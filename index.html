@@ -304,7 +304,7 @@
       );
     };
 
-    // --- Recipe/Plan View ---
+        // --- Recipe/Plan View (Fixed) ---
     const RecipeEngine = ({ apiKey, inventory, setInventory, family, setSelectedRecipe, history, setHistory, recipes, setRecipes, favorites, setFavorites }) => {
       const [loading, setLoading] = useState(false);
       const [activeTab, setActiveTab] = useState('generate');
@@ -312,12 +312,16 @@
       const [missingItemAdd, setMissingItemAdd] = useState(null);
       const [urlInput, setUrlInput] = useState('');
       const [mode, setMode] = useState('Standard');
-      const [eaters, setEaters] = useState(family.map(f => f.id));
+      
+      // FIX: Added (family || []) to prevent crash if family is null
+      const [eaters, setEaters] = useState((family || []).map(f => f.id));
+
+      const safeFamily = family || []; // Helper for safe rendering
 
       const generate = async () => {
          setLoading(true);
          const invStr = inventory.map(i => `${i.name} (${i.quantity} ${i.unit})`).join(', ');
-         const famStr = family.filter(f => eaters.includes(f.id)).map(f => `${f.name} (Age:${f.age}, Diet:${f.diet})`).join(', ');
+         const famStr = safeFamily.filter(f => eaters.includes(f.id)).map(f => `${f.name} (Age:${f.age}, Diet:${f.diet})`).join(', ');
          const prompt = `Act as expert chef. Context: Inventory: [${invStr}]. Eaters: [${famStr}]. Theme: ${urlInput || mode}. Create 3 recipes. Requirements: Use inventory first. If missing ingredients, list them with amount needed. JSON: { "recipes": [{ "name": "Pasta", "description": "...", "time": "20m", "ingredients": [{"item": "Pasta", "qty": "1 lb"}], "missing_ingredients": [{"item": "Sauce", "total_amount_needed": "1 jar"}], "steps": ["Boil water"], "dietary_adaptations": "Use GF pasta" }] }`;
          try {
              const res = await callGemini(apiKey, prompt);
@@ -383,7 +387,7 @@
                 <>
                   <div className="space-y-4 w-full">
                     <textarea value={urlInput} onChange={e => setUrlInput(e.target.value)} placeholder="What are you craving? (or paste a URL)" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm min-h-[100px]" />
-                    {family.length > 0 && (<div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide w-full">{family.map(m => (<button key={m.id} onClick={() => setEaters(eaters.includes(m.id) ? eaters.filter(id => id !== m.id) : [...eaters, m.id])} className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-bold border whitespace-nowrap transition-colors ${eaters.includes(m.id) ? 'bg-orange-50 border-orange-200 text-orange-700' : 'bg-white border-slate-200 text-slate-400'}`}>{eaters.includes(m.id) ? <Check className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />} {m.name}</button>))}</div>)}
+                    {safeFamily.length > 0 && (<div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide w-full">{safeFamily.map(m => (<button key={m.id} onClick={() => setEaters(eaters.includes(m.id) ? eaters.filter(id => id !== m.id) : [...eaters, m.id])} className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-bold border whitespace-nowrap transition-colors ${eaters.includes(m.id) ? 'bg-orange-50 border-orange-200 text-orange-700' : 'bg-white border-slate-200 text-slate-400'}`}>{eaters.includes(m.id) ? <Check className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />} {m.name}</button>))}</div>)}
                     <div className="flex gap-3 w-full"><select value={mode} onChange={e => setMode(e.target.value)} className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium text-slate-700"><option>Standard</option><option>Quick (30m)</option><option>Hosting</option><option>Budget</option></select><button onClick={generate} className="flex-1 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold py-3 rounded-xl shadow-lg flex items-center justify-center gap-2"><Sparkles className="w-5 h-5" /> Generate</button></div>
                   </div>
                   {recipes.map(r => (
@@ -425,6 +429,7 @@
         </div>
       );
     };
+
 
     // --- Other Views ---
     const FamilyView = ({ familyMembers, setFamilyMembers }) => {
