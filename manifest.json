@@ -1,7 +1,8 @@
 {
   "name": "MealPrepMate",
   "short_name": "PrepMate",
-  "start_url": "meal prep.html",
+  "start_url": "/meal-prep-mate/",
+  "scope": "/meal-prep-mate/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#10b981",
