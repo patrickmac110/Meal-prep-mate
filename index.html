@@ -220,7 +220,7 @@
               if (!reader.result) { resolve(); return; }
               const base64 = reader.result.replace("data:", "").replace(/^.+,/, "");
               try {
-                const prompt = `Analyze this image (fridge/pantry/receipt). List EVERY single food item individually.
+                const prompt = `Analyze this image (fridge/pantry/receipt). List every single food item that you can confidently distinguish individually. (i.e. don't just put "bottle with green cap")
 STRICT RULE: Do not group items. Return JSON: { "items": [{ "name": "Milk", "quantity": 1 }] }`;
                 const res = await callGemini(apiKey, prompt, base64);
                 if (res?.items) res.items.forEach(i => newItems.push({ id: Math.random().toString(36).substr(2,9), name: i.name, quantity: i.quantity || 1, addedAt: new Date().toISOString() }));
