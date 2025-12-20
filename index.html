@@ -940,17 +940,20 @@ JSON Structure:
     root.render(<MealPrepMate />);
   </script>
 <script>
-  // Register a simple service worker to satisfy PWA requirements
-  if ('service worker' in navigator) {
-    const swCode = `
-      self.addEventListener('install', (event) => { self.skipWaiting(); });
-      self.addEventListener('fetch', (event) => { event.respondWith(fetch(event.request)); });
-    `;
-    const blob = new Blob([swCode], { type: 'text/javascript' });
-    const swUrl = URL.createObjectURL(blob);
-    navigator.serviceWorker.register(swUrl);
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      // Inline service worker script
+      const swCode = `
+        self.addEventListener('install', (e) => self.skipWaiting());
+        self.addEventListener('fetch', (e) => e.respondWith(fetch(e.request)));
+      `;
+      const blob = new Blob([swCode], { type: 'text/javascript' });
+      const swUrl = URL.createObjectURL(blob);
+      navigator.serviceWorker.register(swUrl, { scope: '/Meal-prep-mate/' });
+    });
   }
 </script>
+
 
 </body>
 </html>
