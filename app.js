@@ -4,7 +4,7 @@ import {
     ChefHat, Refrigerator, Users, ShoppingCart, Clock, Heart,
     ScanBarcode, Camera, Utensils, Trash2, Plus, Edit3, Save,
     ArrowLeft, Loader2, Check, AlertCircle, X, Image as ImageIcon, Sparkles,
-    UserCheck, History, User, ThermometerSnowflake, Settings, Key,
+    UserCheck, History, User, ThermometerSnowflake, Settings, Key, Bell,
     MessageCircle, Download, Leaf, Copy, Share, Calendar, CalendarDays,
     AlertTriangle, MapPin, Package, ChevronDown, ChevronRight, ChevronLeft,
     Flame, Beef, Wheat, Droplet, GripVertical, MoreHorizontal, List, Grid3x3
@@ -14,7 +14,7 @@ import {
 // CONSTANTS & DEFAULTS
 // ============================================================================
 
-const DEFAULT_UNITS = ['each', 'cups', 'tbsp', 'tsp', 'ml', 'L', 'oz', 'lb', 'g', 'kg', 'jar', 'can', 'box', 'bag', 'container', 'pinch', 'bunch', 'piece', 'slice', 'dozen'];
+const DEFAULT_UNITS = ['each', 'cups', 'tbsp', 'tsp', 'ml', 'L', 'oz', 'lb', 'g', 'kg', 'gal', 'bottle', 'jar', 'can', 'box', 'bag', 'container', 'pinch', 'bunch', 'piece', 'slice', 'dozen'];
 const DEFAULT_LOCATIONS = ['Fridge', 'Freezer', 'Pantry', 'Cabinet', 'Countertop', 'Bakers Rack', 'Spice Rack'];
 
 const SERVING_MULTIPLIERS = {
@@ -25,6 +25,41 @@ const SERVING_MULTIPLIERS = {
     teen: 1.0,      // 13-18
     adult_f: 1.0,   // Adult female
     adult_m: 1.5,   // Adult male
+};
+
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+// Parse date string as local date (not UTC) to avoid timezone offset issues
+const parseLocalDate = (dateStr) => {
+    if (!dateStr) return null;
+    // Date strings like "2025-12-31" are parsed as UTC by default
+    // Add time component to treat as local date
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return new Date(year, month - 1, day);
+};
+
+// Format date for display without timezone issues
+const formatExpDate = (dateStr) => {
+    if (!dateStr) return '';
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${months[month - 1]} ${day}`;
+};
+
+// Check if date is expired or expiring soon
+const getExpirationStatus = (dateStr) => {
+    if (!dateStr) return 'none';
+    const expDate = parseLocalDate(dateStr);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const weekFromNow = new Date(today);
+    weekFromNow.setDate(weekFromNow.getDate() + 7);
+
+    if (expDate < today) return 'expired';
+    if (expDate < weekFromNow) return 'soon';
+    return 'ok';
 };
 
 // ============================================================================
@@ -444,17 +479,22 @@ const InventoryView = ({ apiKey, inventory, setInventory, knownLocations, setKno
     const [newQty, setNewQty] = useState(1);
     const [newUnit, setNewUnit] = useState('each');
     const [newLocation, setNewLocation] = useState('Pantry');
+    const [newExpDate, setNewExpDate] = useState('');
     const [showQuickAddExpanded, setShowQuickAddExpanded] = useState(false);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [stagingData, setStagingData] = useState(null);
+    const [pendingFiles, setPendingFiles] = useState([]);  // Queue for multi-file upload
     const [duplicateWarning, setDuplicateWarning] = useState(null);
     const [newLocationInput, setNewLocationInput] = useState('');
     const [showNewLocationModal, setShowNewLocationModal] = useState(false);
     const [pendingLocationItemId, setPendingLocationItemId] = useState(null);
     const [expandedItemId, setExpandedItemId] = useState(null);
     const [collapsedLocations, setCollapsedLocations] = useState({});
+    const [showImageViewer, setShowImageViewer] = useState(false);
+    const [stagingError, setStagingError] = useState(null);
     const fileInputRef = useRef(null);
     const pendingFileRef = useRef(null);
+    const stagingListRef = useRef(null);
 
     const allLocations = [...new Set([...DEFAULT_LOCATIONS, ...knownLocations])];
     const allUnits = DEFAULT_UNITS;
@@ -497,10 +537,13 @@ const InventoryView = ({ apiKey, inventory, setInventory, knownLocations, setKno
             quantity: newQty,
             unit: newUnit,
             location: newLocation,
+            notes: '',
+            expiresAt: newExpDate || null,
             addedAt: new Date().toISOString()
         }]);
         setNewItem('');
         setNewQty(1);
+        setNewExpDate('');
     };
 
     const updateItem = (id, updates) => {
@@ -515,17 +558,39 @@ const InventoryView = ({ apiKey, inventory, setInventory, knownLocations, setKno
 
     const handleImageSelect = async (e) => {
         if (!e.target.files || e.target.files.length === 0) return;
-        const file = e.target.files[0];
-        const filename = file.name;
+        const files = Array.from(e.target.files);
 
-        // Check for duplicate file
-        if (processedFiles.includes(filename)) {
-            pendingFileRef.current = file;
-            setDuplicateWarning(filename);
+        // Filter out duplicates, queue non-duplicates
+        const newFiles = [];
+        for (const file of files) {
+            if (processedFiles.includes(file.name)) {
+                // For now, skip duplicates in multi-select (can be processed manually)
+                continue;
+            }
+            newFiles.push(file);
+        }
+
+        if (newFiles.length === 0) {
+            // All files were duplicates
+            if (files.length === 1) {
+                pendingFileRef.current = files[0];
+                setDuplicateWarning(files[0].name);
+            } else {
+                alert('All selected files have been processed before.');
+            }
             return;
         }
 
-        await processImage(file);
+        // Process first file, queue the rest
+        const [firstFile, ...rest] = newFiles;
+        if (rest.length > 0) {
+            setPendingFiles(rest);
+        }
+
+        await processImage(firstFile);
+
+        // Reset file input so same file can be selected again
+        e.target.value = '';
     };
 
     const processImage = async (file) => {
@@ -602,19 +667,28 @@ Return JSON: {
         setDuplicateWarning(null);
     };
 
-    const confirmStaging = () => {
+    const confirmStaging = async () => {
         if (!stagingData) return;
 
-        const newItems = stagingData.items
-            .filter(item => !item.excluded)
-            .map(item => ({
-                id: generateId(),
-                name: item.name,
-                quantity: item.quantity || 1,
-                unit: item.unit || 'each',
-                location: item.location,
-                addedAt: new Date().toISOString()
-            }));
+        // Validate: check for empty names on non-excluded items
+        const itemsToAdd = stagingData.items.filter(item => !item.excluded);
+        const emptyNameItems = itemsToAdd.filter(item => !item.name || item.name.trim() === '');
+
+        if (emptyNameItems.length > 0) {
+            setStagingError('Please enter a name for all items before saving.');
+            return;
+        }
+
+        const newItems = itemsToAdd.map(item => ({
+            id: generateId(),
+            name: item.name,
+            quantity: item.quantity || 1,
+            unit: item.unit || 'each',
+            location: item.location,
+            notes: item.notes || '',
+            expiresAt: item.expiresAt || null,
+            addedAt: new Date().toISOString()
+        }));
 
         // Add any new locations to known locations
         const newLocs = newItems
@@ -631,6 +705,14 @@ Return JSON: {
 
         setInventory([...inventory, ...newItems]);
         setStagingData(null);
+        setStagingError(null);
+
+        // Process next pending file if any
+        if (pendingFiles.length > 0) {
+            const [nextFile, ...remaining] = pendingFiles;
+            setPendingFiles(remaining);
+            await processImage(nextFile);
+        }
     };
 
     const updateStagingItem = (itemId, updates) => {
@@ -655,19 +737,89 @@ Return JSON: {
         }));
     };
 
+    const rescanWithContext = async () => {
+        if (!stagingData?.imageUrl) return;
+        setIsAnalyzing(true);
+        setStagingError(null);
+
+        const base64 = stagingData.imageUrl.replace("data:", "").replace(/^.+,/, "");
+        const existingItems = stagingData.items.map(i => i.name).filter(n => n).join(', ');
+        const inventoryList = inventory.map(i => i.name).join(', ');
+
+        const prompt = `Look VERY CAREFULLY at this image again. You have already found these items: [${existingItems}]
+
+DO NOT include any of those items again. Instead, look harder for:
+- Small items that might be partially hidden
+- Items in the background
+- Text on packaging you might have missed
+- Any items you weren't sure about before
+
+Current inventory for duplicate checking: [${inventoryList}]
+
+Return JSON with ONLY NEW items not in the list above:
+{
+  "items": [{
+    "name": string,
+    "quantity": number,
+    "unit": string,
+    "confidence": "high" | "medium" | "low",
+    "suggestedLocation": string
+  }]
+}
+
+If you find no additional items, return: { "items": [] }`;
+
+        const result = await callGemini(apiKey, prompt, base64);
+
+        if (result.error) {
+            setStagingError(`AI Error: ${result.message}`);
+            setIsAnalyzing(false);
+            return;
+        }
+
+        if (result.items && result.items.length > 0) {
+            const newItems = result.items.map(item => ({
+                ...item,
+                id: generateId(),
+                excluded: false,
+                location: item.suggestedLocation || stagingData.suggestedLocation || 'Pantry'
+            }));
+
+            setStagingData(prev => ({
+                ...prev,
+                items: [...prev.items, ...newItems]
+            }));
+
+            // Scroll to show new items
+            setTimeout(() => {
+                stagingListRef.current?.scrollTo({ top: stagingListRef.current.scrollHeight, behavior: 'smooth' });
+            }, 50);
+        } else {
+            setStagingError('No additional items found in the image.');
+        }
+
+        setIsAnalyzing(false);
+    };
+
     const addManualStagingItem = () => {
+        setStagingError(null);
         setStagingData(prev => ({
             ...prev,
             items: [...prev.items, {
                 id: generateId(),
-                name: 'New Item',
+                name: '',
                 quantity: 1,
                 unit: 'each',
                 location: prev.suggestedLocation || 'Pantry',
                 confidence: 'high',
-                excluded: false
+                excluded: false,
+                isManual: true
             }]
         }));
+        // Scroll to bottom after state update
+        setTimeout(() => {
+            stagingListRef.current?.scrollTo({ top: stagingListRef.current.scrollHeight, behavior: 'smooth' });
+        }, 50);
     };
 
     const handleLocationChange = (value, itemId = null) => {
@@ -702,7 +854,7 @@ Return JSON: {
                 className="flex items-center justify-center gap-2 bg-indigo-50 text-indigo-600 p-4 rounded-xl font-bold text-sm hover:bg-indigo-100 active:scale-[0.98] transition-all w-full">
                 <Camera className="w-5 h-5" /> Scan Photos
             </button>
-            <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageSelect} />
+            <input type="file" ref={fileInputRef} className="hidden" accept="image/*" multiple onChange={handleImageSelect} />
 
             {/* Enhanced Quick Add Form */}
             <div className="bg-white p-4 rounded-2xl border border-slate-100 space-y-3">
@@ -716,16 +868,27 @@ Return JSON: {
                     </button>
                 </div>
                 {showQuickAddExpanded && (
-                    <div className="flex gap-2 animate-fade-in">
-                        <input type="number" min="1" step="1" value={newQty} onChange={e => setNewQty(parseInt(e.target.value) || 1)}
-                            className="w-16 input-field text-center" />
-                        <select value={newUnit} onChange={e => setNewUnit(e.target.value)} className="select-field flex-1">
-                            {allUnits.map(u => <option key={u} value={u}>{u}</option>)}
-                        </select>
-                        <select value={newLocation} onChange={e => handleLocationChange(e.target.value)} className="select-field flex-1">
-                            {allLocations.map(l => <option key={l} value={l}>{l}</option>)}
-                            <option value="__new__">+ New Location</option>
-                        </select>
+                    <div className="space-y-2 animate-fade-in">
+                        <div className="flex gap-2">
+                            <input type="number" min="0.01" step="0.01" value={newQty} onChange={e => setNewQty(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                                className="w-16 input-field text-center" />
+                            <select value={newUnit} onChange={e => setNewUnit(e.target.value)} className="select-field flex-1">
+                                {allUnits.map(u => <option key={u} value={u}>{u}</option>)}
+                            </select>
+                            <select value={newLocation} onChange={e => handleLocationChange(e.target.value)} className="select-field flex-1">
+                                {allLocations.map(l => <option key={l} value={l}>{l}</option>)}
+                                <option value="__new__">+ New Location</option>
+                            </select>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <label className="text-xs text-slate-500">Expires:</label>
+                            <input
+                                type="date"
+                                value={newExpDate}
+                                onChange={e => setNewExpDate(e.target.value)}
+                                className="flex-1 input-field text-sm"
+                            />
+                        </div>
                     </div>
                 )}
             </div>
@@ -765,22 +928,41 @@ Return JSON: {
                                             className="flex items-center gap-2 cursor-pointer"
                                             onClick={() => setExpandedItemId(expandedItemId === item.id ? null : item.id)}
                                         >
-                                            {/* Quantity */}
+                                            {/* Quantity - color-coded by expiration */}
                                             <input
                                                 type="number"
-                                                min="1"
-                                                step="1"
+                                                min="0.01"
+                                                step="0.01"
                                                 value={item.quantity}
-                                                onChange={(e) => { e.stopPropagation(); updateItem(item.id, { quantity: parseInt(e.target.value) || 1 }); }}
+                                                onChange={(e) => { e.stopPropagation(); updateItem(item.id, { quantity: e.target.value === '' ? '' : parseFloat(e.target.value) }); }}
                                                 onClick={(e) => e.stopPropagation()}
-                                                className="w-14 text-center bg-emerald-50 text-emerald-600 font-bold rounded-lg py-1.5 border-0 focus:ring-2 focus:ring-emerald-500 text-sm"
+                                                className={`w-14 text-center font-bold rounded-lg py-1.5 border-0 focus:ring-2 text-sm ${getExpirationStatus(item.expiresAt) === 'expired'
+                                                    ? 'bg-red-100 text-red-600 focus:ring-red-500'
+                                                    : getExpirationStatus(item.expiresAt) === 'soon'
+                                                        ? 'bg-amber-100 text-amber-600 focus:ring-amber-500'
+                                                        : 'bg-emerald-50 text-emerald-600 focus:ring-emerald-500'
+                                                    }`}
                                             />
 
                                             {/* Unit - Compact */}
-                                            <span className="text-xs text-slate-500 font-medium w-10 truncate">{item.unit || 'each'}</span>
+                                            <span className="text-xs text-slate-500 font-medium w-16 flex-shrink-0">{item.unit || 'each'}</span>
 
-                                            {/* Name */}
-                                            <span className="flex-1 font-bold text-slate-700 truncate">{item.name}</span>
+                                            {/* Name + Expiration */}
+                                            <div className="flex-1 min-w-0">
+                                                <span className="font-bold text-slate-700 break-words">{item.name}</span>
+                                                {item.expiresAt && (
+                                                    <span className={`ml-2 text-xs ${getExpirationStatus(item.expiresAt) === 'expired'
+                                                        ? 'text-red-500'
+                                                        : getExpirationStatus(item.expiresAt) === 'soon'
+                                                            ? 'text-amber-500'
+                                                            : 'text-slate-400'
+                                                        }`}>
+                                                        {getExpirationStatus(item.expiresAt) === 'expired'
+                                                            ? 'Expired'
+                                                            : `Exp ${formatExpDate(item.expiresAt)}`}
+                                                    </span>
+                                                )}
+                                            </div>
 
                                             {/* Expand Indicator */}
                                             <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${expandedItemId === item.id ? 'rotate-180' : ''}`} />
@@ -817,6 +999,39 @@ Return JSON: {
                                                     </select>
                                                 </div>
 
+                                                {/* Notes */}
+                                                <textarea
+                                                    value={item.notes || ''}
+                                                    onChange={(e) => updateItem(item.id, { notes: e.target.value })}
+                                                    placeholder="Add notes (e.g., brand, special info)..."
+                                                    className="w-full input-field text-sm resize-none"
+                                                    rows={2}
+                                                />
+
+                                                {/* Expiration Date */}
+                                                <div className="flex items-center gap-2">
+                                                    <label className="text-sm text-slate-600 flex-shrink-0">Expires:</label>
+                                                    <input
+                                                        type="date"
+                                                        value={item.expiresAt || ''}
+                                                        onChange={(e) => updateItem(item.id, { expiresAt: e.target.value || null })}
+                                                        className={`flex-1 input-field text-sm ${getExpirationStatus(item.expiresAt) === 'expired'
+                                                                ? 'border-red-500 text-red-600'
+                                                                : getExpirationStatus(item.expiresAt) === 'soon'
+                                                                    ? 'border-amber-500 text-amber-600'
+                                                                    : ''
+                                                            }`}
+                                                    />
+                                                    {item.expiresAt && (
+                                                        <button
+                                                            onClick={() => updateItem(item.id, { expiresAt: null })}
+                                                            className="text-slate-400 hover:text-slate-600"
+                                                        >
+                                                            <X className="w-4 h-4" />
+                                                        </button>
+                                                    )}
+                                                </div>
+
                                                 {/* Delete Button */}
                                                 <button
                                                     onClick={() => deleteItem(item.id)}
@@ -838,9 +1053,19 @@ Return JSON: {
             <Modal isOpen={!!stagingData} onClose={() => setStagingData(null)} size="large">
                 {stagingData && (
                     <div className="p-0">
-                        {/* Image Preview */}
+                        {/* Image Preview - Clickable to expand */}
                         {stagingData.imageUrl && (
-                            <img src={stagingData.imageUrl} alt="Scanned" className="staging-image" />
+                            <div className="relative">
+                                <img
+                                    src={stagingData.imageUrl}
+                                    alt="Scanned"
+                                    className="staging-image cursor-pointer"
+                                    onClick={() => setShowImageViewer(true)}
+                                />
+                                <div className="absolute bottom-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded-lg">
+                                    Tap to zoom
+                                </div>
+                            </div>
                         )}
 
                         <div className="p-6 space-y-6">
@@ -871,8 +1096,16 @@ Return JSON: {
                                 </div>
                             )}
 
+                            {/* Error Message */}
+                            {stagingError && (
+                                <div className="bg-red-50 border border-red-200 text-red-600 text-sm p-3 rounded-xl flex items-center gap-2">
+                                    <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                                    {stagingError}
+                                </div>
+                            )}
+
                             {/* Items List */}
-                            <div className="space-y-3 max-h-[40vh] overflow-y-auto">
+                            <div ref={stagingListRef} className="space-y-3 max-h-[40vh] overflow-y-auto">
                                 {stagingData.items.map((item) => (
                                     <div key={item.id} className={`bg-white border rounded-xl p-3 ${item.excluded ? 'opacity-50' : ''} ${item.confidence === 'low' ? 'confidence-low' :
                                         item.confidence === 'medium' ? 'confidence-medium' : 'confidence-high'
@@ -888,10 +1121,10 @@ Return JSON: {
                                             <input
                                                 type="text"
                                                 value={item.name}
-                                                onChange={(e) => updateStagingItem(item.id, { name: e.target.value })}
-                                                className="flex-1 min-w-0 inventory-item-field font-medium text-sm"
+                                                onChange={(e) => { updateStagingItem(item.id, { name: e.target.value }); setStagingError(null); }}
+                                                className={`flex-1 min-w-0 inventory-item-field font-medium text-sm ${!item.name && stagingError ? 'border-red-500 border rounded' : ''}`}
                                                 disabled={item.excluded}
-                                                placeholder="Item name"
+                                                placeholder="New item..."
                                             />
                                         </div>
 
@@ -899,10 +1132,10 @@ Return JSON: {
                                         <div className="flex gap-2 ml-7">
                                             <input
                                                 type="number"
-                                                min="1"
-                                                step="1"
+                                                min="0.01"
+                                                step="0.01"
                                                 value={item.quantity}
-                                                onChange={(e) => updateStagingItem(item.id, { quantity: parseInt(e.target.value) || 1 })}
+                                                onChange={(e) => updateStagingItem(item.id, { quantity: e.target.value === '' ? '' : parseFloat(e.target.value) })}
                                                 className="w-14 flex-shrink-0 text-center bg-slate-50 rounded-lg py-1.5 border focus:border-emerald-500 text-sm"
                                                 disabled={item.excluded}
                                             />
@@ -931,6 +1164,15 @@ Return JSON: {
                                                     <option value="__new__">+ New</option>
                                                 </select>
                                             )}
+                                            <input
+                                                type="date"
+                                                value={item.expiresAt || ''}
+                                                onChange={(e) => updateStagingItem(item.id, { expiresAt: e.target.value || null })}
+                                                className="flex-1 min-w-0 input-field text-xs py-1.5"
+                                                disabled={item.excluded}
+                                                placeholder="Exp date"
+                                                title="Expiration date"
+                                            />
                                         </div>
 
                                         {/* Duplicate Warning */}
@@ -956,14 +1198,59 @@ Return JSON: {
                                 <Plus className="w-5 h-5" /> Add Item Manually
                             </button>
 
+                            {/* Rescan for more items */}
+                            {stagingData.imageUrl && (
+                                <button
+                                    onClick={rescanWithContext}
+                                    disabled={isAnalyzing}
+                                    className="w-full btn-secondary text-indigo-600 border-indigo-200 flex items-center justify-center gap-2"
+                                >
+                                    {isAnalyzing ? (
+                                        <><Loader2 className="w-5 h-5 animate-spin" /> Searching...</>
+                                    ) : (
+                                        <><Sparkles className="w-5 h-5" /> Search for more items in image?</>
+                                    )}
+                                </button>
+                            )}
+
                             {/* Confirm */}
                             <button onClick={confirmStaging} className="w-full btn-primary">
                                 Add {stagingData.items.filter(i => !i.excluded).length} Items to Inventory
+                                {pendingFiles.length > 0 && (
+                                    <span className="ml-2 opacity-75">({pendingFiles.length} more photo{pendingFiles.length > 1 ? 's' : ''} to review)</span>
+                                )}
                             </button>
                         </div>
                     </div>
                 )}
             </Modal>
+
+            {/* Image Viewer Modal */}
+            {showImageViewer && stagingData?.imageUrl && (
+                <div
+                    className="fixed inset-0 z-[100] bg-black flex items-center justify-center"
+                    onClick={() => setShowImageViewer(false)}
+                >
+                    <button
+                        className="absolute top-4 right-4 z-10 bg-white/20 text-white p-2 rounded-full"
+                        onClick={() => setShowImageViewer(false)}
+                    >
+                        <X className="w-6 h-6" />
+                    </button>
+                    <div className="w-full h-full overflow-auto touch-pan-x touch-pan-y">
+                        <img
+                            src={stagingData.imageUrl}
+                            alt="Full size"
+                            className="w-full h-auto min-h-full object-contain"
+                            style={{ touchAction: 'pinch-zoom' }}
+                            onClick={(e) => e.stopPropagation()}
+                        />
+                    </div>
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/50 text-white text-sm px-4 py-2 rounded-full">
+                        Pinch to zoom • Tap outside to close
+                    </div>
+                </div>
+            )}
 
             {/* Duplicate File Warning */}
             <ConfirmDialog
@@ -1255,7 +1542,11 @@ const RecipeEngine = ({ apiKey, inventory, setInventory, family, setSelectedReci
 
     const generate = async () => {
         setLoading(true);
-        const invStr = inventory.map(i => `${i.name} (${i.quantity} ${i.unit})`).join(', ');
+        const invStr = inventory.map(i => {
+            let str = `${i.name} (${i.quantity} ${i.unit})`;
+            if (i.notes) str += ` [Note: ${i.notes}]`;
+            return str;
+        }).join(', ');
         const famStr = family.filter(f => eaters.includes(f.id)).map(f =>
             `${f.name} (Age:${f.age}, Gender:${f.gender}, Diet:${f.diet}, Prefs:${f.preferences || 'None'})`
         ).join(', ');
@@ -2519,6 +2810,7 @@ function MealPrepMate() {
     const [mealPlan, setMealPlan] = useLocalStorage('mpm_meal_plan', {});
     const [lastNotifCheck, setLastNotifCheck] = useLocalStorage('mpm_last_notif_check', '');
     const [notifsEnabled, setNotifsEnabled] = useLocalStorage('mpm_notifs_enabled', true);
+    const [expirationReminders, setExpirationReminders] = useLocalStorage('mpm_expiration_reminders', [7, 3, 1]);
     const [selectedRecipe, setSelectedRecipe] = useState(null);
     const [deductionData, setDeductionData] = useState(null);
     const [addItemModal, setAddItemModal] = useState(null);
@@ -2554,16 +2846,34 @@ function MealPrepMate() {
     useEffect(() => {
         const todayStr = new Date().toDateString();
         // Only check once per day if permission is granted and toggle is ON
-        if (notifsEnabled && lastNotifCheck !== todayStr && leftovers.length > 0 && Notification.permission === 'granted') {
-            const expiringCount = leftovers.filter(l => {
+        if (notifsEnabled && lastNotifCheck !== todayStr && Notification.permission === 'granted') {
+            // Check leftovers
+            const expiringLeftovers = leftovers.filter(l => {
                 const days = Math.ceil((new Date(l.expiresAt) - new Date()) / 86400000);
                 return days <= 1;
             }).length;
 
-            if (expiringCount > 0) {
+            // Check inventory items with expiration dates
+            const expiringInventory = inventory.filter(item => {
+                if (!item.expiresAt) return false;
+                const daysUntil = Math.ceil((new Date(item.expiresAt) - new Date()) / 86400000);
+                return expirationReminders.some(reminderDays => daysUntil === reminderDays || daysUntil <= 0);
+            }).length;
+
+            const totalExpiring = expiringLeftovers + expiringInventory;
+
+            if (totalExpiring > 0) {
                 navigator.serviceWorker.ready.then(reg => {
+                    let body = '';
+                    if (expiringLeftovers > 0 && expiringInventory > 0) {
+                        body = `${expiringLeftovers} leftover(s) and ${expiringInventory} pantry item(s) expiring soon!`;
+                    } else if (expiringLeftovers > 0) {
+                        body = `You have ${expiringLeftovers} leftover(s) expiring soon. Time to eat them!`;
+                    } else {
+                        body = `You have ${expiringInventory} pantry item(s) expiring soon. Use them up!`;
+                    }
                     reg.showNotification('Expiry Alert 🍲', {
-                        body: `You have ${expiringCount} item${expiringCount > 1 ? 's' : ''} expiring soon. Time to eat them!`,
+                        body,
                         tag: 'expiry-check',
                         vibrate: [200, 100, 200]
                     });
@@ -2571,7 +2881,7 @@ function MealPrepMate() {
                 });
             }
         }
-    }, [leftovers, lastNotifCheck]);
+    }, [leftovers, inventory, lastNotifCheck, expirationReminders]);
 
     const handleInstall = async () => {
         if (!installPrompt) return;
@@ -2926,35 +3236,52 @@ Return JSON: {
             {/* Deduction Review Modal */}
             <Modal isOpen={!!deductionData} onClose={() => setDeductionData(null)}>
                 {deductionData && (
-                    <div className="p-6 space-y-6">
-                        <h2 className="text-xl font-bold">Review Ingredient Deductions</h2>
-                        <p className="text-slate-500 text-sm">These items will be deducted from your inventory:</p>
-                        <div className="space-y-3">
+                    <div className="p-4 space-y-4">
+                        <div>
+                            <h2 className="text-lg font-bold">Review Deductions</h2>
+                            <p className="text-slate-500 text-xs">Adjust remaining amounts if needed</p>
+                        </div>
+
+                        <div className="space-y-2 max-h-[60vh] overflow-y-auto">
                             {deductionData.deductions.map((d, idx) => (
-                                <div key={idx} className={`bg-white border rounded-xl p-4 ${d.confidence === 'low' ? 'border-amber-300' : 'border-slate-200'}`}>
-                                    <div className="flex items-center justify-between">
-                                        <span className="font-bold text-slate-800">{d.inventoryItemName}</span>
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-slate-500">{d.currentQuantity} {d.currentUnit}</span>
-                                            <span className="text-slate-400">→</span>
-                                            <input
-                                                type="number"
-                                                value={d.newQuantity}
-                                                onChange={(e) => {
-                                                    const newDeductions = [...deductionData.deductions];
-                                                    newDeductions[idx].newQuantity = parseFloat(e.target.value) || 0;
-                                                    setDeductionData({ ...deductionData, deductions: newDeductions });
-                                                }}
-                                                className="w-16 text-center border rounded-lg py-1 font-bold text-emerald-600"
-                                            />
-                                            <span className="text-slate-500">{d.currentUnit}</span>
-                                        </div>
+                                <div key={idx} className={`bg-slate-50 rounded-lg p-3 ${d.confidence === 'low' ? 'border border-amber-300' : ''}`}>
+                                    {/* Row 1: Item name + quick info */}
+                                    <div className="flex items-center justify-between gap-2 mb-1">
+                                        <span className="font-bold text-slate-800 text-sm">{d.inventoryItemName}</span>
+                                        <span className="text-xs text-slate-400">
+                                            {d.currentQuantity} → {d.newQuantity} {d.currentUnit}
+                                        </span>
                                     </div>
-                                    <div className="text-xs text-slate-400 mt-1">For: {d.recipeIngredient}</div>
+
+                                    {/* Row 2: Need / Have / Remaining inline */}
+                                    <div className="flex items-center gap-2 text-xs flex-wrap">
+                                        <span className="text-slate-500">Need: <span className="font-medium text-blue-600">{d.deductAmount}</span></span>
+                                        <span className="text-slate-400">•</span>
+                                        <span className="text-slate-500">Have: <span className="font-medium">{d.currentQuantity}</span></span>
+                                        <span className="text-slate-400">→</span>
+                                        <span className="font-bold text-slate-700">Left:</span>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            value={d.newQuantity}
+                                            onChange={(e) => {
+                                                const newDeductions = [...deductionData.deductions];
+                                                newDeductions[idx].newQuantity = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                                                setDeductionData({ ...deductionData, deductions: newDeductions });
+                                            }}
+                                            className="w-14 text-center border border-emerald-500 rounded py-0.5 font-bold text-emerald-600 text-sm"
+                                        />
+                                        <span className="text-slate-500">{d.currentUnit}</span>
+                                        {d.confidence === 'low' && (
+                                            <span className="text-[10px] bg-amber-100 text-amber-700 px-1 rounded">?</span>
+                                        )}
+                                    </div>
                                 </div>
                             ))}
                         </div>
-                        <button onClick={confirmDeduction} className="w-full btn-primary">
+
+                        <button onClick={confirmDeduction} className="w-full btn-primary text-sm py-2">
                             Confirm & Mark as Cooked
                         </button>
                     </div>
@@ -3031,6 +3358,50 @@ Return JSON: {
                                     <Bell className="w-3 h-3 inline mr-1" /> {Notification.permission === 'denied' ? 'Re-request Permission' : 'Enable System Notifications'}
                                 </button>
                             )}
+                        </div>
+                    </div>
+
+                    {/* Expiration Reminders */}
+                    <div>
+                        <label className="text-sm font-bold text-slate-600 block mb-2">Inventory Expiration Reminders</label>
+                        <p className="text-xs text-slate-400 mb-3">Get reminded X days before items expire</p>
+                        <div className="space-y-2">
+                            {expirationReminders.sort((a, b) => b - a).map((days, idx) => (
+                                <div key={idx} className="flex justify-between items-center bg-slate-50 p-3 rounded-xl">
+                                    <span className="text-sm text-slate-600">
+                                        {days === 1 ? '1 day before' : `${days} days before`}
+                                    </span>
+                                    <button
+                                        onClick={() => setExpirationReminders(expirationReminders.filter((_, i) => i !== idx))}
+                                        className="text-red-400 hover:text-red-600"
+                                    >
+                                        <X className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            ))}
+                            <div className="flex gap-2">
+                                <input
+                                    type="number"
+                                    min="1"
+                                    max="30"
+                                    placeholder="Days"
+                                    id="new-reminder-days"
+                                    className="flex-1 input-field text-sm"
+                                />
+                                <button
+                                    onClick={() => {
+                                        const input = document.getElementById('new-reminder-days');
+                                        const days = parseInt(input.value);
+                                        if (days > 0 && days <= 30 && !expirationReminders.includes(days)) {
+                                            setExpirationReminders([...expirationReminders, days]);
+                                            input.value = '';
+                                        }
+                                    }}
+                                    className="btn-secondary text-sm px-4"
+                                >
+                                    <Plus className="w-4 h-4" />
+                                </button>
+                            </div>
                         </div>
                     </div>
 
