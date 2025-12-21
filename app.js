@@ -2518,6 +2518,7 @@ function MealPrepMate() {
     const [recipes, setRecipes] = useLocalStorage('mpm_recipes_cache', []);
     const [mealPlan, setMealPlan] = useLocalStorage('mpm_meal_plan', {});
     const [lastNotifCheck, setLastNotifCheck] = useLocalStorage('mpm_last_notif_check', '');
+    const [notifsEnabled, setNotifsEnabled] = useLocalStorage('mpm_notifs_enabled', true);
     const [selectedRecipe, setSelectedRecipe] = useState(null);
     const [deductionData, setDeductionData] = useState(null);
     const [addItemModal, setAddItemModal] = useState(null);
@@ -2531,19 +2532,29 @@ function MealPrepMate() {
     const [scheduleMealType, setScheduleMealType] = useState('Dinner');
 
     useEffect(() => {
-        if (window.matchMedia('(display-mode: standalone)').matches) setIsStandalone(true);
-        window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); setInstallPrompt(e); });
+        // Check if app is installed (PWA mode)
+        if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true) {
+            setIsStandalone(true);
+        }
 
-        // Notification Permission Request
-        if ('Notification' in window && Notification.permission === 'default') {
+        const handler = (e) => {
+            e.preventDefault();
+            setInstallPrompt(e);
+        };
+        window.addEventListener('beforeinstallprompt', handler);
+
+        // Notification Permission Request (Initial)
+        if (notifsEnabled && 'Notification' in window && Notification.permission === 'default') {
             Notification.requestPermission();
         }
+
+        return () => window.removeEventListener('beforeinstallprompt', handler);
     }, []);
 
     useEffect(() => {
         const todayStr = new Date().toDateString();
-        // Only check once per day if permission is granted
-        if (lastNotifCheck !== todayStr && leftovers.length > 0 && Notification.permission === 'granted') {
+        // Only check once per day if permission is granted and toggle is ON
+        if (notifsEnabled && lastNotifCheck !== todayStr && leftovers.length > 0 && Notification.permission === 'granted') {
             const expiringCount = leftovers.filter(l => {
                 const days = Math.ceil((new Date(l.expiresAt) - new Date()) / 86400000);
                 return days <= 1;
@@ -2992,6 +3003,35 @@ Return JSON: {
                         <p className="text-xs text-slate-400 mt-2">
                             Get your API key from <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-emerald-600 underline">Google AI Studio</a>
                         </p>
+                    </div>
+
+                    {/* Notifications */}
+                    <div>
+                        <label className="text-sm font-bold text-slate-600 block mb-2">Notifications</label>
+                        <div className="space-y-3">
+                            <div className="flex justify-between items-center bg-slate-50 p-4 rounded-xl">
+                                <span className="text-sm text-slate-600">Leftover Expiry Alerts</span>
+                                <button
+                                    onClick={() => setNotifsEnabled(!notifsEnabled)}
+                                    className={`w-12 h-6 rounded-full transition-colors relative ${notifsEnabled ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                                >
+                                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${notifsEnabled ? 'translate-x-7' : 'translate-x-1'}`} />
+                                </button>
+                            </div>
+                            {Notification.permission === 'denied' && (
+                                <p className="text-[10px] text-red-500 px-1">
+                                    Notifications are blocked by your browser. You may need to reset permissions in your site settings.
+                                </p>
+                            )}
+                            {Notification.permission !== 'granted' && (
+                                <button
+                                    onClick={() => Notification.requestPermission()}
+                                    className="w-full text-xs font-bold text-emerald-600 bg-emerald-50 py-2 rounded-lg hover:bg-emerald-100 transition-colors"
+                                >
+                                    <Bell className="w-3 h-3 inline mr-1" /> {Notification.permission === 'denied' ? 'Re-request Permission' : 'Enable System Notifications'}
+                                </button>
+                            )}
+                        </div>
                     </div>
 
                     {/* Data Management */}
