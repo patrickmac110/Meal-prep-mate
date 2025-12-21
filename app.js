@@ -1016,10 +1016,10 @@ If you find no additional items, return: { "items": [] }`;
                                                         value={item.expiresAt || ''}
                                                         onChange={(e) => updateItem(item.id, { expiresAt: e.target.value || null })}
                                                         className={`flex-1 input-field text-sm ${getExpirationStatus(item.expiresAt) === 'expired'
-                                                                ? 'border-red-500 text-red-600'
-                                                                : getExpirationStatus(item.expiresAt) === 'soon'
-                                                                    ? 'border-amber-500 text-amber-600'
-                                                                    : ''
+                                                            ? 'border-red-500 text-red-600'
+                                                            : getExpirationStatus(item.expiresAt) === 'soon'
+                                                                ? 'border-amber-500 text-amber-600'
+                                                                : ''
                                                             }`}
                                                     />
                                                     {item.expiresAt && (
