@@ -19,12 +19,16 @@ const DEFAULT_LOCATIONS = ['Fridge', 'Freezer', 'Pantry', 'Cabinet', 'Countertop
 
 // Available Gemini models - user can also type custom model names
 const GEMINI_MODELS = [
-    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', desc: 'Latest, fastest model' },
+    { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro', desc: 'Newest, most powerful' },
+    { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', desc: 'Newest, blazing fast' },
+    { id: 'gemini-2.5-pro-preview-06-05', name: 'Gemini 2.5 Pro', desc: 'Most capable, best quality' },
+    { id: 'gemini-2.5-flash-preview-05-20', name: 'Gemini 2.5 Flash', desc: 'Fast with great quality' },
+    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', desc: 'Fast, reliable' },
     { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite', desc: 'Lighter, most economical' },
+    { id: 'gemini-2.0-flash-thinking-exp', name: 'Gemini 2.0 Flash Thinking', desc: 'Reasoning model (experimental)' },
     { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', desc: 'Fast and versatile' },
     { id: 'gemini-1.5-flash-8b', name: 'Gemini 1.5 Flash 8B', desc: 'Smaller, efficient' },
-    { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro', desc: 'Best quality, higher usage' },
-    { id: 'gemini-1.0-pro', name: 'Gemini 1.0 Pro', desc: 'Legacy model' },
+    { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro', desc: 'Great quality, higher usage' },
 ];
 
 const SERVING_MULTIPLIERS = {
