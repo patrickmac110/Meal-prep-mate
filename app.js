@@ -489,24 +489,27 @@ const LeftoverDetailModal = ({ leftover, leftovers, setLeftovers, onClose, onMov
 // ============================================================================
 
 const InventoryView = ({ apiKey, model, inventory, setInventory, knownLocations, setKnownLocations, processedFiles, setProcessedFiles, allocatedIngredients }) => {
-    const [newItem, setNewItem] = useState('');
-    const [newQty, setNewQty] = useState(1);
-    const [newUnit, setNewUnit] = useState('each');
-    const [newLocation, setNewLocation] = useState('Pantry');
-    const [newExpDate, setNewExpDate] = useState('');
-    const [showQuickAddExpanded, setShowQuickAddExpanded] = useState(false);
+    // Persisted form state (survives refresh)
+    const [newItem, setNewItem] = useLocalStorage('mpm_inv_new_item', '');
+    const [newQty, setNewQty] = useLocalStorage('mpm_inv_new_qty', 1);
+    const [newUnit, setNewUnit] = useLocalStorage('mpm_inv_new_unit', 'each');
+    const [newLocation, setNewLocation] = useLocalStorage('mpm_inv_new_location', 'Pantry');
+    const [newExpDate, setNewExpDate] = useLocalStorage('mpm_inv_new_exp', '');
+    const [showQuickAddExpanded, setShowQuickAddExpanded] = useLocalStorage('mpm_inv_quick_add_expanded', false);
+    const [collapsedLocations, setCollapsedLocations] = useLocalStorage('mpm_inv_collapsed_locations', {});
+    const [searchQuery, setSearchQuery] = useLocalStorage('mpm_inv_search', '');
+    const [expandedItemId, setExpandedItemId] = useLocalStorage('mpm_inv_expanded_item', null);
+
+    // Transient state (not persisted)
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [stagingData, setStagingData] = useState(null);
-    const [pendingFiles, setPendingFiles] = useState([]);  // Queue for multi-file upload
+    const [pendingFiles, setPendingFiles] = useState([]);
     const [duplicateWarning, setDuplicateWarning] = useState(null);
     const [newLocationInput, setNewLocationInput] = useState('');
     const [showNewLocationModal, setShowNewLocationModal] = useState(false);
     const [pendingLocationItemId, setPendingLocationItemId] = useState(null);
-    const [expandedItemId, setExpandedItemId] = useState(null);
-    const [collapsedLocations, setCollapsedLocations] = useState({});
     const [showImageViewer, setShowImageViewer] = useState(false);
     const [stagingError, setStagingError] = useState(null);
-    const [searchQuery, setSearchQuery] = useState('');
     const fileInputRef = useRef(null);
     const pendingFileRef = useRef(null);
     const stagingListRef = useRef(null);
@@ -1153,7 +1156,7 @@ If you find no additional items, return: { "items": [] }`;
                                                                 min="0.1"
                                                                 step="0.1"
                                                                 value={item.minStockLevel || 1}
-                                                                onChange={e => updateItem(item.id, { minStockLevel: parseFloat(e.target.value) || 1 })}
+                                                                onChange={e => updateItem(item.id, { minStockLevel: e.target.value === '' ? 0 : parseFloat(e.target.value) })}
                                                                 className="w-14 input-field text-center text-sm py-1"
                                                             />
                                                         </div>
@@ -1532,7 +1535,7 @@ const FamilyView = ({ familyMembers, setFamilyMembers }) => {
                             min="0.25"
                             max="3"
                             value={servings}
-                            onChange={e => setServings(parseFloat(e.target.value) || 1)}
+                            onChange={e => setServings(e.target.value === '' ? '' : parseFloat(e.target.value))}
                             className="input-field w-16 text-center text-sm"
                             title="Servings"
                         />
@@ -1635,7 +1638,7 @@ const FamilyView = ({ familyMembers, setFamilyMembers }) => {
                                 min="0.25"
                                 max="3"
                                 value={editingMember.servings || 1}
-                                onChange={e => setEditingMember({ ...editingMember, servings: parseFloat(e.target.value) || 1 })}
+                                onChange={e => setEditingMember({ ...editingMember, servings: e.target.value === '' ? '' : parseFloat(e.target.value) })}
                                 className="input-field w-24"
                             />
                         </div>
@@ -1653,26 +1656,30 @@ const FamilyView = ({ familyMembers, setFamilyMembers }) => {
 
 const RecipeEngine = ({ apiKey, model, inventory, setInventory, family, setSelectedRecipe, history, setHistory, recipes, setRecipes, favorites, setFavorites, shoppingList, setShoppingList, mealPlan, setMealPlan, leftovers, setLeftovers, onMoveToHistory, customRecipes, setCustomRecipes, allocatedIngredients, setAllocatedIngredients }) => {
     const [loading, setLoading] = useState(false);
-    const [activeTab, setActiveTab] = useState('generate');
-    const [urlInput, setUrlInput] = useState('');
-    const [showPrepOptions, setShowPrepOptions] = useState(false);
+
+    // Persisted form state (survives refresh)
+    const [activeTab, setActiveTab] = useLocalStorage('mpm_recipe_active_tab', 'generate');
+    const [urlInput, setUrlInput] = useLocalStorage('mpm_recipe_url_input', '');
+    const [showPrepOptions, setShowPrepOptions] = useLocalStorage('mpm_recipe_show_prep', false);
+    const [extraGuests, setExtraGuests] = useLocalStorage('mpm_recipe_extra_guests', 0);
+    const [leftoverDays, setLeftoverDays] = useLocalStorage('mpm_recipe_leftover_days', 1);
+    const [mealType, setMealType] = useLocalStorage('mpm_recipe_meal_type', 'Any');
+    const [mode, setMode] = useLocalStorage('mpm_recipe_mode', 'Standard');
+
+    // Custom recipe form state (persisted)
+    const [showCustomRecipeForm, setShowCustomRecipeForm] = useLocalStorage('mpm_custom_form_show', false);
+    const [customRecipeName, setCustomRecipeName] = useLocalStorage('mpm_custom_form_name', '');
+    const [customRecipeDesc, setCustomRecipeDesc] = useLocalStorage('mpm_custom_form_desc', '');
+    const [customRecipeServings, setCustomRecipeServings] = useLocalStorage('mpm_custom_form_servings', 4);
+    const [customRecipeTime, setCustomRecipeTime] = useLocalStorage('mpm_custom_form_time', '30 min');
+    const [customRecipeIngredients, setCustomRecipeIngredients] = useLocalStorage('mpm_custom_form_ingredients', '');
+    const [customRecipeInstructions, setCustomRecipeInstructions] = useLocalStorage('mpm_custom_form_instructions', '');
+
+    // Transient state (not persisted)
     const [eaters, setEaters] = useState(family.map(f => f.id));
-    const [extraGuests, setExtraGuests] = useState(0);
-    const [leftoverDays, setLeftoverDays] = useState(1);
-    const [mealType, setMealType] = useState('Any');
-    const [mode, setMode] = useState('Standard');
     const [showSlotPicker, setShowSlotPicker] = useState(false);
     const [pendingRecipeForCalendar, setPendingRecipeForCalendar] = useState(null);
     const [selectedHistoryLeftover, setSelectedHistoryLeftover] = useState(null);
-
-    // Custom recipe form state
-    const [showCustomRecipeForm, setShowCustomRecipeForm] = useState(false);
-    const [customRecipeName, setCustomRecipeName] = useState('');
-    const [customRecipeDesc, setCustomRecipeDesc] = useState('');
-    const [customRecipeServings, setCustomRecipeServings] = useState(4);
-    const [customRecipeTime, setCustomRecipeTime] = useState('30 min');
-    const [customRecipeIngredients, setCustomRecipeIngredients] = useState('');
-    const [customRecipeInstructions, setCustomRecipeInstructions] = useState('');
 
     const saveCustomRecipe = () => {
         if (!customRecipeName.trim()) return;
@@ -1843,7 +1850,7 @@ STRICT JSON Output:
                                                     type="number"
                                                     min="0"
                                                     value={extraGuests}
-                                                    onChange={e => setExtraGuests(Math.max(0, parseInt(e.target.value) || 0))}
+                                                    onChange={e => setExtraGuests(e.target.value === '' ? 0 : Math.max(0, parseInt(e.target.value)))}
                                                     className="w-16 text-center input-field py-1"
                                                 />
                                                 <button
@@ -1978,7 +1985,7 @@ STRICT JSON Output:
                                             type="number"
                                             min="1"
                                             value={customRecipeServings}
-                                            onChange={e => setCustomRecipeServings(parseInt(e.target.value) || 1)}
+                                            onChange={e => setCustomRecipeServings(e.target.value === '' ? '' : parseInt(e.target.value))}
                                             className="w-full input-field"
                                         />
                                     </div>
@@ -2489,7 +2496,7 @@ Return JSON: {"storage": "...", "reheat": "...", "expiresInDays": 4}`;
                                 type="number"
                                 min="1"
                                 value={newLeftover.portions}
-                                onChange={e => setNewLeftover({ ...newLeftover, portions: parseInt(e.target.value) || 1 })}
+                                onChange={e => setNewLeftover({ ...newLeftover, portions: e.target.value === '' ? '' : parseInt(e.target.value) })}
                                 className="input-field w-full"
                             />
                         </div>
@@ -3099,7 +3106,8 @@ Generate cooking/storage details. Return JSON:
 // ============================================================================
 
 function MealPrepMate() {
-    const [view, setView] = useState('dashboard');
+    // Persisted UI state (survives refresh)
+    const [view, setView] = useLocalStorage('mpm_current_view', 'dashboard');
     const [apiKey, setApiKey] = useLocalStorage('mpm_api_key', '');
     const [inventory, setInventory] = useLocalStorage('mpm_inventory', []);
     const [knownLocations, setKnownLocations] = useLocalStorage('mpm_known_locations', []);
@@ -3117,17 +3125,24 @@ function MealPrepMate() {
     const [selectedModel, setSelectedModel] = useLocalStorage('mpm_selected_model', 'gemini-2.0-flash');
     const [customRecipes, setCustomRecipes] = useLocalStorage('mpm_custom_recipes', []);
     const [allocatedIngredients, setAllocatedIngredients] = useLocalStorage('mpm_allocated_ingredients', {});
-    const [selectedRecipe, setSelectedRecipe] = useState(null);
+
+    // Persisted modal/UI states
+    const [showSettings, setShowSettings] = useLocalStorage('mpm_ui_show_settings', false);
+    const [showScheduleModal, setShowScheduleModal] = useLocalStorage('mpm_ui_schedule_modal', false);
+    const [scheduleMealType, setScheduleMealType] = useLocalStorage('mpm_ui_schedule_meal_type', 'Dinner');
+    const [selectedRecipeId, setSelectedRecipeId] = useLocalStorage('mpm_ui_selected_recipe_id', null);
+
+    // Transient state (not persisted - runtime only)
     const [deductionData, setDeductionData] = useState(null);
     const [addItemModal, setAddItemModal] = useState(null);
-    const [showSettings, setShowSettings] = useState(false);
     const [installPrompt, setInstallPrompt] = useState(null);
     const [isStandalone, setIsStandalone] = useState(false);
-
-    // Schedule modal state
-    const [showScheduleModal, setShowScheduleModal] = useState(false);
     const [scheduleDate, setScheduleDate] = useState(null);
-    const [scheduleMealType, setScheduleMealType] = useState('Dinner');
+
+    // Reconstruct selectedRecipe from ID
+    const allRecipes = [...recipes, ...favorites, ...customRecipes, ...history];
+    const selectedRecipe = selectedRecipeId ? allRecipes.find(r => r.id === selectedRecipeId) || null : null;
+    const setSelectedRecipe = (recipe) => setSelectedRecipeId(recipe?.id || null);
 
     useEffect(() => {
         // Check if app is installed (PWA mode)
@@ -3620,7 +3635,7 @@ Return JSON: {
                         <h2 className="text-xl font-bold">Add to Inventory</h2>
                         <input value={addItemModal.name} onChange={e => setAddItemModal({ ...addItemModal, name: e.target.value })} placeholder="Item name" className="input-field" />
                         <div className="flex gap-3">
-                            <input type="number" value={addItemModal.quantity} onChange={e => setAddItemModal({ ...addItemModal, quantity: parseFloat(e.target.value) || 1 })} className="w-20 input-field text-center" />
+                            <input type="number" value={addItemModal.quantity} onChange={e => setAddItemModal({ ...addItemModal, quantity: e.target.value === '' ? '' : parseFloat(e.target.value) })} className="w-20 input-field text-center" />
                             <select value={addItemModal.unit} onChange={e => setAddItemModal({ ...addItemModal, unit: e.target.value })} className="flex-1 select-field">
                                 {DEFAULT_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                             </select>
