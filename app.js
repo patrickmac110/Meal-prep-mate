@@ -5,7 +5,7 @@ import {
     ScanBarcode, Camera, Utensils, Trash2, Plus, Edit3, Save,
     ArrowLeft, Loader2, Check, AlertCircle, X, Image as ImageIcon, Sparkles,
     UserCheck, History, User, ThermometerSnowflake, Settings, Key, Bell,
-    MessageCircle, Download, Leaf, Copy, Share, Calendar, CalendarDays,
+    MessageCircle, Download, Upload, Leaf, Copy, Share, Calendar, CalendarDays,
     AlertTriangle, MapPin, Package, ChevronDown, ChevronRight, ChevronLeft,
     Flame, Beef, Wheat, Droplet, GripVertical, MoreHorizontal, List, Grid3x3
 } from 'lucide-react';
@@ -14,8 +14,18 @@ import {
 // CONSTANTS & DEFAULTS
 // ============================================================================
 
-const DEFAULT_UNITS = ['each', 'cups', 'tbsp', 'tsp', 'ml', 'L', 'oz', 'lb', 'g', 'kg', 'gal', 'bottle', 'jar', 'can', 'box', 'bag', 'container', 'pinch', 'bunch', 'piece', 'slice', 'dozen'];
+const DEFAULT_UNITS = ['each', 'cups', 'tbsp', 'tsp', 'ml', 'L', 'oz', 'lb', 'g', 'kg', 'gal', 'bottle', 'jar', 'can', 'box', 'bag', 'container', 'pinch', 'bunch', 'piece', 'slice', 'dozen', 'loaf', 'bushel'];
 const DEFAULT_LOCATIONS = ['Fridge', 'Freezer', 'Pantry', 'Cabinet', 'Countertop', 'Bakers Rack', 'Spice Rack'];
+
+// Available Gemini models - user can also type custom model names
+const GEMINI_MODELS = [
+    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', desc: 'Latest, fastest model' },
+    { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite', desc: 'Lighter, most economical' },
+    { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', desc: 'Fast and versatile' },
+    { id: 'gemini-1.5-flash-8b', name: 'Gemini 1.5 Flash 8B', desc: 'Smaller, efficient' },
+    { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro', desc: 'Best quality, higher usage' },
+    { id: 'gemini-1.0-pro', name: 'Gemini 1.0 Pro', desc: 'Legacy model' },
+];
 
 const SERVING_MULTIPLIERS = {
     infant: 0.3,    // 0-2
@@ -94,8 +104,8 @@ const useLocalStorage = (key, initialValue) => {
 // API HELPERS
 // ============================================================================
 
-const callGemini = async (apiKey, prompt, imageBase64 = null) => {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`;
+const callGemini = async (apiKey, prompt, imageBase64 = null, model = 'gemini-2.0-flash') => {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
     const parts = [{ text: prompt }];
     if (imageBase64) parts.push({ inlineData: { mimeType: "image/jpeg", data: imageBase64 } });
 
@@ -474,7 +484,7 @@ const LeftoverDetailModal = ({ leftover, leftovers, setLeftovers, onClose, onMov
 // INVENTORY VIEW (Enhanced with editable fields)
 // ============================================================================
 
-const InventoryView = ({ apiKey, inventory, setInventory, knownLocations, setKnownLocations, processedFiles, setProcessedFiles }) => {
+const InventoryView = ({ apiKey, model, inventory, setInventory, knownLocations, setKnownLocations, processedFiles, setProcessedFiles, allocatedIngredients }) => {
     const [newItem, setNewItem] = useState('');
     const [newQty, setNewQty] = useState(1);
     const [newUnit, setNewUnit] = useState('each');
@@ -492,16 +502,30 @@ const InventoryView = ({ apiKey, inventory, setInventory, knownLocations, setKno
     const [collapsedLocations, setCollapsedLocations] = useState({});
     const [showImageViewer, setShowImageViewer] = useState(false);
     const [stagingError, setStagingError] = useState(null);
+    const [searchQuery, setSearchQuery] = useState('');
     const fileInputRef = useRef(null);
     const pendingFileRef = useRef(null);
     const stagingListRef = useRef(null);
 
+    // Normalize location names (case-insensitive)
+    const normalizeLocation = (loc) => {
+        if (!loc) return 'Pantry';
+        const normalized = loc.trim();
+        // Find existing location that matches (case-insensitive)
+        const existing = allLocations.find(l => l.toLowerCase() === normalized.toLowerCase());
+        return existing || normalized;
+    };
+
     const allLocations = [...new Set([...DEFAULT_LOCATIONS, ...knownLocations])];
     const allUnits = DEFAULT_UNITS;
 
-    // Group inventory by location
-    const groupedInventory = inventory.reduce((acc, item) => {
-        const loc = item.location || 'Pantry';
+    // Filter and group inventory by location
+    const filteredInventory = searchQuery
+        ? inventory.filter(item => item.name.toLowerCase().includes(searchQuery.toLowerCase()))
+        : inventory;
+
+    const groupedInventory = filteredInventory.reduce((acc, item) => {
+        const loc = normalizeLocation(item.location);
         if (!acc[loc]) acc[loc] = [];
         acc[loc].push(item);
         return acc;
@@ -509,6 +533,27 @@ const InventoryView = ({ apiKey, inventory, setInventory, knownLocations, setKno
 
     const toggleLocationCollapse = (loc) => {
         setCollapsedLocations(prev => ({ ...prev, [loc]: !prev[loc] }));
+    };
+
+    // Calculate which meals have reserved this ingredient
+    const getItemReservations = (itemName) => {
+        if (!allocatedIngredients) return [];
+        const reservations = [];
+        Object.entries(allocatedIngredients).forEach(([slotKey, allocation]) => {
+            const matchingIng = allocation.ingredients?.find(ing =>
+                ing.item.toLowerCase().includes(itemName.toLowerCase()) ||
+                itemName.toLowerCase().includes(ing.item.toLowerCase())
+            );
+            if (matchingIng) {
+                reservations.push({
+                    slotKey,
+                    recipeName: allocation.recipeName,
+                    amount: matchingIng.amount,
+                    unit: matchingIng.unit
+                });
+            }
+        });
+        return reservations;
     };
 
     const addNewLocation = () => {
@@ -608,12 +653,17 @@ const InventoryView = ({ apiKey, inventory, setInventory, knownLocations, setKno
 
             const inventoryList = inventory.map(i => i.name).join(', ');
 
-            const prompt = `Analyze this image of groceries/food/receipt. Include ALL visible items, even if uncertain.
+            const prompt = `Analyze this image of groceries/food/receipt. Include ALL visible food items, even if uncertain.
+
+IMPORTANT RULES:
+- IGNORE non-food items (coupons, receipts in background, packaging materials, baby items, fire blankets, kitchen tools, etc.)
+- For containers/bottles, estimate fill level as decimal (e.g., 0.5 for half-full, 0.25 for quarter-full, 0.75 for three-quarters)
+- Only list actual food/grocery items
 
 Determine:
 1. Is this a receipt? (isReceipt: boolean)
 2. Likely storage location (e.g., "Fridge", "Pantry")
-3. List ALL visible items - even uncertain ones
+3. List ALL visible FOOD items - even uncertain ones
 
 Current inventory for duplicate checking: [${inventoryList}]
 
@@ -622,7 +672,7 @@ Return JSON: {
   "suggestedLocation": string,
   "items": [{
     "name": string,
-    "quantity": number,
+    "quantity": number (use decimals for partial containers like 0.5, 0.25),
     "unit": string,
     "confidence": "high" | "medium" | "low",
     "suggestedLocation": string,
@@ -631,7 +681,7 @@ Return JSON: {
   }]
 }`;
 
-            const result = await callGemini(apiKey, prompt, base64);
+            const result = await callGemini(apiKey, prompt, base64, model);
 
             if (result.error) {
                 alert(`AI Error: ${result.message}`);
@@ -769,7 +819,7 @@ Return JSON with ONLY NEW items not in the list above:
 
 If you find no additional items, return: { "items": [] }`;
 
-        const result = await callGemini(apiKey, prompt, base64);
+        const result = await callGemini(apiKey, prompt, base64, model);
 
         if (result.error) {
             setStagingError(`AI Error: ${result.message}`);
@@ -895,11 +945,50 @@ If you find no additional items, return: { "items": [] }`;
 
             {/* Inventory List - Grouped by Location */}
             <div className="space-y-4">
+                {/* Search and Controls */}
+                <div className="flex gap-2 items-center">
+                    <div className="relative flex-1">
+                        <input
+                            type="text"
+                            value={searchQuery}
+                            onChange={e => setSearchQuery(e.target.value)}
+                            placeholder="Search pantry..."
+                            className="w-full input-field pl-3 pr-8 text-sm"
+                        />
+                        {searchQuery && (
+                            <button
+                                onClick={() => setSearchQuery('')}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        )}
+                    </div>
+                    <button
+                        onClick={() => {
+                            const allLocs = Object.keys(groupedInventory);
+                            const allCollapsed = allLocs.every(loc => collapsedLocations[loc]);
+                            const newState = {};
+                            allLocs.forEach(loc => { newState[loc] = !allCollapsed; });
+                            setCollapsedLocations(newState);
+                        }}
+                        className="px-3 py-2 text-xs font-bold text-slate-500 bg-slate-100 rounded-lg hover:bg-slate-200 whitespace-nowrap"
+                    >
+                        {Object.keys(groupedInventory).every(loc => collapsedLocations[loc]) ? 'Expand All' : 'Collapse All'}
+                    </button>
+                </div>
                 {inventory.length === 0 && (
                     <div className="text-center py-12 text-slate-400">
                         <Refrigerator className="w-16 h-16 mx-auto mb-4 text-slate-200" />
                         <p>Your pantry is empty.</p>
                         <p className="text-sm mt-2">Scan a photo or add items manually.</p>
+                    </div>
+                )}
+
+                {inventory.length > 0 && Object.keys(groupedInventory).length === 0 && searchQuery && (
+                    <div className="text-center py-8 text-slate-400">
+                        <p className="text-sm">No items match "{searchQuery}"</p>
+                        <button onClick={() => setSearchQuery('')} className="text-emerald-600 text-sm mt-2 underline">Clear search</button>
                     </div>
                 )}
 
@@ -947,7 +1036,7 @@ If you find no additional items, return: { "items": [] }`;
                                             {/* Unit - Compact */}
                                             <span className="text-xs text-slate-500 font-medium w-16 flex-shrink-0">{item.unit || 'each'}</span>
 
-                                            {/* Name + Expiration */}
+                                            {/* Name + Expiration + Reservations */}
                                             <div className="flex-1 min-w-0">
                                                 <span className="font-bold text-slate-700 break-words">{item.name}</span>
                                                 {item.expiresAt && (
@@ -962,6 +1051,17 @@ If you find no additional items, return: { "items": [] }`;
                                                             : `Exp ${formatExpDate(item.expiresAt)}`}
                                                     </span>
                                                 )}
+                                                {(() => {
+                                                    const reservations = getItemReservations(item.name);
+                                                    if (reservations.length > 0) {
+                                                        return (
+                                                            <span className="ml-2 text-xs bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded-full font-medium" title={reservations.map(r => r.recipeName).join(', ')}>
+                                                                📅 {reservations.length} meal{reservations.length > 1 ? 's' : ''}
+                                                            </span>
+                                                        );
+                                                    }
+                                                    return null;
+                                                })()}
                                             </div>
 
                                             {/* Expand Indicator */}
@@ -1029,6 +1129,30 @@ If you find no additional items, return: { "items": [] }`;
                                                         >
                                                             <X className="w-4 h-4" />
                                                         </button>
+                                                    )}
+                                                </div>
+
+                                                {/* Staple Item */}
+                                                <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl">
+                                                    <button
+                                                        onClick={() => updateItem(item.id, { isStaple: !item.isStaple })}
+                                                        className={`w-10 h-5 rounded-full transition-colors relative ${item.isStaple ? 'bg-amber-500' : 'bg-slate-300'}`}
+                                                    >
+                                                        <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${item.isStaple ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                                                    </button>
+                                                    <span className="text-sm text-slate-600">Staple Item</span>
+                                                    {item.isStaple && (
+                                                        <div className="flex items-center gap-1 ml-auto">
+                                                            <span className="text-xs text-slate-500">Alert when below:</span>
+                                                            <input
+                                                                type="number"
+                                                                min="0.1"
+                                                                step="0.1"
+                                                                value={item.minStockLevel || 1}
+                                                                onChange={e => updateItem(item.id, { minStockLevel: parseFloat(e.target.value) || 1 })}
+                                                                className="w-14 input-field text-center text-sm py-1"
+                                                            />
+                                                        </div>
                                                     )}
                                                 </div>
 
@@ -1419,6 +1543,7 @@ const FamilyView = ({ familyMembers, setFamilyMembers }) => {
                     <option value="Keto">Keto</option>
                     <option value="GF">Gluten Free</option>
                     <option value="Dairy-Free">Dairy Free</option>
+                    <option value="GF+DF">Gluten AND Dairy Free</option>
                     <option value="athlete">Athlete (larger portions)</option>
                 </select>
                 <input value={preferences} onChange={e => setPreferences(e.target.value)} placeholder="Likes/Dislikes (optional)" className="w-full input-field text-sm" />
@@ -1489,6 +1614,7 @@ const FamilyView = ({ familyMembers, setFamilyMembers }) => {
                             <option value="Keto">Keto</option>
                             <option value="GF">Gluten Free</option>
                             <option value="Dairy-Free">Dairy Free</option>
+                            <option value="GF+DF">Gluten AND Dairy Free</option>
                             <option value="athlete">Athlete (larger portions)</option>
                         </select>
                         <input
@@ -1521,7 +1647,7 @@ const FamilyView = ({ familyMembers, setFamilyMembers }) => {
 // RECIPE ENGINE (with macros and smart deduction)
 // ============================================================================
 
-const RecipeEngine = ({ apiKey, inventory, setInventory, family, setSelectedRecipe, history, setHistory, recipes, setRecipes, favorites, setFavorites, shoppingList, setShoppingList, mealPlan, setMealPlan, leftovers, setLeftovers, onMoveToHistory }) => {
+const RecipeEngine = ({ apiKey, model, inventory, setInventory, family, setSelectedRecipe, history, setHistory, recipes, setRecipes, favorites, setFavorites, shoppingList, setShoppingList, mealPlan, setMealPlan, leftovers, setLeftovers, onMoveToHistory, customRecipes, setCustomRecipes, allocatedIngredients, setAllocatedIngredients }) => {
     const [loading, setLoading] = useState(false);
     const [activeTab, setActiveTab] = useState('generate');
     const [urlInput, setUrlInput] = useState('');
@@ -1534,6 +1660,39 @@ const RecipeEngine = ({ apiKey, inventory, setInventory, family, setSelectedReci
     const [showSlotPicker, setShowSlotPicker] = useState(false);
     const [pendingRecipeForCalendar, setPendingRecipeForCalendar] = useState(null);
     const [selectedHistoryLeftover, setSelectedHistoryLeftover] = useState(null);
+
+    // Custom recipe form state
+    const [showCustomRecipeForm, setShowCustomRecipeForm] = useState(false);
+    const [customRecipeName, setCustomRecipeName] = useState('');
+    const [customRecipeDesc, setCustomRecipeDesc] = useState('');
+    const [customRecipeServings, setCustomRecipeServings] = useState(4);
+    const [customRecipeTime, setCustomRecipeTime] = useState('30 min');
+    const [customRecipeIngredients, setCustomRecipeIngredients] = useState('');
+    const [customRecipeInstructions, setCustomRecipeInstructions] = useState('');
+
+    const saveCustomRecipe = () => {
+        if (!customRecipeName.trim()) return;
+        const newRecipe = {
+            id: generateId(),
+            name: customRecipeName,
+            description: customRecipeDesc,
+            servings: customRecipeServings,
+            total_time: customRecipeTime,
+            ingredients: customRecipeIngredients.split('\n').filter(i => i.trim()).map(i => ({ item: i.trim() })),
+            instructions: customRecipeInstructions.split('\n').filter(i => i.trim()),
+            isCustom: true,
+            createdAt: new Date().toISOString()
+        };
+        setCustomRecipes([...customRecipes, newRecipe]);
+        // Reset form
+        setCustomRecipeName('');
+        setCustomRecipeDesc('');
+        setCustomRecipeServings(4);
+        setCustomRecipeTime('30 min');
+        setCustomRecipeIngredients('');
+        setCustomRecipeInstructions('');
+        setShowCustomRecipeForm(false);
+    };
 
     // Calculate total servings from individual family member servings + extras
     const selectedFamily = family.filter(f => eaters.includes(f.id));
@@ -1597,7 +1756,7 @@ STRICT JSON Output:
   ]
 }`;
 
-        const res = await callGemini(apiKey, prompt);
+        const res = await callGemini(apiKey, prompt, null, model);
 
         if (res.error) {
             alert(`AI Error: ${res.message}`);
@@ -1629,6 +1788,9 @@ STRICT JSON Output:
             <div className="bg-white px-4 pt-4 pb-2 sticky top-0 z-20 border-b border-slate-50">
                 <div className="flex bg-slate-100 rounded-xl p-1 w-full">
                     <button onClick={() => setActiveTab('generate')} className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${activeTab === 'generate' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-400'}`}>Ideas</button>
+                    <button onClick={() => setActiveTab('custom')} className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${activeTab === 'custom' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-400'}`}>
+                        <span className="flex items-center justify-center gap-1"><Plus className="w-3 h-3" /> My</span>
+                    </button>
                     <button onClick={() => setActiveTab('favorites')} className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${activeTab === 'favorites' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-400'}`}>
                         <span className="flex items-center justify-center gap-1"><Heart className="w-3 h-3" /> Saved</span>
                     </button>
@@ -1687,7 +1849,7 @@ STRICT JSON Output:
                                             </div>
                                         </div>
                                         <div className="flex-1">
-                                            <label className="block text-xs font-bold text-slate-500 mb-1">Leftover Days</label>
+                                            <label className="block text-xs font-bold text-slate-500 mb-1">Meal Prep Days</label>
                                             <select
                                                 value={leftoverDays}
                                                 onChange={e => setLeftoverDays(parseInt(e.target.value))}
@@ -1778,6 +1940,120 @@ STRICT JSON Output:
                             ))}
                         </div>
                     </>
+                ) : activeTab === 'custom' ? (
+                    <div className="space-y-4 w-full">
+                        <div className="flex justify-between items-center">
+                            <h2 className="text-xl font-bold text-slate-900 px-1">My Recipes</h2>
+                            <button
+                                onClick={() => setShowCustomRecipeForm(!showCustomRecipeForm)}
+                                className="btn-primary text-sm py-2"
+                            >
+                                <Plus className="w-4 h-4 inline mr-1" /> Add Recipe
+                            </button>
+                        </div>
+
+                        {showCustomRecipeForm && (
+                            <div className="bg-slate-50 p-4 rounded-2xl space-y-3">
+                                <input
+                                    type="text"
+                                    value={customRecipeName}
+                                    onChange={e => setCustomRecipeName(e.target.value)}
+                                    placeholder="Recipe name *"
+                                    className="w-full input-field"
+                                />
+                                <textarea
+                                    value={customRecipeDesc}
+                                    onChange={e => setCustomRecipeDesc(e.target.value)}
+                                    placeholder="Description (optional)"
+                                    className="w-full input-field min-h-[60px]"
+                                />
+                                <div className="flex gap-2">
+                                    <div className="flex-1">
+                                        <label className="text-xs font-bold text-slate-500 block mb-1">Servings</label>
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            value={customRecipeServings}
+                                            onChange={e => setCustomRecipeServings(parseInt(e.target.value) || 1)}
+                                            className="w-full input-field"
+                                        />
+                                    </div>
+                                    <div className="flex-1">
+                                        <label className="text-xs font-bold text-slate-500 block mb-1">Time</label>
+                                        <input
+                                            type="text"
+                                            value={customRecipeTime}
+                                            onChange={e => setCustomRecipeTime(e.target.value)}
+                                            placeholder="30 min"
+                                            className="w-full input-field"
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold text-slate-500 block mb-1">Ingredients (one per line)</label>
+                                    <textarea
+                                        value={customRecipeIngredients}
+                                        onChange={e => setCustomRecipeIngredients(e.target.value)}
+                                        placeholder="2 cups flour&#10;1 egg&#10;1/2 cup milk"
+                                        className="w-full input-field min-h-[100px] font-mono text-sm"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold text-slate-500 block mb-1">Instructions (one step per line)</label>
+                                    <textarea
+                                        value={customRecipeInstructions}
+                                        onChange={e => setCustomRecipeInstructions(e.target.value)}
+                                        placeholder="Mix dry ingredients&#10;Add wet ingredients&#10;Bake at 350°F for 25 min"
+                                        className="w-full input-field min-h-[100px] font-mono text-sm"
+                                    />
+                                </div>
+                                <div className="flex gap-2">
+                                    <button onClick={() => setShowCustomRecipeForm(false)} className="flex-1 btn-secondary">Cancel</button>
+                                    <button onClick={saveCustomRecipe} className="flex-1 btn-primary" disabled={!customRecipeName.trim()}>Save Recipe</button>
+                                </div>
+                            </div>
+                        )}
+
+                        {customRecipes.length === 0 && !showCustomRecipeForm && (
+                            <p className="text-center text-slate-400 py-10">No custom recipes yet. Add your own recipes above!</p>
+                        )}
+
+                        {customRecipes.map(r => (
+                            <div key={r.id} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                                <div className="flex justify-between items-start">
+                                    <div className="flex-1">
+                                        <h3 className="font-bold text-slate-800">{r.name}</h3>
+                                        {r.description && <p className="text-sm text-slate-500 mt-1">{r.description}</p>}
+                                        <div className="flex gap-3 mt-2 text-xs text-slate-400">
+                                            <span>{r.servings} servings</span>
+                                            <span>{r.total_time}</span>
+                                            <span>{r.ingredients?.length || 0} ingredients</span>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => setCustomRecipes(customRecipes.filter(c => c.id !== r.id))}
+                                        className="text-slate-400 hover:text-red-500 p-2"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                </div>
+                                <div className="flex gap-2 mt-3">
+                                    <button
+                                        onClick={() => setSelectedRecipe(r)}
+                                        className="flex-1 btn-secondary text-sm"
+                                    >
+                                        View Details
+                                    </button>
+                                    <button
+                                        onClick={() => setFavorites([...favorites, { ...r, id: generateId() }])}
+                                        className="btn-secondary text-sm px-3"
+                                    >
+                                        <Heart className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 ) : activeTab === 'favorites' ? (
                     <div className="space-y-4 w-full">
                         <h2 className="text-xl font-bold text-slate-900 px-1">Saved Recipes</h2>
@@ -1920,6 +2196,8 @@ STRICT JSON Output:
 
                                 // Add recipe to calendar for selected day and leftover days
                                 const updates = {};
+                                const mainDayKey = `${days[startIdx]}-${targetSlot.meal}`;
+
                                 for (let i = 0; i < leftoverDays && (startIdx + i) < days.length; i++) {
                                     const dayKey = `${days[startIdx + i]}-${targetSlot.meal}`;
                                     updates[dayKey] = {
@@ -1932,11 +2210,26 @@ STRICT JSON Output:
                                     };
                                 }
 
+                                // Allocate ingredients for this scheduled meal (only for main day, not leftovers)
+                                if (pendingRecipeForCalendar.ingredients && pendingRecipeForCalendar.ingredients.length > 0) {
+                                    const allocation = {
+                                        recipeId: pendingRecipeForCalendar.id,
+                                        recipeName: pendingRecipeForCalendar.name,
+                                        scheduledAt: new Date().toISOString(),
+                                        ingredients: pendingRecipeForCalendar.ingredients.map(ing => ({
+                                            item: ing.item || ing.name || String(ing),
+                                            amount: ing.amount || ing.quantity || 1,
+                                            unit: ing.unit || ''
+                                        }))
+                                    };
+                                    setAllocatedIngredients(prev => ({ ...prev, [mainDayKey]: allocation }));
+                                }
+
                                 setMealPlan(prev => ({ ...prev, ...updates }));
                                 setShowSlotPicker(false);
                                 setPendingRecipeForCalendar(null);
                                 setTargetSlot(null);
-                                alert(`${pendingRecipeForCalendar.name} scheduled!${leftoverDays > 1 ? ` Leftovers added for ${leftoverDays - 1} more day(s).` : ''}`);
+                                alert(`${pendingRecipeForCalendar.name} scheduled!${leftoverDays > 1 ? ` Leftovers added for ${leftoverDays - 1} more day(s).` : ''} Ingredients reserved.`);
                             }}
                             disabled={!targetSlot?.day || !targetSlot?.meal}
                             className="w-full btn-primary bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1955,7 +2248,7 @@ STRICT JSON Output:
 // SHOPPING VIEW
 // ============================================================================
 
-const ShoppingView = ({ apiKey, list, setList }) => {
+const ShoppingView = ({ apiKey, model, list, setList }) => {
     const [newItem, setNewItem] = useState('');
     const [sorting, setSorting] = useState(false);
     const [editingItem, setEditingItem] = useState(null);
@@ -1984,7 +2277,7 @@ const ShoppingView = ({ apiKey, list, setList }) => {
             Categories: Produce, Dairy, Meat, Pantry, Frozen, Household, Beverages, Bakery.
             Return JSON: { "items": [{ "name": "Apple", "category": "Produce" }] }`;
 
-            const res = await callGemini(apiKey, prompt);
+            const res = await callGemini(apiKey, prompt, null, model);
             if (res.items) {
                 const updatedList = list.map(item => {
                     const found = res.items.find(ai => ai.name.toLowerCase().includes(item.name.toLowerCase()));
@@ -2071,7 +2364,7 @@ const ShoppingView = ({ apiKey, list, setList }) => {
 // LEFTOVERS VIEW (Unified layout with LeftoverCard and LeftoverDetailModal)
 // ============================================================================
 
-const LeftoversView = ({ apiKey, leftovers, setLeftovers, onMoveToHistory }) => {
+const LeftoversView = ({ apiKey, model, leftovers, setLeftovers, onMoveToHistory }) => {
     const [selected, setSelected] = useState(null);
     const [showAddModal, setShowAddModal] = useState(false);
     const [newLeftover, setNewLeftover] = useState({ name: '', portions: 2, tip: '', reheat: '' });
@@ -2086,7 +2379,7 @@ const LeftoversView = ({ apiKey, leftovers, setLeftovers, onMoveToHistory }) => 
 3. Suggested days until expiration (number only, 1-7)
 Return JSON: {"storage": "...", "reheat": "...", "expiresInDays": 4}`;
 
-        const res = await callGemini(apiKey, prompt);
+        const res = await callGemini(apiKey, prompt, null, model);
         if (!res.error) {
             setNewLeftover({
                 ...newLeftover,
@@ -2231,7 +2524,7 @@ Return JSON: {"storage": "...", "reheat": "...", "expiresInDays": 4}`;
 // CALENDAR VIEW (Agenda Style)
 // ============================================================================
 
-const CalendarView = ({ apiKey, mealPlan, setMealPlan, inventory, family, recipes, downloadICSFn, onCook, onFavorite, onAddToLeftovers, leftovers, setLeftovers, onMoveToHistory }) => {
+const CalendarView = ({ apiKey, model, mealPlan, setMealPlan, inventory, family, recipes, downloadICSFn, onCook, onFavorite, onAddToLeftovers, leftovers, setLeftovers, onMoveToHistory, allocatedIngredients, setAllocatedIngredients }) => {
     const [activeTab, setActiveTab] = useState('upcoming');
     const [selectedMeal, setSelectedMeal] = useState(null);
     const [selectedLeftover, setSelectedLeftover] = useState(null);
@@ -2298,6 +2591,12 @@ const CalendarView = ({ apiKey, mealPlan, setMealPlan, inventory, family, recipe
         const slot = mealPlan[slotKey];
         if (!slot) return;
 
+        // Clean up allocated ingredients for this slot
+        if (allocatedIngredients && allocatedIngredients[slotKey]) {
+            const { [slotKey]: _, ...restAlloc } = allocatedIngredients;
+            setAllocatedIngredients(restAlloc);
+        }
+
         if (slot.meals) {
             const updatedMeals = slot.meals.filter(m => m.id !== mealId);
             if (updatedMeals.length === 0) {
@@ -2338,7 +2637,7 @@ Generate cooking/storage details. Return JSON:
   "servings": 4
 }`;
 
-            const result = await callGemini(apiKey, prompt);
+            const result = await callGemini(apiKey, prompt, null, model);
             if (!result.error) {
                 newMeal = { ...newMeal, ...result };
             }
@@ -2811,6 +3110,9 @@ function MealPrepMate() {
     const [lastNotifCheck, setLastNotifCheck] = useLocalStorage('mpm_last_notif_check', '');
     const [notifsEnabled, setNotifsEnabled] = useLocalStorage('mpm_notifs_enabled', true);
     const [expirationReminders, setExpirationReminders] = useLocalStorage('mpm_expiration_reminders', [7, 3, 1]);
+    const [selectedModel, setSelectedModel] = useLocalStorage('mpm_selected_model', 'gemini-2.0-flash');
+    const [customRecipes, setCustomRecipes] = useLocalStorage('mpm_custom_recipes', []);
+    const [allocatedIngredients, setAllocatedIngredients] = useLocalStorage('mpm_allocated_ingredients', {});
     const [selectedRecipe, setSelectedRecipe] = useState(null);
     const [deductionData, setDeductionData] = useState(null);
     const [addItemModal, setAddItemModal] = useState(null);
@@ -2860,19 +3162,38 @@ function MealPrepMate() {
                 return expirationReminders.some(reminderDays => daysUntil === reminderDays || daysUntil <= 0);
             }).length;
 
+            // Check staple items that are running low
+            const lowStockStaples = inventory.filter(item => {
+                if (!item.isStaple) return false;
+                const minLevel = item.minStockLevel || 1;
+                return item.quantity <= minLevel;
+            });
+
             const totalExpiring = expiringLeftovers + expiringInventory;
 
-            if (totalExpiring > 0) {
+            if (totalExpiring > 0 || lowStockStaples.length > 0) {
                 navigator.serviceWorker.ready.then(reg => {
                     let body = '';
                     if (expiringLeftovers > 0 && expiringInventory > 0) {
                         body = `${expiringLeftovers} leftover(s) and ${expiringInventory} pantry item(s) expiring soon!`;
                     } else if (expiringLeftovers > 0) {
                         body = `You have ${expiringLeftovers} leftover(s) expiring soon. Time to eat them!`;
-                    } else {
+                    } else if (expiringInventory > 0) {
                         body = `You have ${expiringInventory} pantry item(s) expiring soon. Use them up!`;
                     }
-                    reg.showNotification('Expiry Alert 🍲', {
+
+                    // Add staple low stock alerts
+                    if (lowStockStaples.length > 0) {
+                        const stapleNames = lowStockStaples.slice(0, 3).map(s => s.name).join(', ');
+                        const stapleMsg = lowStockStaples.length > 3
+                            ? `${stapleNames} (+${lowStockStaples.length - 3} more)`
+                            : stapleNames;
+                        body = body
+                            ? `${body} Also low on: ${stapleMsg}`
+                            : `Running low on: ${stapleMsg}`;
+                    }
+
+                    reg.showNotification('Kitchen Alert 🍲', {
                         body,
                         tag: 'expiry-check',
                         vibrate: [200, 100, 200]
@@ -2928,7 +3249,7 @@ Return JSON: {
     }]
 } `;
 
-        const res = await callGemini(apiKey, prompt);
+        const res = await callGemini(apiKey, prompt, null, selectedModel);
         if (!res.error && res.deductions) {
             setDeductionData({ recipe, deductions: res.deductions });
         } else {
@@ -3114,12 +3435,12 @@ Return JSON: {
             {/* Main Content */}
             <div className="flex-1 overflow-y-auto scrollbar-hide w-full relative bg-white">
                 {view === 'dashboard' && <Dashboard />}
-                {view === 'inventory' && <InventoryView apiKey={apiKey} inventory={inventory} setInventory={setInventory} knownLocations={knownLocations} setKnownLocations={setKnownLocations} processedFiles={processedFiles} setProcessedFiles={setProcessedFiles} />}
+                {view === 'inventory' && <InventoryView apiKey={apiKey} model={selectedModel} inventory={inventory} setInventory={setInventory} knownLocations={knownLocations} setKnownLocations={setKnownLocations} processedFiles={processedFiles} setProcessedFiles={setProcessedFiles} allocatedIngredients={allocatedIngredients} />}
                 {view === 'family' && <FamilyView familyMembers={family} setFamilyMembers={setFamily} />}
-                {view === 'recipes' && <RecipeEngine apiKey={apiKey} inventory={inventory} setInventory={setInventory} family={family} setSelectedRecipe={setSelectedRecipe} history={history} setHistory={setHistory} recipes={recipes} setRecipes={setRecipes} favorites={favorites} setFavorites={setFavorites} shoppingList={shoppingList} setShoppingList={setShoppingList} mealPlan={mealPlan} setMealPlan={setMealPlan} leftovers={leftovers} setLeftovers={setLeftovers} onMoveToHistory={handleMoveToHistory} />}
-                {view === 'shopping' && <ShoppingView apiKey={apiKey} list={shoppingList} setList={setShoppingList} />}
-                {view === 'leftovers' && <LeftoversView apiKey={apiKey} leftovers={leftovers} setLeftovers={setLeftovers} onMoveToHistory={handleMoveToHistory} />}
-                {view === 'calendar' && <CalendarView apiKey={apiKey} mealPlan={mealPlan} setMealPlan={setMealPlan} inventory={inventory} family={family} recipes={recipes} downloadICSFn={downloadICS} onCook={handleCook} onFavorite={(r) => setFavorites([...favorites, { ...r, id: generateId() }])} onAddToLeftovers={handleAddToLeftovers} leftovers={leftovers} setLeftovers={setLeftovers} onMoveToHistory={handleMoveToHistory} />}
+                {view === 'recipes' && <RecipeEngine apiKey={apiKey} model={selectedModel} inventory={inventory} setInventory={setInventory} family={family} setSelectedRecipe={setSelectedRecipe} history={history} setHistory={setHistory} recipes={recipes} setRecipes={setRecipes} favorites={favorites} setFavorites={setFavorites} shoppingList={shoppingList} setShoppingList={setShoppingList} mealPlan={mealPlan} setMealPlan={setMealPlan} leftovers={leftovers} setLeftovers={setLeftovers} onMoveToHistory={handleMoveToHistory} customRecipes={customRecipes} setCustomRecipes={setCustomRecipes} allocatedIngredients={allocatedIngredients} setAllocatedIngredients={setAllocatedIngredients} />}
+                {view === 'shopping' && <ShoppingView apiKey={apiKey} model={selectedModel} list={shoppingList} setList={setShoppingList} />}
+                {view === 'leftovers' && <LeftoversView apiKey={apiKey} model={selectedModel} leftovers={leftovers} setLeftovers={setLeftovers} onMoveToHistory={handleMoveToHistory} />}
+                {view === 'calendar' && <CalendarView apiKey={apiKey} model={selectedModel} mealPlan={mealPlan} setMealPlan={setMealPlan} inventory={inventory} family={family} recipes={recipes} downloadICSFn={downloadICS} onCook={handleCook} onFavorite={(r) => setFavorites([...favorites, { ...r, id: generateId() }])} onAddToLeftovers={handleAddToLeftovers} leftovers={leftovers} setLeftovers={setLeftovers} onMoveToHistory={handleMoveToHistory} allocatedIngredients={allocatedIngredients} setAllocatedIngredients={setAllocatedIngredients} />}
             </div>
 
             {/* Bottom Nav */}
@@ -3332,6 +3653,37 @@ Return JSON: {
                         </p>
                     </div>
 
+                    {/* AI Model Selector */}
+                    <div>
+                        <label className="text-sm font-bold text-slate-600 block mb-2">AI Model</label>
+                        <select
+                            value={GEMINI_MODELS.find(m => m.id === selectedModel) ? selectedModel : '__custom__'}
+                            onChange={e => {
+                                if (e.target.value !== '__custom__') {
+                                    setSelectedModel(e.target.value);
+                                }
+                            }}
+                            className="w-full select-field mb-2"
+                        >
+                            {GEMINI_MODELS.map(m => (
+                                <option key={m.id} value={m.id}>{m.name} - {m.desc}</option>
+                            ))}
+                            <option value="__custom__">Custom Model...</option>
+                        </select>
+                        {!GEMINI_MODELS.find(m => m.id === selectedModel) && (
+                            <input
+                                type="text"
+                                value={selectedModel}
+                                onChange={e => setSelectedModel(e.target.value)}
+                                placeholder="e.g., gemini-2.0-flash-exp"
+                                className="w-full input-field text-sm"
+                            />
+                        )}
+                        <p className="text-xs text-slate-400 mt-2">
+                            Select a model or type a custom model name. See <a href="https://ai.google.dev/gemini-api/docs/models/gemini" target="_blank" className="text-emerald-600 underline">available models</a>.
+                        </p>
+                    </div>
+
                     {/* Notifications */}
                     <div>
                         <label className="text-sm font-bold text-slate-600 block mb-2">Notifications</label>
@@ -3421,6 +3773,64 @@ Return JSON: {
                                 <span className="text-sm text-slate-600">Shopping List</span>
                                 <span className="text-sm font-bold text-slate-800">{shoppingList.length}</span>
                             </div>
+                        </div>
+
+                        {/* Export/Import Buttons */}
+                        <div className="flex gap-2 mt-3">
+                            <button
+                                onClick={() => {
+                                    const data = {};
+                                    // Collect all MealPrepMate localStorage keys
+                                    Object.keys(localStorage).forEach(key => {
+                                        if (key.startsWith('mpm_')) {
+                                            try {
+                                                data[key] = JSON.parse(localStorage.getItem(key));
+                                            } catch {
+                                                data[key] = localStorage.getItem(key);
+                                            }
+                                        }
+                                    });
+                                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                                    const url = URL.createObjectURL(blob);
+                                    const a = document.createElement('a');
+                                    a.href = url;
+                                    a.download = `mealprepmate-backup-${new Date().toISOString().split('T')[0]}.json`;
+                                    a.click();
+                                    URL.revokeObjectURL(url);
+                                }}
+                                className="flex-1 btn-secondary text-emerald-600 text-sm"
+                            >
+                                <Download className="w-4 h-4 inline mr-1" /> Export Data
+                            </button>
+                            <label className="flex-1 btn-secondary text-indigo-600 text-sm cursor-pointer text-center">
+                                <Upload className="w-4 h-4 inline mr-1" /> Import Data
+                                <input
+                                    type="file"
+                                    accept=".json"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (!file) return;
+                                        const reader = new FileReader();
+                                        reader.onload = (event) => {
+                                            try {
+                                                const data = JSON.parse(event.target.result);
+                                                if (confirm(`Import ${Object.keys(data).length} data items? This will overwrite existing data.`)) {
+                                                    Object.entries(data).forEach(([key, value]) => {
+                                                        localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
+                                                    });
+                                                    alert('Data imported successfully! Reloading...');
+                                                    window.location.reload();
+                                                }
+                                            } catch (err) {
+                                                alert('Failed to import: Invalid JSON file');
+                                            }
+                                        };
+                                        reader.readAsText(file);
+                                        e.target.value = '';
+                                    }}
+                                />
+                            </label>
                         </div>
                     </div>
 
