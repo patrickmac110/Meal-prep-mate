@@ -7,14 +7,24 @@ import {
     UserCheck, History, User, ThermometerSnowflake, Settings, Key, Bell,
     MessageCircle, Download, Upload, Leaf, Copy, Share, Calendar, CalendarDays,
     AlertTriangle, MapPin, Package, ChevronDown, ChevronRight, ChevronLeft,
-    Flame, Beef, Wheat, Droplet, GripVertical, MoreHorizontal, List, Grid3x3
+    Flame, Beef, Wheat, Droplet, GripVertical, MoreHorizontal, List, Grid3x3, ClipboardList
 } from 'lucide-react';
 
 // ============================================================================
 // CONSTANTS & DEFAULTS
 // ============================================================================
 
-const DEFAULT_UNITS = ['each', 'cups', 'tbsp', 'tsp', 'ml', 'L', 'oz', 'lb', 'g', 'kg', 'gal', 'bottle', 'jar', 'can', 'box', 'bag', 'container', 'pinch', 'bunch', 'piece', 'slice', 'dozen', 'loaf', 'bushel'];
+// Units organized by category for better picker UX
+const UNITS_BY_CATEGORY = {
+    'Count': ['each', 'package', 'piece', 'slice', 'dozen', 'bunch'],
+    'Volume (Small)': ['tsp', 'tbsp', 'cups', 'ml'],
+    'Volume (Large)': ['L', 'quart', 'gal'],
+    'Weight': ['oz', 'lb', 'g', 'kg'],
+    'Containers': ['bottle', 'jar', 'can', 'box', 'bag', 'container', 'loaf'],
+    'Other': ['pinch', 'bushel']
+};
+const COMMON_UNITS = ['each', 'package', 'cups', 'oz', 'lb', 'g'];
+const DEFAULT_UNITS = Object.values(UNITS_BY_CATEGORY).flat();
 const DEFAULT_LOCATIONS = ['Fridge', 'Freezer', 'Pantry', 'Cabinet', 'Countertop', 'Bakers Rack', 'Spice Rack'];
 
 // Available Gemini models - user can also type custom model names
@@ -318,6 +328,351 @@ const MacroBadges = ({ macros, servings }) => {
     );
 };
 
+// Reusable Unit Picker Component - compact chips + expandable modal
+const UnitPicker = ({ value, onChange, compact = false }) => {
+    const [showModal, setShowModal] = useState(false);
+
+    const handleSelect = (unit) => {
+        onChange(unit);
+        setShowModal(false);
+    };
+
+    // If current value isn't in common units, show it as an extra chip
+    const displayUnits = COMMON_UNITS.includes(value)
+        ? COMMON_UNITS
+        : [value, ...COMMON_UNITS.filter(u => u !== value)].slice(0, 6);
+
+    return (
+        <>
+            <div className={`flex gap-1 flex-wrap ${compact ? '' : 'items-center'}`}>
+                {displayUnits.map(u => (
+                    <button
+                        key={u}
+                        type="button"
+                        onClick={() => handleSelect(u)}
+                        className={`px-2 py-1 rounded-lg text-xs font-bold transition-colors ${value === u
+                            ? 'bg-emerald-500 text-white'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                            }`}
+                    >
+                        {u}
+                    </button>
+                ))}
+                <button
+                    type="button"
+                    onClick={() => setShowModal(true)}
+                    className="px-2 py-1 rounded-lg text-xs font-bold bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
+                >
+                    More...
+                </button>
+            </div>
+
+            {/* Full Unit Picker Modal */}
+            <Modal isOpen={showModal} onClose={() => setShowModal(false)}>
+                <div className="p-6 space-y-4">
+                    <h2 className="text-xl font-bold text-slate-900">Select Unit</h2>
+                    {Object.entries(UNITS_BY_CATEGORY).map(([category, units]) => (
+                        <div key={category}>
+                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">{category}</h3>
+                            <div className="flex flex-wrap gap-2">
+                                {units.map(u => (
+                                    <button
+                                        key={u}
+                                        onClick={() => handleSelect(u)}
+                                        className={`px-3 py-2 rounded-lg text-sm font-bold transition-colors ${value === u
+                                            ? 'bg-emerald-500 text-white'
+                                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                            }`}
+                                    >
+                                        {u}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </Modal>
+        </>
+    );
+};
+
+// Compact Unit Picker Button - just shows current value, opens modal on tap
+// Perfect for inline item rows in the scan review screen
+const UnitPickerButton = ({ value, onChange, disabled = false }) => {
+    const [showModal, setShowModal] = useState(false);
+
+    const handleSelect = (unit) => {
+        onChange(unit);
+        setShowModal(false);
+    };
+
+    return (
+        <>
+            <button
+                type="button"
+                onClick={() => !disabled && setShowModal(true)}
+                disabled={disabled}
+                className={`px-3 py-1.5 rounded-lg text-sm font-bold flex items-center gap-1 transition-colors ${disabled
+                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                    : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
+                    }`}
+            >
+                {value}
+                <ChevronRight className="w-3 h-3" />
+            </button>
+
+            {/* Full Unit Picker Modal */}
+            <Modal isOpen={showModal} onClose={() => setShowModal(false)}>
+                <div className="p-6 space-y-4">
+                    <h2 className="text-xl font-bold text-slate-900">Select Unit</h2>
+                    {Object.entries(UNITS_BY_CATEGORY).map(([category, units]) => (
+                        <div key={category}>
+                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">{category}</h3>
+                            <div className="flex flex-wrap gap-2">
+                                {units.map(u => (
+                                    <button
+                                        key={u}
+                                        onClick={() => handleSelect(u)}
+                                        className={`px-3 py-2 rounded-lg text-sm font-bold transition-colors ${value === u
+                                            ? 'bg-emerald-500 text-white'
+                                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                            }`}
+                                    >
+                                        {u}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </Modal>
+        </>
+    );
+};
+
+// Reusable Recipe Card Component - matches RecipeEngine vertical card design
+const RecipeCard = ({ recipe, onClick, showUseButton, onUseRecipe }) => (
+    <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden w-full" onClick={onClick}>
+        <div className="h-32 bg-orange-50 flex items-center justify-center overflow-hidden cursor-pointer">
+            {recipe.imageUrl ? (
+                <img src={recipe.imageUrl} className="w-full h-full object-cover" alt={recipe.name} />
+            ) : recipe.imageLoading ? (
+                <Loader2 className="text-orange-300 w-8 h-8 animate-spin" />
+            ) : (
+                <ChefHat className="text-orange-200 w-12 h-12" />
+            )}
+        </div>
+        <div className="p-5 cursor-pointer">
+            <h3 className="font-bold text-xl text-slate-800 leading-tight mb-2">{recipe.name}</h3>
+            <MacroBadges macros={recipe.macros} servings={recipe.servings} />
+            <div className="flex gap-2 mt-3 flex-wrap">
+                {recipe.time && (
+                    <span className="text-xs font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded-md flex items-center gap-1"><Clock className="w-3 h-3" /> {recipe.time}</span>
+                )}
+                {recipe.missing_ingredients?.length > 0 && (
+                    <span className="text-xs font-bold bg-purple-50 text-purple-700 px-2 py-1 rounded-md">{recipe.missing_ingredients.length} missing</span>
+                )}
+                {recipe.leftoverDays > 0 && (
+                    <span className="text-xs font-bold bg-emerald-50 text-emerald-700 px-2 py-1 rounded-md">+{recipe.leftoverDays} leftover{recipe.leftoverDays > 1 ? 's' : ''}</span>
+                )}
+            </div>
+            <p className="text-sm text-slate-500 line-clamp-2 leading-relaxed mt-3">{recipe.description}</p>
+
+            {/* Action button */}
+            {showUseButton && onUseRecipe ? (
+                <button
+                    onClick={(e) => { e.stopPropagation(); onUseRecipe(recipe); }}
+                    className="w-full mt-4 btn-primary bg-emerald-600 text-sm"
+                >
+                    <Check className="w-4 h-4 inline mr-1" /> Use This Recipe
+                </button>
+            ) : (
+                <button
+                    onClick={(e) => { e.stopPropagation(); onClick?.(); }}
+                    className="w-full mt-4 flex items-center justify-center gap-1 bg-orange-50 text-orange-600 py-2.5 px-3 rounded-lg text-sm font-bold hover:bg-orange-100 transition-colors"
+                >
+                    View Details
+                </button>
+            )}
+        </div>
+    </div>
+);
+
+// Reusable Recipe Detail Modal Content - for full recipe information
+// Props allow customizing which action buttons appear based on context
+const RecipeDetailModal = ({
+    recipe,
+    isOpen,
+    onClose,
+    onFavorite,
+    onCook,
+    onSchedule,
+    onAddToLeftovers,
+    onAddMissingToInventory,
+    onAddToShoppingList,
+    onUseRecipe,
+    showScheduleButton = true,
+    showLeftoversButton = true,
+    showCookButton = true
+}) => {
+    if (!recipe) return null;
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} size="large">
+            <div className="bg-white min-h-full pb-10">
+                {/* Image Header */}
+                <div className="w-full h-48 bg-gradient-to-br from-orange-100 to-amber-50 flex items-center justify-center overflow-hidden">
+                    {recipe.imageUrl ? (
+                        <img src={recipe.imageUrl} className="w-full h-full object-cover" alt={recipe.name} />
+                    ) : recipe.imageLoading ? (
+                        <Loader2 className="w-12 h-12 text-orange-300 animate-spin" />
+                    ) : (
+                        <ChefHat className="w-20 h-20 text-orange-200" />
+                    )}
+                </div>
+
+                <div className="p-6 space-y-6">
+                    {/* Title & Macros */}
+                    <div>
+                        <h2 className="text-2xl font-bold text-slate-900 mb-2">{recipe.name}</h2>
+                        <MacroBadges macros={recipe.macros} servings={recipe.servings} />
+                    </div>
+
+                    {/* Description */}
+                    {recipe.description && (
+                        <div className="border-l-4 border-emerald-400 pl-4">
+                            <p className="text-slate-600 leading-relaxed italic">{recipe.description}</p>
+                        </div>
+                    )}
+
+                    {/* Family Adaptation */}
+                    {(recipe.family_adaptation || recipe.dietary_adaptations) && (
+                        <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
+                            <div className="flex items-center gap-2 mb-2">
+                                <Users className="w-5 h-5 text-purple-600" />
+                                <span className="font-bold text-purple-700 text-sm uppercase tracking-wide">Family Adaptation</span>
+                            </div>
+                            <p className="text-purple-800 text-sm leading-relaxed">
+                                {recipe.family_adaptation || recipe.dietary_adaptations}
+                            </p>
+                        </div>
+                    )}
+
+                    {/* Ingredients */}
+                    {recipe.ingredients?.length > 0 && (
+                        <div>
+                            <h3 className="font-bold mb-3 flex items-center gap-2"><Check className="w-5 h-5 text-emerald-500" /> Ingredients</h3>
+                            <div className="bg-emerald-50/50 rounded-xl p-3 space-y-2">
+                                {recipe.ingredients.map((i, idx) => (
+                                    <div key={idx} className="flex justify-between items-center p-2 bg-white rounded-lg">
+                                        <span className="text-slate-700">{i.item}</span>
+                                        <span className="text-emerald-600 font-bold text-sm">{i.qty}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Missing Ingredients */}
+                    {recipe.missing_ingredients?.length > 0 && (
+                        <div>
+                            <h3 className="font-bold mb-3 flex items-center gap-2"><ShoppingCart className="w-5 h-5 text-orange-500" /> Missing</h3>
+                            <div className="bg-orange-50 rounded-xl p-3 space-y-2">
+                                {recipe.missing_ingredients.map((i, idx) => (
+                                    <div key={idx} className="flex justify-between items-center p-2 bg-white rounded-lg">
+                                        <span className="text-slate-700">{i.item || i}</span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-orange-600 font-bold text-sm">{i.total_amount_needed || 'Needed'}</span>
+                                            {onAddMissingToInventory && (
+                                                <button onClick={() => onAddMissingToInventory(i)} className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded font-bold">
+                                                    I have this
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            {onAddToShoppingList && (
+                                <button onClick={() => onAddToShoppingList(recipe)} className="w-full mt-3 btn-secondary text-orange-600">
+                                    <ShoppingCart className="w-4 h-4 inline mr-1" /> Add All to Shopping List
+                                </button>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Instructions */}
+                    {recipe.steps?.length > 0 && (
+                        <div>
+                            <h3 className="font-bold mb-3">Instructions</h3>
+                            <div className="space-y-4">
+                                {recipe.steps.map((s, idx) => (
+                                    <div key={idx} className="flex gap-4">
+                                        <span className="bg-slate-100 text-slate-600 w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold">{idx + 1}</span>
+                                        <p className="text-slate-700 leading-relaxed pt-1">{s}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Storage & Reheating */}
+                    {(recipe.storage_instructions || recipe.reheating_tips) && (
+                        <div className="p-4 bg-blue-50 rounded-xl space-y-2">
+                            {recipe.storage_instructions && (
+                                <div className="text-sm text-blue-700">
+                                    <strong>Storage:</strong> {recipe.storage_instructions}
+                                </div>
+                            )}
+                            {recipe.reheating_tips && (
+                                <div className="text-sm text-blue-700">
+                                    <strong>Reheat:</strong> {recipe.reheating_tips}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Action Buttons */}
+                    <div className="pt-4 space-y-3">
+                        <div className="flex gap-3">
+                            {onFavorite && (
+                                <button onClick={() => onFavorite(recipe)} className="flex-1 btn-secondary flex items-center justify-center gap-2">
+                                    <Heart className="w-5 h-5" /> Save
+                                </button>
+                            )}
+                            {onUseRecipe && (
+                                <button onClick={() => onUseRecipe(recipe)} className="flex-1 btn-primary flex items-center justify-center gap-2">
+                                    <Check className="w-5 h-5" /> Use Recipe
+                                </button>
+                            )}
+                            {showCookButton && onCook && (
+                                <button onClick={() => onCook(recipe)} className="flex-1 btn-primary flex items-center justify-center gap-2">
+                                    <Check className="w-5 h-5" /> Cook
+                                </button>
+                            )}
+                        </div>
+                        {showScheduleButton && onSchedule && (
+                            <button
+                                onClick={() => onSchedule(recipe)}
+                                className="w-full btn-secondary text-indigo-600 border-indigo-200 flex items-center justify-center gap-2"
+                            >
+                                <CalendarDays className="w-5 h-5" /> Schedule to Calendar
+                            </button>
+                        )}
+                        {showLeftoversButton && onAddToLeftovers && (
+                            <button
+                                onClick={() => onAddToLeftovers(recipe)}
+                                className="w-full btn-secondary text-rose-600 border-rose-200 flex items-center justify-center gap-2"
+                            >
+                                <ThermometerSnowflake className="w-5 h-5" /> Add to Leftovers
+                            </button>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </Modal>
+    );
+};
+
 // Reusable Leftover Card Component
 const LeftoverCard = ({ leftover, leftovers, setLeftovers, onSelect, onMoveToHistory }) => {
     const today = new Date();
@@ -511,6 +866,7 @@ const InventoryView = ({ apiKey, model, inventory, setInventory, knownLocations,
     const [showImageViewer, setShowImageViewer] = useState(false);
     const [stagingError, setStagingError] = useState(null);
     const fileInputRef = useRef(null);
+    const cameraInputRef = useRef(null);
     const pendingFileRef = useRef(null);
     const stagingListRef = useRef(null);
 
@@ -906,11 +1262,21 @@ If you find no additional items, return: { "items": [] }`;
                 </span>
             </div>
 
-            {/* Scan Button - Full Width */}
-            <button onClick={() => fileInputRef.current?.click()}
-                className="flex items-center justify-center gap-2 bg-indigo-50 text-indigo-600 p-4 rounded-xl font-bold text-sm hover:bg-indigo-100 active:scale-[0.98] transition-all w-full">
-                <Camera className="w-5 h-5" /> Scan Photos
-            </button>
+            {/* Photo Capture Buttons - Camera & Upload */}
+            <div className="flex gap-2">
+                <button onClick={() => cameraInputRef.current?.click()}
+                    className="flex-1 flex flex-col items-center justify-center gap-1 bg-emerald-50 text-emerald-600 p-3 rounded-xl font-bold hover:bg-emerald-100 active:scale-[0.98] transition-all">
+                    <Camera className="w-6 h-6" />
+                    <span className="text-xs">Take Photo</span>
+                </button>
+                <button onClick={() => fileInputRef.current?.click()}
+                    className="flex-1 flex flex-col items-center justify-center gap-1 bg-indigo-50 text-indigo-600 p-3 rounded-xl font-bold hover:bg-indigo-100 active:scale-[0.98] transition-all">
+                    <ImageIcon className="w-6 h-6" />
+                    <span className="text-xs">Upload Photos</span>
+                </button>
+            </div>
+            <p className="text-xs text-center text-slate-400 -mt-1">Snap your pantry, fridge, or grocery receipts</p>
+            <input type="file" ref={cameraInputRef} className="hidden" accept="image/*" capture="environment" onChange={handleImageSelect} />
             <input type="file" ref={fileInputRef} className="hidden" accept="image/*" multiple onChange={handleImageSelect} />
 
             {/* Enhanced Quick Add Form */}
@@ -925,17 +1291,18 @@ If you find no additional items, return: { "items": [] }`;
                     </button>
                 </div>
                 {showQuickAddExpanded && (
-                    <div className="space-y-2 animate-fade-in">
-                        <div className="flex gap-2">
+                    <div className="space-y-3 animate-fade-in">
+                        <div className="flex gap-2 items-center">
                             <input type="number" min="0.01" step="0.01" value={newQty} onChange={e => setNewQty(e.target.value === '' ? '' : parseFloat(e.target.value))}
                                 className="w-16 input-field text-center" />
-                            <select value={newUnit} onChange={e => setNewUnit(e.target.value)} className="select-field flex-1">
-                                {allUnits.map(u => <option key={u} value={u}>{u}</option>)}
-                            </select>
                             <select value={newLocation} onChange={e => handleLocationChange(e.target.value)} className="select-field flex-1">
                                 {allLocations.map(l => <option key={l} value={l}>{l}</option>)}
                                 <option value="__new__">+ New Location</option>
                             </select>
+                        </div>
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 mb-1 block">Unit</label>
+                            <UnitPicker value={newUnit} onChange={setNewUnit} compact />
                         </div>
                         <div className="flex items-center gap-2">
                             <label className="text-xs text-slate-500">Expires:</label>
@@ -988,7 +1355,7 @@ If you find no additional items, return: { "items": [] }`;
                     <div className="text-center py-12 text-slate-400">
                         <Refrigerator className="w-16 h-16 mx-auto mb-4 text-slate-200" />
                         <p>Your pantry is empty.</p>
-                        <p className="text-sm mt-2">Scan a photo or add items manually.</p>
+                        <p className="text-sm mt-2">Upload photos of your pantry, fridge, or receipts to get started.</p>
                     </div>
                 )}
 
@@ -1088,14 +1455,12 @@ If you find no additional items, return: { "items": [] }`;
                                                 />
 
                                                 {/* Unit & Location Row */}
-                                                <div className="flex gap-2">
-                                                    <select
+                                                <div className="flex gap-2 items-center">
+                                                    <UnitPicker
                                                         value={item.unit || 'each'}
-                                                        onChange={(e) => updateItem(item.id, { unit: e.target.value })}
-                                                        className="select-field flex-1 text-sm"
-                                                    >
-                                                        {allUnits.map(u => <option key={u} value={u}>{u}</option>)}
-                                                    </select>
+                                                        onChange={(u) => updateItem(item.id, { unit: u })}
+                                                        compact
+                                                    />
                                                     <select
                                                         value={item.location || 'Pantry'}
                                                         onChange={(e) => handleLocationChange(e.target.value, item.id)}
@@ -1270,14 +1635,11 @@ If you find no additional items, return: { "items": [] }`;
                                                 className="w-14 flex-shrink-0 text-center bg-slate-50 rounded-lg py-1.5 border focus:border-emerald-500 text-sm"
                                                 disabled={item.excluded}
                                             />
-                                            <select
-                                                value={item.unit || 'piece'}
-                                                onChange={(e) => updateStagingItem(item.id, { unit: e.target.value })}
-                                                className="w-20 flex-shrink-0 select-field text-sm py-1.5"
+                                            <UnitPickerButton
+                                                value={item.unit || 'each'}
+                                                onChange={(u) => updateStagingItem(item.id, { unit: u })}
                                                 disabled={item.excluded}
-                                            >
-                                                {allUnits.map(u => <option key={u} value={u}>{u}</option>)}
-                                            </select>
+                                            />
                                             {stagingData.isReceipt && (
                                                 <select
                                                     value={item.location}
@@ -1356,29 +1718,37 @@ If you find no additional items, return: { "items": [] }`;
                 )}
             </Modal>
 
-            {/* Image Viewer Modal */}
+            {/* Image Viewer Modal - Enhanced Zoom */}
             {showImageViewer && stagingData?.imageUrl && (
                 <div
-                    className="fixed inset-0 z-[100] bg-black flex items-center justify-center"
+                    className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center p-4"
                     onClick={() => setShowImageViewer(false)}
                 >
                     <button
-                        className="absolute top-4 right-4 z-10 bg-white/20 text-white p-2 rounded-full"
+                        className="absolute top-4 right-4 z-10 bg-white/20 text-white p-3 rounded-full hover:bg-white/30 transition-colors"
                         onClick={() => setShowImageViewer(false)}
                     >
                         <X className="w-6 h-6" />
                     </button>
-                    <div className="w-full h-full overflow-auto touch-pan-x touch-pan-y">
+                    <div
+                        className="w-full h-full flex items-center justify-center overflow-auto"
+                        style={{ touchAction: 'manipulation' }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
                         <img
                             src={stagingData.imageUrl}
-                            alt="Full size"
-                            className="w-full h-auto min-h-full object-contain"
-                            style={{ touchAction: 'pinch-zoom' }}
-                            onClick={(e) => e.stopPropagation()}
+                            alt="Full size - pinch to zoom"
+                            className="max-w-none cursor-zoom-in"
+                            style={{
+                                maxHeight: '90vh',
+                                width: 'auto',
+                                height: 'auto',
+                                touchAction: 'pinch-zoom pan-x pan-y'
+                            }}
                         />
                     </div>
-                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/50 text-white text-sm px-4 py-2 rounded-full">
-                        Pinch to zoom • Tap outside to close
+                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-black/70 text-white text-sm px-4 py-2 rounded-full backdrop-blur-sm">
+                        📱 Pinch to zoom • Tap X to close
                     </div>
                 </div>
             )}
@@ -1662,7 +2032,7 @@ const RecipeEngine = ({ apiKey, model, inventory, setInventory, family, setSelec
     const [urlInput, setUrlInput] = useLocalStorage('mpm_recipe_url_input', '');
     const [showPrepOptions, setShowPrepOptions] = useLocalStorage('mpm_recipe_show_prep', false);
     const [extraGuests, setExtraGuests] = useLocalStorage('mpm_recipe_extra_guests', 0);
-    const [leftoverDays, setLeftoverDays] = useLocalStorage('mpm_recipe_leftover_days', 1);
+    const [leftoverDays, setLeftoverDays] = useLocalStorage('mpm_recipe_leftover_days', 0);
     const [mealType, setMealType] = useLocalStorage('mpm_recipe_meal_type', 'Any');
     const [mode, setMode] = useLocalStorage('mpm_recipe_mode', 'Standard');
 
@@ -1708,7 +2078,8 @@ const RecipeEngine = ({ apiKey, model, inventory, setInventory, family, setSelec
     // Calculate total servings from individual family member servings + extras
     const selectedFamily = family.filter(f => eaters.includes(f.id));
     const baseServings = selectedFamily.reduce((sum, f) => sum + (f.servings || 1), 0) || 2;
-    const totalServings = (baseServings + extraGuests) * leftoverDays;
+    const totalDays = 1 + leftoverDays; // 1 cook day + leftover days
+    const totalServings = (baseServings + extraGuests) * totalDays;
 
     const generate = async () => {
         setLoading(true);
@@ -1735,7 +2106,7 @@ Task: Create 3 ${mealType !== 'Any' ? mealType.toLowerCase() : ''} recipes.
 
 Requirements:
 1. Prioritize stock ingredients.
-2. If mixed diets (e.g. Vegan + Keto), provide a "Deviation Strategy" in the 'dietary_adaptations' field explaining how to serve both.
+2. INCLUDE a 'family_adaptation' field explaining how to accommodate all family members' dietary needs (e.g., "Deviation Strategy (Dairy-Free/Vegan): Substitute cheese with nutritional yeast or vegan cheese"). This is REQUIRED.
 3. The 'ingredients' list MUST contain ALL ingredients needed for the recipe.
 4. The 'missing_ingredients' list MUST contain objects with 'item' and 'total_amount_needed'.
 5. Include nutritional macros per serving.
@@ -1760,7 +2131,7 @@ STRICT JSON Output:
       "ingredients": [{ "item": "Rice", "qty": "1 cup", "have": true }],
       "missing_ingredients": [{ "item": "Saffron", "total_amount_needed": "1 pinch" }],
       "steps": ["Step 1", "Step 2"],
-      "dietary_adaptations": "To make vegan: Set aside portion before adding cheese.",
+      "family_adaptation": "Deviation Strategy (Dairy-Free): Substitute Pecorino Romano with a vegan Parmesan alternative or nutritional yeast.",
       "storage_instructions": "Store in airtight container. Refrigerate up to 3 days.",
       "reheating_tips": "Microwave 2-3 mins or pan-fry with a splash of water."
     }
@@ -1860,24 +2231,24 @@ STRICT JSON Output:
                                             </div>
                                         </div>
                                         <div className="flex-1">
-                                            <label className="block text-xs font-bold text-slate-500 mb-1">Meal Prep Days</label>
+                                            <label className="block text-xs font-bold text-slate-500 mb-1">Leftover Days</label>
                                             <select
                                                 value={leftoverDays}
                                                 onChange={e => setLeftoverDays(parseInt(e.target.value))}
                                                 className="w-full select-field"
                                             >
-                                                <option value={1}>1 day (no leftovers)</option>
-                                                <option value={2}>2 days</option>
-                                                <option value={3}>3 days</option>
-                                                <option value={4}>4 days</option>
-                                                <option value={5}>5 days</option>
+                                                <option value={0}>No leftovers</option>
+                                                <option value={1}>+1 day leftovers</option>
+                                                <option value={2}>+2 days leftovers</option>
+                                                <option value={3}>+3 days leftovers</option>
+                                                <option value={4}>+4 days leftovers</option>
                                             </select>
                                         </div>
                                     </div>
                                     <div className="bg-white rounded-lg p-3 text-center">
                                         <div className="text-xs text-slate-500">Total Servings Needed</div>
                                         <div className="text-2xl font-bold text-indigo-600">{totalServings}</div>
-                                        <div className="text-xs text-slate-400">({baseServings} people + {extraGuests} guests) × {leftoverDays} day{leftoverDays > 1 ? 's' : ''}</div>
+                                        <div className="text-xs text-slate-400">({baseServings} people + {extraGuests} guests) × {totalDays} day{totalDays > 1 ? 's' : ''}</div>
                                     </div>
                                 </div>
                             )}
@@ -1917,37 +2288,11 @@ STRICT JSON Output:
                             <h2 className="text-xl font-bold text-slate-900 px-1 mt-2">Suggestions</h2>
                             {recipes.length === 0 && <p className="text-slate-400 px-1 text-sm">Tap generate to get started.</p>}
                             {recipes.map(r => (
-                                <div key={r.id} className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden w-full" onClick={() => setSelectedRecipe(r)}>
-                                    <div className="h-32 bg-orange-50 flex items-center justify-center overflow-hidden">
-                                        {r.imageUrl ? (
-                                            <img src={r.imageUrl} className="w-full h-full object-cover" alt={r.name} />
-                                        ) : r.imageLoading ? (
-                                            <Loader2 className="text-orange-300 w-8 h-8 animate-spin" />
-                                        ) : (
-                                            <ChefHat className="text-orange-200 w-12 h-12" />
-                                        )}
-                                    </div>
-                                    <div className="p-5">
-                                        <h3 className="font-bold text-xl text-slate-800 leading-tight mb-2">{r.name}</h3>
-                                        <MacroBadges macros={r.macros} servings={r.servings} />
-                                        <div className="flex gap-2 mt-3 flex-wrap">
-                                            <span className="text-xs font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded-md flex items-center gap-1"><Clock className="w-3 h-3" /> {r.time}</span>
-                                            <span className="text-xs font-bold bg-purple-50 text-purple-700 px-2 py-1 rounded-md">{r.missing_ingredients?.length || 0} missing</span>
-                                            {r.leftoverDays > 1 && (
-                                                <span className="text-xs font-bold bg-emerald-50 text-emerald-700 px-2 py-1 rounded-md">{r.leftoverDays} days</span>
-                                            )}
-                                        </div>
-                                        <p className="text-sm text-slate-500 line-clamp-2 leading-relaxed mt-3">{r.description}</p>
-
-                                        {/* Quick Action */}
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); setSelectedRecipe(r); }}
-                                            className="w-full mt-4 flex items-center justify-center gap-1 bg-orange-50 text-orange-600 py-2.5 px-3 rounded-lg text-sm font-bold hover:bg-orange-100 transition-colors"
-                                        >
-                                            View Details
-                                        </button>
-                                    </div>
-                                </div>
+                                <RecipeCard
+                                    key={r.id}
+                                    recipe={r}
+                                    onClick={() => setSelectedRecipe(r)}
+                                />
                             ))}
                         </div>
                     </>
@@ -2159,8 +2504,8 @@ STRICT JSON Output:
                             <div>
                                 <h3 className="font-bold text-slate-800">{pendingRecipeForCalendar.name}</h3>
                                 <div className="text-sm text-slate-500">{pendingRecipeForCalendar.totalServings || pendingRecipeForCalendar.servings} servings</div>
-                                {pendingRecipeForCalendar.leftoverDays > 1 && (
-                                    <div className="text-xs text-emerald-600 font-bold">+ {pendingRecipeForCalendar.leftoverDays - 1} days of leftovers</div>
+                                {pendingRecipeForCalendar.leftoverDays > 0 && (
+                                    <div className="text-xs text-emerald-600 font-bold">+ {pendingRecipeForCalendar.leftoverDays} day{pendingRecipeForCalendar.leftoverDays > 1 ? 's' : ''} of leftovers</div>
                                 )}
                             </div>
                         </div>
@@ -2203,13 +2548,13 @@ STRICT JSON Output:
                                 }
                                 const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
                                 const startIdx = days.indexOf(targetSlot.day);
-                                const leftoverDays = pendingRecipeForCalendar.leftoverDays || 1;
+                                const totalDays = 1 + (pendingRecipeForCalendar.leftoverDays || 0); // cook day + leftover days
 
                                 // Add recipe to calendar for selected day and leftover days
                                 const updates = {};
                                 const mainDayKey = `${days[startIdx]}-${targetSlot.meal}`;
 
-                                for (let i = 0; i < leftoverDays && (startIdx + i) < days.length; i++) {
+                                for (let i = 0; i < totalDays && (startIdx + i) < days.length; i++) {
                                     const dayKey = `${days[startIdx + i]}-${targetSlot.meal}`;
                                     updates[dayKey] = {
                                         selected: {
@@ -2240,7 +2585,7 @@ STRICT JSON Output:
                                 setShowSlotPicker(false);
                                 setPendingRecipeForCalendar(null);
                                 setTargetSlot(null);
-                                alert(`${pendingRecipeForCalendar.name} scheduled!${leftoverDays > 1 ? ` Leftovers added for ${leftoverDays - 1} more day(s).` : ''} Ingredients reserved.`);
+                                alert(`${pendingRecipeForCalendar.name} scheduled!${totalDays > 1 ? ` Leftovers added for ${totalDays - 1} more day(s).` : ''} Ingredients reserved.`);
                             }}
                             disabled={!targetSlot?.day || !targetSlot?.meal}
                             className="w-full btn-primary bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -2535,7 +2880,7 @@ Return JSON: {"storage": "...", "reheat": "...", "expiresInDays": 4}`;
 // CALENDAR VIEW (Agenda Style)
 // ============================================================================
 
-const CalendarView = ({ apiKey, model, mealPlan, setMealPlan, inventory, family, recipes, downloadICSFn, onCook, onFavorite, onAddToLeftovers, leftovers, setLeftovers, onMoveToHistory, allocatedIngredients, setAllocatedIngredients }) => {
+const CalendarView = ({ apiKey, model, mealPlan, setMealPlan, inventory, family, recipes, downloadICSFn, onCook, onFavorite, onAddToLeftovers, leftovers, setLeftovers, onMoveToHistory, allocatedIngredients, setAllocatedIngredients, onOpenWizard }) => {
     const [activeTab, setActiveTab] = useState('upcoming');
     const [selectedMeal, setSelectedMeal] = useState(null);
     const [selectedLeftover, setSelectedLeftover] = useState(null);
@@ -2719,6 +3064,11 @@ Generate cooking/storage details. Return JSON:
                         </button>
                     </div>
                 </div>
+
+                {/* Plan Week Button */}
+                <button onClick={onOpenWizard} className="w-full btn-primary bg-gradient-to-r from-indigo-500 to-purple-500 text-white">
+                    <Sparkles className="w-4 h-4 inline mr-2" /> Plan Your Week
+                </button>
 
                 {calendarViewMode === 'agenda' ? (
                     <>
@@ -2976,55 +3326,17 @@ Generate cooking/storage details. Return JSON:
                 )}
             </div>
 
-            {/* Selected Meal Detail Modal */}
-            <Modal isOpen={!!selectedMeal} onClose={() => setSelectedMeal(null)}>
-                {selectedMeal && (
-                    <div className="p-6 space-y-4">
-                        {selectedMeal.imageUrl && (
-                            <img src={selectedMeal.imageUrl} className="w-full h-40 object-cover rounded-xl" alt="" />
-                        )}
-                        <h2 className="text-xl font-bold text-slate-900">{selectedMeal.name}</h2>
-                        {selectedMeal.description && (
-                            <p className="text-slate-600">{selectedMeal.description}</p>
-                        )}
-
-                        {selectedMeal.ingredients && (
-                            <div>
-                                <h3 className="font-bold text-sm text-slate-700 mb-2">Ingredients</h3>
-                                <div className="bg-slate-50 rounded-lg p-3 space-y-1">
-                                    {selectedMeal.ingredients.slice(0, 6).map((ing, i) => (
-                                        <div key={i} className="flex justify-between text-sm">
-                                            <span>{ing.item}</span>
-                                            <span className="text-slate-500">{ing.qty}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        <div className="flex gap-2">
-                            <button
-                                onClick={() => { onFavorite?.(selectedMeal); alert('Saved!'); }}
-                                className="flex-1 btn-secondary flex items-center justify-center gap-2"
-                            >
-                                <Heart className="w-4 h-4" /> Save
-                            </button>
-                            <button
-                                onClick={() => { onCook?.(selectedMeal); setSelectedMeal(null); }}
-                                className="flex-1 btn-primary flex items-center justify-center gap-2"
-                            >
-                                <Check className="w-4 h-4" /> Cook
-                            </button>
-                        </div>
-                        <button
-                            onClick={() => { onAddToLeftovers?.(selectedMeal); alert('Added to leftovers!'); }}
-                            className="w-full btn-secondary text-rose-600"
-                        >
-                            <ThermometerSnowflake className="w-4 h-4 inline mr-1" /> Add to Leftovers
-                        </button>
-                    </div>
-                )}
-            </Modal>
+            {/* Selected Meal Detail Modal - using reusable component */}
+            <RecipeDetailModal
+                recipe={selectedMeal}
+                isOpen={!!selectedMeal}
+                onClose={() => setSelectedMeal(null)}
+                onFavorite={(recipe) => { onFavorite?.(recipe); alert('Saved!'); }}
+                onCook={(recipe) => { onCook?.(recipe); setSelectedMeal(null); }}
+                onAddToLeftovers={(recipe) => { onAddToLeftovers?.(recipe); alert('Added to leftovers!'); }}
+                showScheduleButton={false}
+                showCookButton={true}
+            />
 
             {/* Add Custom Meal Modal */}
             <Modal isOpen={!!showAddCustomMeal} onClose={() => setShowAddCustomMeal(null)}>
@@ -3102,6 +3414,597 @@ Generate cooking/storage details. Return JSON:
 };
 
 // ============================================================================
+// MEAL SCHEDULER WIZARD
+// ============================================================================
+
+const MealSchedulerWizard = ({
+    isOpen, onClose, apiKey, model, inventory, setInventory, family, mealPlan, setMealPlan,
+    wizardDays, setWizardDays, wizardEaters, setWizardEaters,
+    wizardExtraGuests, setWizardExtraGuests, wizardMealType, setWizardMealType,
+    wizardLeftoverDays, setWizardLeftoverDays, wizardPrompt, setWizardPrompt,
+    wizardCurrentIdx, setWizardCurrentIdx, wizardPhase, setWizardPhase,
+    allocatedIngredients, setAllocatedIngredients,
+    shoppingList, setShoppingList, favorites, setFavorites
+}) => {
+    const [recipes, setRecipes] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [scheduledMeals, setScheduledMeals] = useState([]);
+    const [selectedWizardRecipe, setSelectedWizardRecipe] = useState(null);
+    const [pendingAllocation, setPendingAllocation] = useState(null);
+    // dayStates: { [dateKey]: 'cook' | 'leftover' | null }
+    const [dayStates, setDayStates] = useLocalStorage('mpm_wizard_day_states', {});
+
+    // Generate next 8 days
+    const upcomingDays = Array.from({ length: 8 }, (_, i) => {
+        const d = new Date();
+        d.setDate(d.getDate() + i);
+        return {
+            date: d,
+            dateKey: getLocalDateKey(d),
+            dayOfWeek: d.toLocaleDateString('en-US', { weekday: 'short' }),
+            dateLabel: `${d.getMonth() + 1}/${d.getDate()}`
+        };
+    });
+
+    // When a cook day is selected, auto-fill subsequent days as leftovers
+    const handleDayClick = (dateKey) => {
+        setDayStates(prev => {
+            const current = prev[dateKey];
+            const newStates = { ...prev };
+
+            if (current === 'cook') {
+                // Remove cook day and clear its leftovers
+                delete newStates[dateKey];
+                // Clear leftovers that belonged to this cook day
+                const clickedIdx = upcomingDays.findIndex(d => d.dateKey === dateKey);
+                for (let i = clickedIdx + 1; i < upcomingDays.length; i++) {
+                    const nextDate = upcomingDays[i].dateKey;
+                    if (newStates[nextDate] === 'cook') break;
+                    if (newStates[nextDate] === 'leftover') {
+                        delete newStates[nextDate];
+                    }
+                }
+            } else if (current === 'leftover') {
+                // Remove leftover
+                delete newStates[dateKey];
+            } else {
+                // Add as cook day and auto-fill leftovers
+                newStates[dateKey] = 'cook';
+                const clickedIdx = upcomingDays.findIndex(d => d.dateKey === dateKey);
+                for (let i = clickedIdx + 1; i < upcomingDays.length; i++) {
+                    const nextDate = upcomingDays[i].dateKey;
+                    if (newStates[nextDate] === 'cook') break;
+                    newStates[nextDate] = 'leftover';
+                }
+            }
+            return newStates;
+        });
+    };
+
+    // Convert a leftover day to a cook day
+    const convertToCook = (dateKey) => {
+        setDayStates(prev => {
+            const newStates = { ...prev };
+            newStates[dateKey] = 'cook';
+            // Fill subsequent days as leftovers
+            const clickedIdx = upcomingDays.findIndex(d => d.dateKey === dateKey);
+            for (let i = clickedIdx + 1; i < upcomingDays.length; i++) {
+                const nextDate = upcomingDays[i].dateKey;
+                if (newStates[nextDate] === 'cook') break;
+                newStates[nextDate] = 'leftover';
+            }
+            return newStates;
+        });
+    };
+
+    const clearAllLeftovers = () => {
+        setDayStates(prev => {
+            const newStates = {};
+            Object.entries(prev).forEach(([k, v]) => {
+                if (v === 'cook') newStates[k] = 'cook';
+            });
+            return newStates;
+        });
+    };
+
+    // Calculate cooking days and their leftover info
+    const getCookingDaysWithInfo = () => {
+        const cookDays = Object.entries(dayStates)
+            .filter(([k, v]) => v === 'cook')
+            .map(([k]) => k)
+            .sort((a, b) => new Date(a) - new Date(b));
+
+        return cookDays.map((cookDay, idx) => {
+            const cookIdx = upcomingDays.findIndex(d => d.dateKey === cookDay);
+            const nextCookDay = cookDays[idx + 1];
+            const nextCookIdx = nextCookDay ? upcomingDays.findIndex(d => d.dateKey === nextCookDay) : upcomingDays.length;
+
+            let leftoverDays = 0;
+            let totalDaySpan = 0;
+
+            for (let i = cookIdx + 1; i < nextCookIdx && i < upcomingDays.length; i++) {
+                totalDaySpan++;
+                if (dayStates[upcomingDays[i].dateKey] === 'leftover') {
+                    leftoverDays++;
+                }
+            }
+
+            return {
+                dateKey: cookDay,
+                leftoverDays,
+                totalDaySpan,
+                needsFreezing: totalDaySpan >= 4
+            };
+        });
+    };
+
+    const cookingDaysInfo = getCookingDaysWithInfo();
+    const cookingDays = cookingDaysInfo.map(c => c.dateKey);
+    const currentDayInfo = cookingDaysInfo[wizardCurrentIdx];
+    const currentDay = currentDayInfo?.dateKey;
+
+    const selectedFamily = family.filter(f => wizardEaters.includes(f.id));
+    const baseServings = selectedFamily.reduce((sum, f) => sum + (f.servings || 1), 0) || 2;
+    const currentLeftoverDays = currentDayInfo?.leftoverDays || 0;
+    const totalServings = (baseServings + wizardExtraGuests) * (1 + currentLeftoverDays);
+
+    const toggleEater = (id) => {
+        setWizardEaters(prev =>
+            prev.includes(id) ? prev.filter(e => e !== id) : [...prev, id]
+        );
+    };
+
+    const generateRecipes = async () => {
+        if (!currentDay) return;
+        setLoading(true);
+        setRecipes([]);
+
+        const invStr = inventory.map(i => `${i.name} (${i.quantity} ${i.unit})`).join(', ');
+        const famStr = selectedFamily.map(f =>
+            `${f.name} (Age:${f.age}, Diet:${f.diet}, Dislikes:${f.dislikes || 'None'})`
+        ).join(', ');
+
+        const dayLabel = upcomingDays.find(d => d.dateKey === currentDay)?.dayOfWeek || currentDay;
+        const alreadyScheduled = scheduledMeals.map(m => m.name).join(', ');
+        const needsFreezing = currentDayInfo?.needsFreezing || false;
+        const totalDaySpan = currentDayInfo?.totalDaySpan || 0;
+
+        const freezingNote = needsFreezing
+            ? `\n- IMPORTANT: Leftovers will be stored for ${totalDaySpan} days. Include FREEZING instructions and reheating from frozen tips.`
+            : '';
+
+        const prompt = `Act as an expert chef and nutritionist.
+
+Context:
+- Inventory: [${invStr}]
+- People Eating: [${famStr}]
+- Total Servings: ${totalServings} (1 cook day + ${currentLeftoverDays} leftover days)
+- Meal Type: ${wizardMealType}
+- Day: ${dayLabel}
+- Already Scheduled: [${alreadyScheduled || 'None'}]
+- Preferences: ${wizardPrompt || 'Standard'}${freezingNote}
+
+Create 3 different ${wizardMealType.toLowerCase()} recipes.
+
+Requirements:
+1. Use stock ingredients
+2. Include family_adaptation for dietary needs
+3. Include macros, storage_instructions, reheating_tips
+4. Scale to ${totalServings} servings${needsFreezing ? '\n5. MUST include freezing instructions' : ''}
+
+JSON Output:
+{
+  "recipes": [{
+    "id": "1", "name": "Name", "time": "30 min", "description": "Brief",
+    "servings": ${totalServings},
+    "macros": {"calories":400,"protein":25,"carbs":40,"fat":15},
+    "ingredients": [{"item":"Item","qty":"1 cup","have":true}],
+    "missing_ingredients": [{"item":"Missing","total_amount_needed":"1 unit"}],
+    "steps": ["Step 1"],
+    "family_adaptation": "Adaptations",
+    "storage_instructions": "Storage",
+    "reheating_tips": "Reheat tips"
+  }]
+}`;
+
+        try {
+            const res = await callGemini(apiKey, prompt, null, model);
+            if (res?.recipes || Array.isArray(res)) {
+                const newRecipes = (res.recipes || res).map(r => ({
+                    ...r, id: generateId(),
+                    imageUrl: generateRecipeImage(apiKey, r.name),
+                    leftoverDays: currentLeftoverDays, totalServings, baseServings
+                }));
+                setRecipes(newRecipes);
+            } else {
+                alert('Failed to generate recipes.');
+            }
+        } catch (err) {
+            alert(`Error: ${err.message}`);
+        }
+        setLoading(false);
+    };
+
+    const selectRecipe = (recipe) => {
+        const updates = {};
+        const cookSlotKey = `${currentDay}-${wizardMealType}`;
+        const existingCook = mealPlan[cookSlotKey] || { meals: [] };
+        updates[cookSlotKey] = {
+            meals: [...(existingCook.meals || []), {
+                ...recipe, isLeftover: false, dayNumber: 1,
+                scheduledFor: new Date(currentDay).toISOString(), mealType: wizardMealType
+            }]
+        };
+
+        let leftoverNum = 0;
+        const cookIdx = upcomingDays.findIndex(d => d.dateKey === currentDay);
+        const nextCookDay = cookingDays[wizardCurrentIdx + 1];
+        const nextCookIdx = nextCookDay ? upcomingDays.findIndex(d => d.dateKey === nextCookDay) : upcomingDays.length;
+
+        for (let i = cookIdx + 1; i < nextCookIdx && i < upcomingDays.length; i++) {
+            if (dayStates[upcomingDays[i].dateKey] === 'leftover') {
+                leftoverNum++;
+                const slotKey = `${upcomingDays[i].dateKey}-${wizardMealType}`;
+                const existing = mealPlan[slotKey] || { meals: [] };
+                updates[slotKey] = {
+                    meals: [...(existing.meals || []), {
+                        ...recipe, isLeftover: true, dayNumber: leftoverNum + 1,
+                        scheduledFor: new Date(upcomingDays[i].dateKey).toISOString(), mealType: wizardMealType
+                    }]
+                };
+            }
+        }
+
+        setMealPlan(prev => ({ ...prev, ...updates }));
+        setScheduledMeals(prev => [...prev, recipe]);
+
+        if (wizardCurrentIdx < cookingDays.length - 1) {
+            setWizardCurrentIdx(wizardCurrentIdx + 1);
+            setRecipes([]);
+            setTimeout(generateRecipes, 100);
+        } else {
+            alert(`All ${cookingDays.length} meals scheduled!`);
+            resetWizard();
+            onClose();
+        }
+    };
+
+    const skipDay = () => {
+        if (wizardCurrentIdx < cookingDays.length - 1) {
+            setWizardCurrentIdx(wizardCurrentIdx + 1);
+            setRecipes([]);
+            setTimeout(generateRecipes, 100);
+        } else {
+            alert('Wizard complete!');
+            resetWizard();
+            onClose();
+        }
+    };
+
+    const resetWizard = () => {
+        setWizardPhase('config');
+        setWizardCurrentIdx(0);
+        setScheduledMeals([]);
+        setRecipes([]);
+        setDayStates({});
+    };
+
+    const startWizard = () => {
+        if (cookingDays.length === 0) {
+            alert('Please select at least one day to cook');
+            return;
+        }
+        if (wizardEaters.length === 0) {
+            alert('Please select who is eating');
+            return;
+        }
+        setWizardPhase('review');
+        setWizardCurrentIdx(0);
+        setScheduledMeals([]);
+        setTimeout(generateRecipes, 100);
+    };
+
+    // Action handlers for wizard recipe cards
+    const handleAddToShoppingList = (recipe) => {
+        if (!recipe.missing_ingredients || recipe.missing_ingredients.length === 0) {
+            alert('No missing ingredients to add!');
+            return;
+        }
+        const newItems = recipe.missing_ingredients.map(ing => ({
+            id: generateId(),
+            name: ing.item,
+            checked: false,
+            category: 'From Recipe',
+            quantity: ing.total_amount_needed || '1',
+            notes: `For: ${recipe.name}`
+        }));
+        setShoppingList([...shoppingList, ...newItems]);
+        alert(`Added ${newItems.length} items to shopping list!`);
+    };
+
+    const handleAddToFavorites = (recipe) => {
+        setFavorites([...favorites, { ...recipe, id: generateId() }]);
+        alert('Recipe saved to favorites!');
+    };
+
+    const handleAddMissingToPantry = (ingredient) => {
+        const newItem = {
+            id: generateId(),
+            name: ingredient.item || ingredient,
+            quantity: 1,
+            unit: 'piece',
+            location: 'Pantry',
+            notes: '',
+            expiresAt: null,
+            addedAt: new Date().toISOString()
+        };
+        setInventory([...inventory, newItem]);
+        alert(`Added ${newItem.name} to inventory!`);
+    };
+
+    // Modified selectRecipe to show allocation prompt
+    const initiateSelectRecipe = (recipe) => {
+        // Show allocation confirmation modal
+        setPendingAllocation({
+            recipe,
+            slotKey: `${currentDay}-${wizardMealType}`,
+            ingredients: recipe.ingredients?.map(ing => ({
+                ...ing,
+                selected: ing.have !== false // Pre-select items we have
+            })) || []
+        });
+    };
+
+    const confirmAllocation = () => {
+        if (!pendingAllocation) return;
+        const { recipe, slotKey, ingredients } = pendingAllocation;
+
+        // Save allocation for selected ingredients
+        const selectedIngredients = ingredients.filter(ing => ing.selected);
+        if (selectedIngredients.length > 0) {
+            setAllocatedIngredients({
+                ...allocatedIngredients,
+                [slotKey]: {
+                    recipeName: recipe.name,
+                    ingredients: selectedIngredients.map(ing => ({
+                        item: ing.item,
+                        amount: ing.qty,
+                        unit: ''
+                    }))
+                }
+            });
+        }
+
+        selectRecipe(recipe);
+        setPendingAllocation(null);
+    };
+
+    const skipAllocation = () => {
+        if (!pendingAllocation) return;
+        selectRecipe(pendingAllocation.recipe);
+        setPendingAllocation(null);
+    };
+
+    if (!isOpen) return null;
+
+    const cookCount = Object.values(dayStates).filter(v => v === 'cook').length;
+    const leftoverCount = Object.values(dayStates).filter(v => v === 'leftover').length;
+
+    return (
+        <>
+            <Modal isOpen={isOpen} onClose={onClose}>
+                <div className="flex flex-col h-full max-h-[90vh]">
+                    {/* Scrollable Content */}
+                    <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                        <div className="flex justify-between items-center">
+                            <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+                                <CalendarDays className="w-6 h-6 text-indigo-600" />
+                                Meal Planning Wizard
+                            </h2>
+                            {wizardPhase === 'review' && (
+                                <span className="text-sm font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">
+                                    Meal {wizardCurrentIdx + 1} of {cookingDays.length}
+                                </span>
+                            )}
+                        </div>
+
+                        {wizardPhase === 'config' ? (
+                            <>
+                                <div>
+                                    <label className="block text-sm font-bold text-slate-600 mb-2">Select Days to Cook</label>
+                                    <p className="text-xs text-slate-400 mb-3">
+                                        Click to add cook days (blue) • Remaining days auto-fill as leftovers (orange) • Click a leftover to remove it, double-click to make it a cook day
+                                    </p>
+                                    <div className="grid grid-cols-4 gap-2">
+                                        {upcomingDays.map(day => {
+                                            const state = dayStates[day.dateKey];
+                                            const isCook = state === 'cook';
+                                            const isLeftover = state === 'leftover';
+
+                                            return (
+                                                <button
+                                                    key={day.dateKey}
+                                                    onClick={() => handleDayClick(day.dateKey)}
+                                                    onDoubleClick={() => isLeftover && convertToCook(day.dateKey)}
+                                                    className={`p-3 rounded-xl text-center transition-all ${isCook ? 'bg-indigo-600 text-white'
+                                                        : isLeftover ? 'bg-orange-50 text-orange-700 border-2 border-orange-400'
+                                                            : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                                                        }`}
+                                                >
+                                                    <div className="font-bold text-sm">{day.dayOfWeek}</div>
+                                                    <div className="text-xs">{day.dateLabel}</div>
+                                                    {isCook && <div className="text-[10px] mt-1 opacity-75">Cook</div>}
+                                                    {isLeftover && <div className="text-[10px] mt-1 text-orange-600 font-bold">Leftover</div>}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    <div className="flex justify-between items-center mt-2">
+                                        <span className="text-xs text-slate-400">
+                                            <span className="text-indigo-600 font-bold">{cookCount}</span> cook •
+                                            <span className="text-orange-500 font-bold ml-1">{leftoverCount}</span> leftover
+                                        </span>
+                                        {leftoverCount > 0 && (
+                                            <button onClick={clearAllLeftovers} className="text-xs text-red-500 hover:underline">
+                                                Clear all leftovers
+                                            </button>
+                                        )}
+                                    </div>
+                                    {cookingDaysInfo.some(c => c.needsFreezing) && (
+                                        <div className="mt-2 p-2 bg-amber-50 rounded-lg text-xs text-amber-700">
+                                            ❄️ Some meals span 4+ days. AI will include freezing instructions.
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-bold text-slate-600 mb-2">Who's Eating?</label>
+                                    <div className="flex flex-wrap gap-2">
+                                        {family.map(f => (
+                                            <button key={f.id} onClick={() => toggleEater(f.id)}
+                                                className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${wizardEaters.includes(f.id) ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                                    }`}>{f.name}</button>
+                                        ))}
+                                    </div>
+                                    <div className="flex items-center gap-2 mt-3">
+                                        <span className="text-sm text-slate-500">Extra guests:</span>
+                                        <input type="number" min="0" value={wizardExtraGuests}
+                                            onChange={e => setWizardExtraGuests(e.target.value === '' ? 0 : parseInt(e.target.value))}
+                                            className="w-16 input-field text-center" />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-bold text-slate-600 mb-2">Meal Type</label>
+                                    <select value={wizardMealType} onChange={e => setWizardMealType(e.target.value)} className="w-full select-field">
+                                        <option value="Dinner">Dinner</option>
+                                        <option value="Lunch">Lunch</option>
+                                        <option value="Breakfast">Breakfast</option>
+                                        <option value="Any">Any</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-bold text-slate-600 mb-2">Preferences (optional)</label>
+                                    <textarea value={wizardPrompt} onChange={e => setWizardPrompt(e.target.value)}
+                                        placeholder="Quick meals, Tex-Mex, No mushrooms..." className="w-full input-field h-16 resize-none" />
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <div className="bg-slate-100 rounded-xl p-3 text-center">
+                                    <div className="text-sm text-slate-500">Planning for</div>
+                                    <div className="font-bold text-slate-800">
+                                        {upcomingDays.find(d => d.dateKey === currentDay)?.dayOfWeek} {upcomingDays.find(d => d.dateKey === currentDay)?.dateLabel}
+                                    </div>
+                                    <div className="text-xs text-slate-400 mt-1">
+                                        {totalServings} servings ({currentLeftoverDays} leftover days)
+                                        {currentDayInfo?.needsFreezing && <span className="text-amber-600 ml-2">❄️ Freezing</span>}
+                                    </div>
+                                </div>
+
+                                {loading && (
+                                    <div className="text-center py-12">
+                                        <Loader2 className="w-12 h-12 text-indigo-500 animate-spin mx-auto mb-4" />
+                                        <p className="text-slate-500">Generating 3 options...</p>
+                                    </div>
+                                )}
+
+                                {recipes.length > 0 && (
+                                    <div className="space-y-4 pb-20">
+                                        {recipes.map(r => (
+                                            <RecipeCard
+                                                key={r.id}
+                                                recipe={r}
+                                                onClick={() => setSelectedWizardRecipe(r)}
+                                                showUseButton={true}
+                                                onUseRecipe={() => initiateSelectRecipe(r)}
+                                            />
+                                        ))}
+                                        <div className="flex gap-2">
+                                            <button onClick={generateRecipes} className="flex-1 btn-secondary text-indigo-600">
+                                                <Sparkles className="w-4 h-4 inline mr-1" /> 3 More
+                                            </button>
+                                            <button onClick={skipDay} className="flex-1 btn-secondary text-slate-500">Skip</button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <button onClick={resetWizard} className="w-full btn-secondary text-slate-500 text-sm">← Back</button>
+                            </>
+                        )}
+                    </div>
+
+                    {/* Sticky Footer with Action Buttons */}
+                    <div className="shrink-0 bg-white border-t border-slate-100 p-4 pb-safe">
+                        {wizardPhase === 'config' ? (
+                            <button onClick={startWizard} disabled={cookCount === 0 || wizardEaters.length === 0}
+                                className="w-full btn-primary bg-indigo-600 disabled:opacity-50">
+                                <Sparkles className="w-4 h-4 inline mr-2" /> Start Planning ({cookCount} meals)
+                            </button>
+                        ) : null}
+                    </div>
+                </div>
+            </Modal>
+
+            {/* Recipe Detail Modal - using reusable component */}
+            <RecipeDetailModal
+                recipe={selectedWizardRecipe}
+                isOpen={!!selectedWizardRecipe}
+                onClose={() => setSelectedWizardRecipe(null)}
+                onFavorite={(recipe) => { handleAddToFavorites(recipe); }}
+                onAddMissingToInventory={(ing) => handleAddMissingToPantry(ing)}
+                onAddToShoppingList={(recipe) => handleAddToShoppingList(recipe)}
+                onUseRecipe={(recipe) => { initiateSelectRecipe(recipe); setSelectedWizardRecipe(null); }}
+                showScheduleButton={false}
+                showLeftoversButton={false}
+                showCookButton={false}
+            />
+
+            {/* Ingredient Allocation Modal */}
+            <Modal isOpen={!!pendingAllocation} onClose={() => setPendingAllocation(null)}>
+                {pendingAllocation && (
+                    <div className="p-6 space-y-4">
+                        <h2 className="text-xl font-bold text-slate-900">Reserve Ingredients?</h2>
+                        <p className="text-slate-600 text-sm">
+                            Mark these ingredients as reserved for <strong>{pendingAllocation.recipe.name}</strong> on {new Date(currentDay).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}?
+                        </p>
+
+                        <div className="max-h-[40vh] overflow-y-auto space-y-2">
+                            {pendingAllocation.ingredients.map((ing, i) => (
+                                <div key={i} className={`flex items-center gap-3 p-2 rounded-lg ${ing.have !== false ? 'bg-emerald-50' : 'bg-slate-50'}`}>
+                                    <input
+                                        type="checkbox"
+                                        checked={ing.selected || false}
+                                        onChange={(e) => {
+                                            const newIngredients = [...pendingAllocation.ingredients];
+                                            newIngredients[i].selected = e.target.checked;
+                                            setPendingAllocation({ ...pendingAllocation, ingredients: newIngredients });
+                                        }}
+                                        className="w-4 h-4 rounded border-slate-300 text-emerald-500 focus:ring-emerald-500"
+                                    />
+                                    <span className="flex-1 text-sm">{ing.item}</span>
+                                    <span className="text-sm text-slate-500">{ing.qty}</span>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="flex gap-3 pt-2">
+                            <button onClick={skipAllocation} className="flex-1 btn-secondary">
+                                Skip
+                            </button>
+                            <button onClick={confirmAllocation} className="flex-1 btn-primary bg-emerald-600">
+                                <Check className="w-4 h-4 inline mr-1" /> Reserve & Use
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </Modal>
+        </>
+    );
+};
+
+// ============================================================================
 // MAIN APP
 // ============================================================================
 
@@ -3131,6 +4034,19 @@ function MealPrepMate() {
     const [showScheduleModal, setShowScheduleModal] = useLocalStorage('mpm_ui_schedule_modal', false);
     const [scheduleMealType, setScheduleMealType] = useLocalStorage('mpm_ui_schedule_meal_type', 'Dinner');
     const [selectedRecipeId, setSelectedRecipeId] = useLocalStorage('mpm_ui_selected_recipe_id', null);
+
+    // Meal Scheduler Wizard state
+    const [showMealWizard, setShowMealWizard] = useLocalStorage('mpm_wizard_show', false);
+    const [wizardDays, setWizardDays] = useLocalStorage('mpm_wizard_days', []);
+    const [wizardEaters, setWizardEaters] = useLocalStorage('mpm_wizard_eaters', []);
+    const [wizardExtraGuests, setWizardExtraGuests] = useLocalStorage('mpm_wizard_extra', 0);
+    const [wizardMealType, setWizardMealType] = useLocalStorage('mpm_wizard_meal_type', 'Dinner');
+    const [wizardLeftoverDays, setWizardLeftoverDays] = useLocalStorage('mpm_wizard_leftover', 0);
+    const [wizardPrompt, setWizardPrompt] = useLocalStorage('mpm_wizard_prompt', '');
+    const [wizardCurrentIdx, setWizardCurrentIdx] = useLocalStorage('mpm_wizard_idx', 0);
+    const [wizardPhase, setWizardPhase] = useLocalStorage('mpm_wizard_phase', 'config'); // 'config' | 'review'
+    const [wizardRecipes, setWizardRecipes] = useState([]);
+    const [wizardLoading, setWizardLoading] = useState(false);
 
     // Transient state (not persisted - runtime only)
     const [deductionData, setDeductionData] = useState(null);
@@ -3298,9 +4214,9 @@ Return JSON: {
         const recipe = deductionData.recipe;
         setHistory([{ ...recipe, id: generateId(), cookedAt: new Date().toISOString() }, ...history]);
 
-        // Automatically add to leftovers if recipe has leftoverDays > 1
-        const leftoverDays = recipe.leftoverDays || 1;
-        if (leftoverDays > 1) {
+        // Automatically add to leftovers if recipe has leftoverDays > 0
+        const leftoverDays = recipe.leftoverDays || 0;
+        if (leftoverDays > 0) {
             const leftoverPortions = (recipe.totalServings || recipe.servings || 4) - (recipe.baseServings || 2);
             handleAddToLeftovers(recipe, leftoverPortions > 0 ? leftoverPortions : recipe.servings);
         }
@@ -3459,7 +4375,7 @@ Return JSON: {
                 {view === 'recipes' && <RecipeEngine apiKey={apiKey} model={selectedModel} inventory={inventory} setInventory={setInventory} family={family} setSelectedRecipe={setSelectedRecipe} history={history} setHistory={setHistory} recipes={recipes} setRecipes={setRecipes} favorites={favorites} setFavorites={setFavorites} shoppingList={shoppingList} setShoppingList={setShoppingList} mealPlan={mealPlan} setMealPlan={setMealPlan} leftovers={leftovers} setLeftovers={setLeftovers} onMoveToHistory={handleMoveToHistory} customRecipes={customRecipes} setCustomRecipes={setCustomRecipes} allocatedIngredients={allocatedIngredients} setAllocatedIngredients={setAllocatedIngredients} />}
                 {view === 'shopping' && <ShoppingView apiKey={apiKey} model={selectedModel} list={shoppingList} setList={setShoppingList} />}
                 {view === 'leftovers' && <LeftoversView apiKey={apiKey} model={selectedModel} leftovers={leftovers} setLeftovers={setLeftovers} onMoveToHistory={handleMoveToHistory} />}
-                {view === 'calendar' && <CalendarView apiKey={apiKey} model={selectedModel} mealPlan={mealPlan} setMealPlan={setMealPlan} inventory={inventory} family={family} recipes={recipes} downloadICSFn={downloadICS} onCook={handleCook} onFavorite={(r) => setFavorites([...favorites, { ...r, id: generateId() }])} onAddToLeftovers={handleAddToLeftovers} leftovers={leftovers} setLeftovers={setLeftovers} onMoveToHistory={handleMoveToHistory} allocatedIngredients={allocatedIngredients} setAllocatedIngredients={setAllocatedIngredients} />}
+                {view === 'calendar' && <CalendarView apiKey={apiKey} model={selectedModel} mealPlan={mealPlan} setMealPlan={setMealPlan} inventory={inventory} family={family} recipes={recipes} downloadICSFn={downloadICS} onCook={handleCook} onFavorite={(r) => setFavorites([...favorites, { ...r, id: generateId() }])} onAddToLeftovers={handleAddToLeftovers} leftovers={leftovers} setLeftovers={setLeftovers} onMoveToHistory={handleMoveToHistory} allocatedIngredients={allocatedIngredients} setAllocatedIngredients={setAllocatedIngredients} onOpenWizard={() => setShowMealWizard(true)} />}
             </div>
 
             {/* Bottom Nav */}
@@ -3477,101 +4393,21 @@ Return JSON: {
                 </div>
             </div>
 
-            {/* Recipe Detail Modal */}
-            <Modal isOpen={!!selectedRecipe} onClose={() => setSelectedRecipe(null)} size="large">
-                {selectedRecipe && (
-                    <div className="bg-white min-h-full pb-10">
-                        <div className="w-full h-48 bg-gradient-to-br from-orange-100 to-amber-50 flex items-center justify-center overflow-hidden">
-                            {selectedRecipe.imageUrl ? (
-                                <img src={selectedRecipe.imageUrl} className="w-full h-full object-cover" alt={selectedRecipe.name} />
-                            ) : selectedRecipe.imageLoading ? (
-                                <Loader2 className="w-12 h-12 text-orange-300 animate-spin" />
-                            ) : (
-                                <ChefHat className="w-20 h-20 text-orange-200" />
-                            )}
-                        </div>
-                        <div className="p-6 space-y-6">
-                            <div>
-                                <h2 className="text-2xl font-bold text-slate-900 mb-2">{selectedRecipe.name}</h2>
-                                <MacroBadges macros={selectedRecipe.macros} servings={selectedRecipe.servings} />
-                            </div>
-                            <p className="text-slate-600 leading-relaxed">{selectedRecipe.description}</p>
-
-                            {/* Ingredients */}
-                            <div>
-                                <h3 className="font-bold mb-3 flex items-center gap-2"><Check className="w-5 h-5 text-emerald-500" /> Ingredients</h3>
-                                <div className="bg-emerald-50/50 rounded-xl p-3 space-y-2">
-                                    {selectedRecipe.ingredients?.map((i, idx) => (
-                                        <div key={idx} className="flex justify-between items-center p-2 bg-white rounded-lg">
-                                            <span className="text-slate-700">{i.item}</span>
-                                            <span className="text-emerald-600 font-bold text-sm">{i.qty}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Missing */}
-                            {selectedRecipe.missing_ingredients?.length > 0 && (
-                                <div>
-                                    <h3 className="font-bold mb-3 flex items-center gap-2"><ShoppingCart className="w-5 h-5 text-orange-500" /> Missing</h3>
-                                    <div className="bg-orange-50 rounded-xl p-3 space-y-2">
-                                        {selectedRecipe.missing_ingredients.map((i, idx) => (
-                                            <div key={idx} className="flex justify-between items-center p-2 bg-white rounded-lg">
-                                                <span className="text-slate-700">{i.item || i}</span>
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-orange-600 font-bold text-sm">{i.total_amount_needed || 'Needed'}</span>
-                                                    <button onClick={() => handleAddMissingToInventory(i)} className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded font-bold">
-                                                        I have this
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                    <button onClick={() => handleAddToShoppingList(selectedRecipe)} className="w-full mt-3 btn-secondary text-orange-600">
-                                        Add All to Shopping List
-                                    </button>
-                                </div>
-                            )}
-
-                            {/* Steps */}
-                            <div>
-                                <h3 className="font-bold mb-3">Instructions</h3>
-                                <div className="space-y-4">
-                                    {selectedRecipe.steps?.map((s, idx) => (
-                                        <div key={idx} className="flex gap-4">
-                                            <span className="bg-slate-100 text-slate-600 w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold">{idx + 1}</span>
-                                            <p className="text-slate-700 leading-relaxed pt-1">{s}</p>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-
-                            <div className="pt-4 space-y-3">
-                                <div className="flex gap-3">
-                                    <button onClick={() => { setFavorites([...favorites, { ...selectedRecipe, id: generateId() }]); alert('Saved!'); }} className="flex-1 btn-secondary flex items-center justify-center gap-2">
-                                        <Heart className="w-5 h-5" /> Save
-                                    </button>
-                                    <button onClick={() => handleCook(selectedRecipe)} className="flex-1 btn-primary flex items-center justify-center gap-2">
-                                        <Check className="w-5 h-5" /> Cook
-                                    </button>
-                                </div>
-                                <button
-                                    onClick={() => { setScheduleDate(new Date()); setShowScheduleModal(true); }}
-                                    className="w-full btn-secondary text-indigo-600 border-indigo-200 flex items-center justify-center gap-2"
-                                >
-                                    <CalendarDays className="w-5 h-5" /> Schedule to Calendar
-                                </button>
-                                <button
-                                    onClick={() => { handleAddToLeftovers(selectedRecipe); alert('Added to leftovers!'); }}
-                                    className="w-full btn-secondary text-rose-600 border-rose-200 flex items-center justify-center gap-2"
-                                >
-                                    <ThermometerSnowflake className="w-5 h-5" /> Add to Leftovers
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-            </Modal>
+            {/* Recipe Detail Modal - using reusable component */}
+            <RecipeDetailModal
+                recipe={selectedRecipe}
+                isOpen={!!selectedRecipe}
+                onClose={() => setSelectedRecipe(null)}
+                onFavorite={(recipe) => { setFavorites([...favorites, { ...recipe, id: generateId() }]); alert('Saved!'); }}
+                onCook={(recipe) => handleCook(recipe)}
+                onSchedule={(recipe) => { setScheduleDate(new Date()); setShowScheduleModal(true); }}
+                onAddToLeftovers={(recipe) => { handleAddToLeftovers(recipe); alert('Added to leftovers!'); }}
+                onAddMissingToInventory={(ing) => handleAddMissingToInventory(ing)}
+                onAddToShoppingList={(recipe) => handleAddToShoppingList(recipe)}
+                showScheduleButton={true}
+                showLeftoversButton={true}
+                showCookButton={true}
+            />
 
             {/* Deduction Review Modal */}
             <Modal isOpen={!!deductionData} onClose={() => setDeductionData(null)}>
@@ -3634,11 +4470,12 @@ Return JSON: {
                     <div className="p-6 space-y-4">
                         <h2 className="text-xl font-bold">Add to Inventory</h2>
                         <input value={addItemModal.name} onChange={e => setAddItemModal({ ...addItemModal, name: e.target.value })} placeholder="Item name" className="input-field" />
-                        <div className="flex gap-3">
+                        <div className="flex gap-3 items-center">
                             <input type="number" value={addItemModal.quantity} onChange={e => setAddItemModal({ ...addItemModal, quantity: e.target.value === '' ? '' : parseFloat(e.target.value) })} className="w-20 input-field text-center" />
-                            <select value={addItemModal.unit} onChange={e => setAddItemModal({ ...addItemModal, unit: e.target.value })} className="flex-1 select-field">
-                                {DEFAULT_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-                            </select>
+                        </div>
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 mb-1 block">Unit</label>
+                            <UnitPicker value={addItemModal.unit} onChange={(u) => setAddItemModal({ ...addItemModal, unit: u })} compact />
                         </div>
                         <select value={addItemModal.location} onChange={e => setAddItemModal({ ...addItemModal, location: e.target.value })} className="w-full select-field">
                             {DEFAULT_LOCATIONS.map(l => <option key={l} value={l}>{l}</option>)}
@@ -3647,6 +4484,36 @@ Return JSON: {
                     </div>
                 )}
             </Modal>
+
+            {/* Meal Scheduler Wizard */}
+            <MealSchedulerWizard
+                isOpen={showMealWizard}
+                onClose={() => setShowMealWizard(false)}
+                apiKey={apiKey}
+                model={selectedModel}
+                inventory={inventory}
+                family={family}
+                mealPlan={mealPlan}
+                setMealPlan={setMealPlan}
+                wizardDays={wizardDays}
+                setWizardDays={setWizardDays}
+                wizardEaters={wizardEaters}
+                setWizardEaters={setWizardEaters}
+                wizardExtraGuests={wizardExtraGuests}
+                setWizardExtraGuests={setWizardExtraGuests}
+                wizardMealType={wizardMealType}
+                setWizardMealType={setWizardMealType}
+                wizardLeftoverDays={wizardLeftoverDays}
+                setWizardLeftoverDays={setWizardLeftoverDays}
+                wizardPrompt={wizardPrompt}
+                setWizardPrompt={setWizardPrompt}
+                wizardCurrentIdx={wizardCurrentIdx}
+                setWizardCurrentIdx={setWizardCurrentIdx}
+                wizardPhase={wizardPhase}
+                setWizardPhase={setWizardPhase}
+                allocatedIngredients={allocatedIngredients}
+                setAllocatedIngredients={setAllocatedIngredients}
+            />
 
             {/* Settings Modal */}
             <Modal isOpen={showSettings} onClose={() => setShowSettings(false)}>
@@ -3951,11 +4818,11 @@ Return JSON: {
                         </div>
 
                         {/* Leftover Preview */}
-                        {selectedRecipe.leftoverDays > 1 && scheduleDate && (
+                        {selectedRecipe.leftoverDays > 0 && scheduleDate && (
                             <div className="bg-teal-50 p-3 rounded-xl text-sm">
                                 <div className="font-bold text-teal-700 mb-1">Leftovers will be added for:</div>
                                 <div className="text-teal-600">
-                                    {Array.from({ length: selectedRecipe.leftoverDays - 1 }, (_, i) => {
+                                    {Array.from({ length: selectedRecipe.leftoverDays }, (_, i) => {
                                         const d = new Date(scheduleDate);
                                         d.setDate(d.getDate() + i + 1);
                                         return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
@@ -3972,10 +4839,10 @@ Return JSON: {
                                     return;
                                 }
 
-                                const leftoverDays = selectedRecipe.leftoverDays || 1;
+                                const totalDays = 1 + (selectedRecipe.leftoverDays || 0); // cook day + leftover days
                                 const updates = {};
 
-                                for (let i = 0; i < leftoverDays; i++) {
+                                for (let i = 0; i < totalDays; i++) {
                                     const d = new Date(scheduleDate);
                                     d.setDate(d.getDate() + i);
                                     const dateKey = getLocalDateKey(d);
@@ -3999,7 +4866,7 @@ Return JSON: {
                                 setMealPlan(prev => ({ ...prev, ...updates }));
                                 setShowScheduleModal(false);
                                 setScheduleDate(null);
-                                alert(`${selectedRecipe.name} scheduled!${leftoverDays > 1 ? ` Leftovers added for ${leftoverDays - 1} more day(s).` : ''} `);
+                                alert(`${selectedRecipe.name} scheduled!${totalDays > 1 ? ` Leftovers added for ${totalDays - 1} more day(s).` : ''} `);
                             }}
                             disabled={!scheduleDate}
                             className="w-full btn-primary bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -4010,6 +4877,41 @@ Return JSON: {
                     </div>
                 )}
             </Modal>
+
+            {/* Meal Scheduler Wizard */}
+            <MealSchedulerWizard
+                isOpen={showMealWizard}
+                onClose={() => setShowMealWizard(false)}
+                apiKey={apiKey}
+                model={selectedModel}
+                inventory={inventory}
+                setInventory={setInventory}
+                family={family}
+                mealPlan={mealPlan}
+                setMealPlan={setMealPlan}
+                wizardDays={wizardDays}
+                setWizardDays={setWizardDays}
+                wizardEaters={wizardEaters}
+                setWizardEaters={setWizardEaters}
+                wizardExtraGuests={wizardExtraGuests}
+                setWizardExtraGuests={setWizardExtraGuests}
+                wizardMealType={wizardMealType}
+                setWizardMealType={setWizardMealType}
+                wizardLeftoverDays={wizardLeftoverDays}
+                setWizardLeftoverDays={setWizardLeftoverDays}
+                wizardPrompt={wizardPrompt}
+                setWizardPrompt={setWizardPrompt}
+                wizardCurrentIdx={wizardCurrentIdx}
+                setWizardCurrentIdx={setWizardCurrentIdx}
+                wizardPhase={wizardPhase}
+                setWizardPhase={setWizardPhase}
+                allocatedIngredients={allocatedIngredients}
+                setAllocatedIngredients={setAllocatedIngredients}
+                shoppingList={shoppingList}
+                setShoppingList={setShoppingList}
+                favorites={favorites}
+                setFavorites={setFavorites}
+            />
         </div>
     );
 }
