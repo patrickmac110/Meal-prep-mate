@@ -507,78 +507,385 @@ const RecipeDetailModal = ({
     onFavorite,
     onCook,
     onSchedule,
+    onReschedule,
     onAddToLeftovers,
     onAddMissingToInventory,
     onAddToShoppingList,
     onUseRecipe,
+    onSave, // New: callback to save edited recipe
+    startInEditMode = false, // Open directly in edit mode for new recipes
     showScheduleButton = true,
+    showRescheduleButton = false,
     showLeftoversButton = true,
     showCookButton = true
 }) => {
+    const [editMode, setEditMode] = useState(startInEditMode);
+    const [editedRecipe, setEditedRecipe] = useState(null);
+    const [imageGenerating, setImageGenerating] = useState(false);
+    const fileInputRef = useRef(null);
+
+    // Initialize editedRecipe when recipe changes or edit mode starts
+    useEffect(() => {
+        // Reset editMode when recipe changes based on startInEditMode prop
+        if (startInEditMode) {
+            setEditMode(true);
+        }
+    }, [startInEditMode, recipe]);
+
+    useEffect(() => {
+        if (recipe && editMode) {
+            setEditedRecipe({
+                ...recipe,
+                ingredients: recipe.ingredients || [],
+                steps: recipe.steps || [],
+                macros: recipe.macros || {},
+            });
+        }
+    }, [recipe, editMode]);
+
     if (!recipe) return null;
+
+    const displayRecipe = editMode && editedRecipe ? editedRecipe : recipe;
+
+    // Helper to update nested fields
+    const updateField = (field, value) => {
+        setEditedRecipe(prev => ({ ...prev, [field]: value }));
+    };
+
+    const updateMacro = (field, value) => {
+        setEditedRecipe(prev => ({
+            ...prev,
+            macros: { ...prev.macros, [field]: value }
+        }));
+    };
+
+    const updateIngredient = (idx, field, value) => {
+        setEditedRecipe(prev => {
+            const newIngredients = [...prev.ingredients];
+            newIngredients[idx] = { ...newIngredients[idx], [field]: value };
+            return { ...prev, ingredients: newIngredients };
+        });
+    };
+
+    const addIngredient = () => {
+        setEditedRecipe(prev => ({
+            ...prev,
+            ingredients: [...prev.ingredients, { item: '', qty: '' }]
+        }));
+    };
+
+    const removeIngredient = (idx) => {
+        setEditedRecipe(prev => ({
+            ...prev,
+            ingredients: prev.ingredients.filter((_, i) => i !== idx)
+        }));
+    };
+
+    const updateStep = (idx, value) => {
+        setEditedRecipe(prev => {
+            const newSteps = [...prev.steps];
+            newSteps[idx] = value;
+            return { ...prev, steps: newSteps };
+        });
+    };
+
+    const addStep = () => {
+        setEditedRecipe(prev => ({
+            ...prev,
+            steps: [...prev.steps, '']
+        }));
+    };
+
+    const removeStep = (idx) => {
+        setEditedRecipe(prev => ({
+            ...prev,
+            steps: prev.steps.filter((_, i) => i !== idx)
+        }));
+    };
+
+    const handleSave = () => {
+        if (onSave && editedRecipe) {
+            onSave(editedRecipe);
+        }
+        setEditMode(false);
+    };
+
+    const handleCancel = () => {
+        setEditedRecipe(null);
+        setEditMode(false);
+    };
+
+    const handleImageUpload = (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            updateField('imageUrl', reader.result);
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const generateAIImage = async () => {
+        if (!editedRecipe?.name) return;
+        setImageGenerating(true);
+        try {
+            // Use Pollinations for quick image generation
+            const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(editedRecipe.name + ' food dish professional photo')}?width=512&height=512&nologo=true`;
+            updateField('imageUrl', imageUrl);
+        } catch (e) {
+            console.error('Image generation error:', e);
+        }
+        setImageGenerating(false);
+    };
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} size="large">
             <div className="bg-white min-h-full pb-10">
                 {/* Image Header */}
-                <div className="w-full h-48 bg-gradient-to-br from-orange-100 to-amber-50 flex items-center justify-center overflow-hidden">
-                    {recipe.imageUrl ? (
-                        <img src={recipe.imageUrl} className="w-full h-full object-cover" alt={recipe.name} />
-                    ) : recipe.imageLoading ? (
+                <div className="w-full h-48 bg-gradient-to-br from-orange-100 to-amber-50 flex items-center justify-center overflow-hidden relative">
+                    {displayRecipe.imageUrl ? (
+                        <img src={displayRecipe.imageUrl} className="w-full h-full object-cover" alt={displayRecipe.name} />
+                    ) : displayRecipe.imageLoading || imageGenerating ? (
                         <Loader2 className="w-12 h-12 text-orange-300 animate-spin" />
                     ) : (
                         <ChefHat className="w-20 h-20 text-orange-200" />
                     )}
+
+                    {/* Image editing overlay in edit mode */}
+                    {editMode && (
+                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center gap-2">
+                            <input
+                                type="file"
+                                ref={fileInputRef}
+                                accept="image/*"
+                                onChange={handleImageUpload}
+                                className="hidden"
+                            />
+                            <button
+                                onClick={() => fileInputRef.current?.click()}
+                                className="p-3 bg-white/90 rounded-full shadow-lg hover:bg-white transition-all"
+                                title="Upload image"
+                            >
+                                <Upload className="w-5 h-5 text-indigo-600" />
+                            </button>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                onChange={handleImageUpload}
+                                className="hidden"
+                                id="camera-input"
+                            />
+                            <label
+                                htmlFor="camera-input"
+                                className="p-3 bg-white/90 rounded-full shadow-lg hover:bg-white transition-all cursor-pointer"
+                                title="Take photo"
+                            >
+                                <Camera className="w-5 h-5 text-emerald-600" />
+                            </label>
+                            <button
+                                onClick={generateAIImage}
+                                disabled={imageGenerating}
+                                className="p-3 bg-white/90 rounded-full shadow-lg hover:bg-white transition-all disabled:opacity-50"
+                                title="Generate with AI"
+                            >
+                                {imageGenerating ? <Loader2 className="w-5 h-5 text-purple-600 animate-spin" /> : <Sparkles className="w-5 h-5 text-purple-600" />}
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Edit/Save buttons in header */}
+                    <div className="absolute top-4 left-4 flex gap-2">
+                        {!editMode ? (
+                            <button
+                                onClick={() => setEditMode(true)}
+                                className="p-2 bg-white/90 hover:bg-white rounded-full shadow-md backdrop-blur-md transition-all"
+                            >
+                                <Edit3 className="w-5 h-5 text-indigo-600" />
+                            </button>
+                        ) : (
+                            <>
+                                <button
+                                    onClick={handleSave}
+                                    className="px-3 py-1.5 bg-emerald-500 text-white rounded-full text-sm font-bold shadow-md flex items-center gap-1"
+                                >
+                                    <Save className="w-4 h-4" /> Save
+                                </button>
+                                <button
+                                    onClick={handleCancel}
+                                    className="px-3 py-1.5 bg-slate-200 text-slate-700 rounded-full text-sm font-bold shadow-md"
+                                >
+                                    Cancel
+                                </button>
+                            </>
+                        )}
+                    </div>
                 </div>
 
                 <div className="p-6 space-y-6">
                     {/* Title & Macros */}
                     <div>
-                        <h2 className="text-2xl font-bold text-slate-900 mb-2">{recipe.name}</h2>
-                        <MacroBadges macros={recipe.macros} servings={recipe.servings} />
+                        {editMode ? (
+                            <input
+                                type="text"
+                                value={editedRecipe?.name || ''}
+                                onChange={(e) => updateField('name', e.target.value)}
+                                className="text-2xl font-bold text-slate-900 mb-2 w-full input-field"
+                                placeholder="Recipe name"
+                            />
+                        ) : (
+                            <h2 className="text-2xl font-bold text-slate-900 mb-2">{displayRecipe.name}</h2>
+                        )}
+
+                        {editMode ? (
+                            <div className="grid grid-cols-5 gap-2 mt-2">
+                                <div>
+                                    <label className="text-xs text-slate-500">Calories</label>
+                                    <input
+                                        type="number"
+                                        value={editedRecipe?.macros?.calories || ''}
+                                        onChange={(e) => updateMacro('calories', parseInt(e.target.value) || '')}
+                                        className="input-field text-sm w-full"
+                                        placeholder="0"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs text-slate-500">Protein (g)</label>
+                                    <input
+                                        type="number"
+                                        value={editedRecipe?.macros?.protein || ''}
+                                        onChange={(e) => updateMacro('protein', parseInt(e.target.value) || '')}
+                                        className="input-field text-sm w-full"
+                                        placeholder="0"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs text-slate-500">Carbs (g)</label>
+                                    <input
+                                        type="number"
+                                        value={editedRecipe?.macros?.carbs || ''}
+                                        onChange={(e) => updateMacro('carbs', parseInt(e.target.value) || '')}
+                                        className="input-field text-sm w-full"
+                                        placeholder="0"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs text-slate-500">Fat (g)</label>
+                                    <input
+                                        type="number"
+                                        value={editedRecipe?.macros?.fat || ''}
+                                        onChange={(e) => updateMacro('fat', parseInt(e.target.value) || '')}
+                                        className="input-field text-sm w-full"
+                                        placeholder="0"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs text-slate-500">Servings</label>
+                                    <input
+                                        type="number"
+                                        value={editedRecipe?.servings || ''}
+                                        onChange={(e) => updateField('servings', parseInt(e.target.value) || '')}
+                                        className="input-field text-sm w-full"
+                                        placeholder="4"
+                                    />
+                                </div>
+                            </div>
+                        ) : (
+                            <MacroBadges macros={displayRecipe.macros} servings={displayRecipe.servings} />
+                        )}
                     </div>
 
                     {/* Description */}
-                    {recipe.description && (
+                    {(editMode || displayRecipe.description) && (
                         <div className="border-l-4 border-emerald-400 pl-4">
-                            <p className="text-slate-600 leading-relaxed italic">{recipe.description}</p>
+                            {editMode ? (
+                                <textarea
+                                    value={editedRecipe?.description || ''}
+                                    onChange={(e) => updateField('description', e.target.value)}
+                                    className="w-full input-field text-sm h-20"
+                                    placeholder="Recipe description/overview..."
+                                />
+                            ) : (
+                                <p className="text-slate-600 leading-relaxed italic">{displayRecipe.description}</p>
+                            )}
                         </div>
                     )}
 
                     {/* Family Adaptation */}
-                    {(recipe.family_adaptation || recipe.dietary_adaptations) && (
+                    {(editMode || displayRecipe.family_adaptation || displayRecipe.dietary_adaptations) && (
                         <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
                             <div className="flex items-center gap-2 mb-2">
                                 <Users className="w-5 h-5 text-purple-600" />
                                 <span className="font-bold text-purple-700 text-sm uppercase tracking-wide">Family Adaptation</span>
                             </div>
-                            <p className="text-purple-800 text-sm leading-relaxed">
-                                {recipe.family_adaptation || recipe.dietary_adaptations}
-                            </p>
+                            {editMode ? (
+                                <textarea
+                                    value={editedRecipe?.family_adaptation || editedRecipe?.dietary_adaptations || ''}
+                                    onChange={(e) => updateField('family_adaptation', e.target.value)}
+                                    className="w-full input-field text-sm h-16"
+                                    placeholder="Any modifications for family members..."
+                                />
+                            ) : (
+                                <p className="text-purple-800 text-sm leading-relaxed">
+                                    {displayRecipe.family_adaptation || displayRecipe.dietary_adaptations}
+                                </p>
+                            )}
                         </div>
                     )}
 
                     {/* Ingredients */}
-                    {recipe.ingredients?.length > 0 && (
-                        <div>
-                            <h3 className="font-bold mb-3 flex items-center gap-2"><Check className="w-5 h-5 text-emerald-500" /> Ingredients</h3>
-                            <div className="bg-emerald-50/50 rounded-xl p-3 space-y-2">
-                                {recipe.ingredients.map((i, idx) => (
-                                    <div key={idx} className="flex justify-between items-center p-2 bg-white rounded-lg">
-                                        <span className="text-slate-700">{i.item}</span>
-                                        <span className="text-emerald-600 font-bold text-sm">{i.qty}</span>
-                                    </div>
-                                ))}
-                            </div>
+                    <div>
+                        <h3 className="font-bold mb-3 flex items-center gap-2">
+                            <Check className="w-5 h-5 text-emerald-500" /> Ingredients
+                            {editMode && (
+                                <button onClick={addIngredient} className="ml-auto text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded font-bold">
+                                    + Add
+                                </button>
+                            )}
+                        </h3>
+                        <div className="bg-emerald-50/50 rounded-xl p-3 space-y-2">
+                            {(editMode ? editedRecipe?.ingredients : displayRecipe.ingredients)?.map((i, idx) => (
+                                <div key={idx} className="flex justify-between items-center p-2 bg-white rounded-lg gap-2">
+                                    {editMode ? (
+                                        <>
+                                            <input
+                                                type="text"
+                                                value={i.item || ''}
+                                                onChange={(e) => updateIngredient(idx, 'item', e.target.value)}
+                                                className="flex-1 input-field text-sm"
+                                                placeholder="Ingredient name"
+                                            />
+                                            <input
+                                                type="text"
+                                                value={i.qty || ''}
+                                                onChange={(e) => updateIngredient(idx, 'qty', e.target.value)}
+                                                className="w-24 input-field text-sm text-right"
+                                                placeholder="1 cup"
+                                            />
+                                            <button onClick={() => removeIngredient(idx)} className="p-1 text-red-500 hover:bg-red-50 rounded">
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <span className="text-slate-700">{i.item}</span>
+                                            <span className="text-emerald-600 font-bold text-sm">{i.qty}</span>
+                                        </>
+                                    )}
+                                </div>
+                            ))}
+                            {(!displayRecipe.ingredients || displayRecipe.ingredients.length === 0) && !editMode && (
+                                <div className="text-slate-400 text-sm italic text-center py-2">No ingredients listed</div>
+                            )}
                         </div>
-                    )}
+                    </div>
 
-                    {/* Missing Ingredients */}
-                    {recipe.missing_ingredients?.length > 0 && (
+                    {/* Missing Ingredients - only shown in view mode, auto-populated */}
+                    {!editMode && displayRecipe.missing_ingredients?.length > 0 && (
                         <div>
                             <h3 className="font-bold mb-3 flex items-center gap-2"><ShoppingCart className="w-5 h-5 text-orange-500" /> Missing</h3>
                             <div className="bg-orange-50 rounded-xl p-3 space-y-2">
-                                {recipe.missing_ingredients.map((i, idx) => (
+                                {displayRecipe.missing_ingredients.map((i, idx) => (
                                     <div key={idx} className="flex justify-between items-center p-2 bg-white rounded-lg">
                                         <span className="text-slate-700">{i.item || i}</span>
                                         <div className="flex items-center gap-2">
@@ -593,7 +900,7 @@ const RecipeDetailModal = ({
                                 ))}
                             </div>
                             {onAddToShoppingList && (
-                                <button onClick={() => onAddToShoppingList(recipe)} className="w-full mt-3 btn-secondary text-orange-600">
+                                <button onClick={() => onAddToShoppingList(displayRecipe)} className="w-full mt-3 btn-secondary text-orange-600">
                                     <ShoppingCart className="w-4 h-4 inline mr-1" /> Add All to Shopping List
                                 </button>
                             )}
@@ -601,72 +908,131 @@ const RecipeDetailModal = ({
                     )}
 
                     {/* Instructions */}
-                    {recipe.steps?.length > 0 && (
-                        <div>
-                            <h3 className="font-bold mb-3">Instructions</h3>
-                            <div className="space-y-4">
-                                {recipe.steps.map((s, idx) => (
-                                    <div key={idx} className="flex gap-4">
-                                        <span className="bg-slate-100 text-slate-600 w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold">{idx + 1}</span>
+                    <div>
+                        <h3 className="font-bold mb-3 flex items-center gap-2">
+                            Instructions
+                            {editMode && (
+                                <button onClick={addStep} className="ml-auto text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded font-bold">
+                                    + Add Step
+                                </button>
+                            )}
+                        </h3>
+                        <div className="space-y-4">
+                            {(editMode ? editedRecipe?.steps : displayRecipe.steps)?.map((s, idx) => (
+                                <div key={idx} className="flex gap-4">
+                                    <span className="bg-slate-100 text-slate-600 w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold">{idx + 1}</span>
+                                    {editMode ? (
+                                        <div className="flex-1 flex gap-2">
+                                            <textarea
+                                                value={s}
+                                                onChange={(e) => updateStep(idx, e.target.value)}
+                                                className="flex-1 input-field text-sm min-h-[60px]"
+                                                placeholder="Describe this step..."
+                                            />
+                                            <button onClick={() => removeStep(idx)} className="p-1 text-red-500 hover:bg-red-50 rounded self-start">
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    ) : (
                                         <p className="text-slate-700 leading-relaxed pt-1">{s}</p>
-                                    </div>
-                                ))}
-                            </div>
+                                    )}
+                                </div>
+                            ))}
+                            {(!displayRecipe.steps || displayRecipe.steps.length === 0) && !editMode && (
+                                <div className="text-slate-400 text-sm italic text-center py-2">No instructions listed</div>
+                            )}
                         </div>
-                    )}
+                    </div>
 
                     {/* Storage & Reheating */}
-                    {(recipe.storage_instructions || recipe.reheating_tips) && (
+                    {(editMode || displayRecipe.storage_instructions || displayRecipe.reheating_tips) && (
                         <div className="p-4 bg-blue-50 rounded-xl space-y-2">
-                            {recipe.storage_instructions && (
-                                <div className="text-sm text-blue-700">
-                                    <strong>Storage:</strong> {recipe.storage_instructions}
-                                </div>
-                            )}
-                            {recipe.reheating_tips && (
-                                <div className="text-sm text-blue-700">
-                                    <strong>Reheat:</strong> {recipe.reheating_tips}
-                                </div>
+                            {editMode ? (
+                                <>
+                                    <div>
+                                        <label className="text-xs font-bold text-blue-700">Storage Instructions</label>
+                                        <input
+                                            type="text"
+                                            value={editedRecipe?.storage_instructions || ''}
+                                            onChange={(e) => updateField('storage_instructions', e.target.value)}
+                                            className="w-full input-field text-sm mt-1"
+                                            placeholder="How to store..."
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold text-blue-700">Reheating Tips</label>
+                                        <input
+                                            type="text"
+                                            value={editedRecipe?.reheating_tips || ''}
+                                            onChange={(e) => updateField('reheating_tips', e.target.value)}
+                                            className="w-full input-field text-sm mt-1"
+                                            placeholder="How to reheat..."
+                                        />
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    {displayRecipe.storage_instructions && (
+                                        <div className="text-sm text-blue-700">
+                                            <strong>Storage:</strong> {displayRecipe.storage_instructions}
+                                        </div>
+                                    )}
+                                    {displayRecipe.reheating_tips && (
+                                        <div className="text-sm text-blue-700">
+                                            <strong>Reheat:</strong> {displayRecipe.reheating_tips}
+                                        </div>
+                                    )}
+                                </>
                             )}
                         </div>
                     )}
 
-                    {/* Action Buttons */}
-                    <div className="pt-4 space-y-3">
-                        <div className="flex gap-3">
-                            {onFavorite && (
-                                <button onClick={() => onFavorite(recipe)} className="flex-1 btn-secondary flex items-center justify-center gap-2">
-                                    <Heart className="w-5 h-5" /> Save
+                    {/* Action Buttons - hide in edit mode */}
+                    {!editMode && (
+                        <div className="pt-4 space-y-3">
+                            <div className="flex gap-3">
+                                {onFavorite && (
+                                    <button onClick={() => onFavorite(displayRecipe)} className="flex-1 btn-secondary flex items-center justify-center gap-2">
+                                        <Heart className="w-5 h-5" /> Save
+                                    </button>
+                                )}
+                                {onUseRecipe && (
+                                    <button onClick={() => onUseRecipe(displayRecipe)} className="flex-1 btn-primary flex items-center justify-center gap-2">
+                                        <Check className="w-5 h-5" /> Use Recipe
+                                    </button>
+                                )}
+                                {showCookButton && onCook && (
+                                    <button onClick={() => onCook(displayRecipe)} className="flex-1 btn-primary flex items-center justify-center gap-2">
+                                        <Check className="w-5 h-5" /> Cook
+                                    </button>
+                                )}
+                            </div>
+                            {showScheduleButton && onSchedule && (
+                                <button
+                                    onClick={() => onSchedule(displayRecipe)}
+                                    className="w-full btn-secondary text-indigo-600 border-indigo-200 flex items-center justify-center gap-2"
+                                >
+                                    <CalendarDays className="w-5 h-5" /> Schedule to Calendar
                                 </button>
                             )}
-                            {onUseRecipe && (
-                                <button onClick={() => onUseRecipe(recipe)} className="flex-1 btn-primary flex items-center justify-center gap-2">
-                                    <Check className="w-5 h-5" /> Use Recipe
+                            {showRescheduleButton && onReschedule && (
+                                <button
+                                    onClick={() => onReschedule(displayRecipe)}
+                                    className="w-full btn-secondary text-amber-600 border-amber-200 flex items-center justify-center gap-2"
+                                >
+                                    <CalendarDays className="w-5 h-5" /> Reschedule
                                 </button>
                             )}
-                            {showCookButton && onCook && (
-                                <button onClick={() => onCook(recipe)} className="flex-1 btn-primary flex items-center justify-center gap-2">
-                                    <Check className="w-5 h-5" /> Cook
+                            {showLeftoversButton && onAddToLeftovers && (
+                                <button
+                                    onClick={() => onAddToLeftovers(displayRecipe)}
+                                    className="w-full btn-secondary text-rose-600 border-rose-200 flex items-center justify-center gap-2"
+                                >
+                                    <ThermometerSnowflake className="w-5 h-5" /> Add to Leftovers
                                 </button>
                             )}
                         </div>
-                        {showScheduleButton && onSchedule && (
-                            <button
-                                onClick={() => onSchedule(recipe)}
-                                className="w-full btn-secondary text-indigo-600 border-indigo-200 flex items-center justify-center gap-2"
-                            >
-                                <CalendarDays className="w-5 h-5" /> Schedule to Calendar
-                            </button>
-                        )}
-                        {showLeftoversButton && onAddToLeftovers && (
-                            <button
-                                onClick={() => onAddToLeftovers(recipe)}
-                                className="w-full btn-secondary text-rose-600 border-rose-200 flex items-center justify-center gap-2"
-                            >
-                                <ThermometerSnowflake className="w-5 h-5" /> Add to Leftovers
-                            </button>
-                        )}
-                    </div>
+                    )}
                 </div>
             </div>
         </Modal>
@@ -854,6 +1220,7 @@ const InventoryView = ({ apiKey, model, inventory, setInventory, knownLocations,
     const [collapsedLocations, setCollapsedLocations] = useLocalStorage('mpm_inv_collapsed_locations', {});
     const [searchQuery, setSearchQuery] = useLocalStorage('mpm_inv_search', '');
     const [expandedItemId, setExpandedItemId] = useLocalStorage('mpm_inv_expanded_item', null);
+    const [sortBy, setSortBy] = useLocalStorage('mpm_inv_sort', 'location'); // 'location', 'name', 'expiration', 'allocated'
 
     // Transient state (not persisted)
     const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -882,17 +1249,53 @@ const InventoryView = ({ apiKey, model, inventory, setInventory, knownLocations,
     const allLocations = [...new Set([...DEFAULT_LOCATIONS, ...knownLocations])];
     const allUnits = DEFAULT_UNITS;
 
-    // Filter and group inventory by location
+    // Filter and sort inventory
     const filteredInventory = searchQuery
         ? inventory.filter(item => item.name.toLowerCase().includes(searchQuery.toLowerCase()))
         : inventory;
 
-    const groupedInventory = filteredInventory.reduce((acc, item) => {
-        const loc = normalizeLocation(item.location);
-        if (!acc[loc]) acc[loc] = [];
-        acc[loc].push(item);
-        return acc;
-    }, {});
+    // Helper to check if item is allocated
+    const isItemAllocated = (itemName) => {
+        if (!allocatedIngredients) return false;
+        return Object.values(allocatedIngredients).some(allocation =>
+            allocation.ingredients?.some(ing =>
+                ing.item.toLowerCase().includes(itemName.toLowerCase()) ||
+                itemName.toLowerCase().includes(ing.item.toLowerCase())
+            )
+        );
+    };
+
+    // Sort items based on selected sort option
+    const sortedInventory = [...filteredInventory].sort((a, b) => {
+        switch (sortBy) {
+            case 'name':
+                return a.name.localeCompare(b.name);
+            case 'expiration':
+                // Items without expiration go last
+                if (!a.expiresAt && !b.expiresAt) return 0;
+                if (!a.expiresAt) return 1;
+                if (!b.expiresAt) return -1;
+                return new Date(a.expiresAt) - new Date(b.expiresAt);
+            case 'allocated':
+                // Allocated items first
+                const aAlloc = isItemAllocated(a.name) ? 0 : 1;
+                const bAlloc = isItemAllocated(b.name) ? 0 : 1;
+                return aAlloc - bAlloc || a.name.localeCompare(b.name);
+            case 'location':
+            default:
+                return normalizeLocation(a.location).localeCompare(normalizeLocation(b.location));
+        }
+    });
+
+    // Group by location only when sortBy is 'location'
+    const groupedInventory = sortBy === 'location'
+        ? sortedInventory.reduce((acc, item) => {
+            const loc = normalizeLocation(item.location);
+            if (!acc[loc]) acc[loc] = [];
+            acc[loc].push(item);
+            return acc;
+        }, {})
+        : null;
 
     const toggleLocationCollapse = (loc) => {
         setCollapsedLocations(prev => ({ ...prev, [loc]: !prev[loc] }));
@@ -955,6 +1358,18 @@ const InventoryView = ({ apiKey, model, inventory, setInventory, knownLocations,
     };
 
     const updateItem = (id, updates) => {
+        // Protect against NaN or invalid quantity updates
+        if (updates.quantity !== undefined) {
+            const qty = updates.quantity;
+            // If quantity is NaN, empty string while typing, or undefined, keep existing value
+            if (qty === '' || qty === undefined || (typeof qty === 'number' && isNaN(qty))) {
+                // Allow empty string for controlled input, but don't save NaN
+                if (typeof qty === 'number' && isNaN(qty)) {
+                    console.warn('Ignoring NaN quantity update for item', id);
+                    return; // Don't update with NaN
+                }
+            }
+        }
         setInventory(inventory.map(item =>
             item.id === id ? { ...item, ...updates } : item
         ));
@@ -1338,18 +1753,30 @@ If you find no additional items, return: { "items": [] }`;
                             </button>
                         )}
                     </div>
-                    <button
-                        onClick={() => {
-                            const allLocs = Object.keys(groupedInventory);
-                            const allCollapsed = allLocs.every(loc => collapsedLocations[loc]);
-                            const newState = {};
-                            allLocs.forEach(loc => { newState[loc] = !allCollapsed; });
-                            setCollapsedLocations(newState);
-                        }}
-                        className="px-3 py-2 text-xs font-bold text-slate-500 bg-slate-100 rounded-lg hover:bg-slate-200 whitespace-nowrap"
+                    <select
+                        value={sortBy}
+                        onChange={e => setSortBy(e.target.value)}
+                        className="select-field text-xs py-2 px-2 w-auto"
                     >
-                        {Object.keys(groupedInventory).every(loc => collapsedLocations[loc]) ? 'Expand All' : 'Collapse All'}
-                    </button>
+                        <option value="location">By Location</option>
+                        <option value="name">By Name</option>
+                        <option value="expiration">By Expiration</option>
+                        <option value="allocated">Reserved First</option>
+                    </select>
+                    {sortBy === 'location' && groupedInventory && (
+                        <button
+                            onClick={() => {
+                                const allLocs = Object.keys(groupedInventory);
+                                const allCollapsed = allLocs.every(loc => collapsedLocations[loc]);
+                                const newState = {};
+                                allLocs.forEach(loc => { newState[loc] = !allCollapsed; });
+                                setCollapsedLocations(newState);
+                            }}
+                            className="px-3 py-2 text-xs font-bold text-slate-500 bg-slate-100 rounded-lg hover:bg-slate-200 whitespace-nowrap"
+                        >
+                            {Object.keys(groupedInventory).every(loc => collapsedLocations[loc]) ? 'Expand All' : 'Collapse All'}
+                        </button>
+                    )}
                 </div>
                 {inventory.length === 0 && (
                     <div className="text-center py-12 text-slate-400">
@@ -1359,14 +1786,15 @@ If you find no additional items, return: { "items": [] }`;
                     </div>
                 )}
 
-                {inventory.length > 0 && Object.keys(groupedInventory).length === 0 && searchQuery && (
+                {inventory.length > 0 && groupedInventory && Object.keys(groupedInventory).length === 0 && searchQuery && (
                     <div className="text-center py-8 text-slate-400">
                         <p className="text-sm">No items match "{searchQuery}"</p>
                         <button onClick={() => setSearchQuery('')} className="text-emerald-600 text-sm mt-2 underline">Clear search</button>
                     </div>
                 )}
 
-                {Object.keys(groupedInventory).sort().map(location => (
+                {/* Grouped by Location (default) */}
+                {sortBy === 'location' && groupedInventory && Object.keys(groupedInventory).sort().map(location => (
                     <div key={location} className="space-y-2">
                         {/* Location Header - Collapsible */}
                         <button
@@ -1543,6 +1971,82 @@ If you find no additional items, return: { "items": [] }`;
                         )}
                     </div>
                 ))}
+
+                {/* Flat List (for non-location sorts) */}
+                {sortBy !== 'location' && sortedInventory.length > 0 && (
+                    <div className="space-y-2">
+                        <p className="text-xs text-slate-400 px-2">
+                            Sorted by {sortBy === 'name' ? 'Name (A-Z)' : sortBy === 'expiration' ? 'Expiration Date' : 'Reserved Status'}
+                        </p>
+                        {sortedInventory.map((item) => (
+                            <div key={item.id} className="inventory-item">
+                                {/* Main Row */}
+                                <div
+                                    className="flex items-center gap-2 cursor-pointer"
+                                    onClick={() => setExpandedItemId(expandedItemId === item.id ? null : item.id)}
+                                >
+                                    <input
+                                        type="number"
+                                        min="0.01"
+                                        step="0.01"
+                                        value={item.quantity}
+                                        onChange={(e) => { e.stopPropagation(); updateItem(item.id, { quantity: e.target.value === '' ? '' : parseFloat(e.target.value) }); }}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className={`w-14 text-center font-bold rounded-lg py-1.5 border-0 focus:ring-2 text-sm ${getExpirationStatus(item.expiresAt) === 'expired'
+                                            ? 'bg-red-100 text-red-600 focus:ring-red-500'
+                                            : getExpirationStatus(item.expiresAt) === 'soon'
+                                                ? 'bg-amber-100 text-amber-600 focus:ring-amber-500'
+                                                : 'bg-emerald-50 text-emerald-600 focus:ring-emerald-500'
+                                            }`}
+                                    />
+                                    <span className="text-xs text-slate-400 w-12">{item.unit}</span>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="font-bold text-slate-800 truncate">{item.name}</div>
+                                        <div className="flex items-center gap-2 mt-0.5">
+                                            <span className="text-xs text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">{normalizeLocation(item.location)}</span>
+                                            {item.expiresAt && (
+                                                <span className={`text-xs ${getExpirationStatus(item.expiresAt) === 'expired' ? 'text-red-500' : getExpirationStatus(item.expiresAt) === 'soon' ? 'text-amber-500' : 'text-slate-400'}`}>
+                                                    {getExpirationStatus(item.expiresAt) === 'expired' ? 'Expired' : `Exp: ${new Date(item.expiresAt).toLocaleDateString()}`}
+                                                </span>
+                                            )}
+                                            {isItemAllocated(item.name) && (
+                                                <span className="text-xs text-indigo-500 font-bold">Reserved</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                    {expandedItemId === item.id ? <ChevronDown className="w-4 h-4 text-slate-300" /> : <ChevronRight className="w-4 h-4 text-slate-300" />}
+                                </div>
+
+                                {/* Expanded Details */}
+                                {expandedItemId === item.id && (
+                                    <div className="mt-3 pt-3 border-t border-slate-100 space-y-3 animate-fade-in">
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div>
+                                                <label className="text-xs font-bold text-slate-400 block mb-1">Unit</label>
+                                                <UnitPickerButton value={item.unit} onChange={(u) => updateItem(item.id, { unit: u })} />
+                                            </div>
+                                            <div>
+                                                <label className="text-xs font-bold text-slate-400 block mb-1">Expires</label>
+                                                <input
+                                                    type="date"
+                                                    value={item.expiresAt?.split('T')[0] || ''}
+                                                    onChange={(e) => updateItem(item.id, { expiresAt: e.target.value || null })}
+                                                    className="input-field text-sm py-1.5"
+                                                />
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); deleteItem(item.id); }}
+                                            className="w-full py-2 text-red-500 text-sm font-bold flex items-center justify-center gap-2 hover:bg-red-50 rounded-lg transition-colors"
+                                        >
+                                            <Trash2 className="w-4 h-4" /> Delete Item
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                )}
             </div>
 
             {/* Staging Modal */}
@@ -1719,39 +2223,41 @@ If you find no additional items, return: { "items": [] }`;
             </Modal>
 
             {/* Image Viewer Modal - Enhanced Zoom */}
-            {showImageViewer && stagingData?.imageUrl && (
-                <div
-                    className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center p-4"
-                    onClick={() => setShowImageViewer(false)}
-                >
-                    <button
-                        className="absolute top-4 right-4 z-10 bg-white/20 text-white p-3 rounded-full hover:bg-white/30 transition-colors"
+            {
+                showImageViewer && stagingData?.imageUrl && (
+                    <div
+                        className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center p-4"
                         onClick={() => setShowImageViewer(false)}
                     >
-                        <X className="w-6 h-6" />
-                    </button>
-                    <div
-                        className="w-full h-full flex items-center justify-center overflow-auto"
-                        style={{ touchAction: 'manipulation' }}
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <img
-                            src={stagingData.imageUrl}
-                            alt="Full size - pinch to zoom"
-                            className="max-w-none cursor-zoom-in"
-                            style={{
-                                maxHeight: '90vh',
-                                width: 'auto',
-                                height: 'auto',
-                                touchAction: 'pinch-zoom pan-x pan-y'
-                            }}
-                        />
+                        <button
+                            className="absolute top-4 right-4 z-10 bg-white/20 text-white p-3 rounded-full hover:bg-white/30 transition-colors"
+                            onClick={() => setShowImageViewer(false)}
+                        >
+                            <X className="w-6 h-6" />
+                        </button>
+                        <div
+                            className="w-full h-full flex items-center justify-center overflow-auto"
+                            style={{ touchAction: 'manipulation' }}
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <img
+                                src={stagingData.imageUrl}
+                                alt="Full size - pinch to zoom"
+                                className="max-w-none cursor-zoom-in"
+                                style={{
+                                    maxHeight: '90vh',
+                                    width: 'auto',
+                                    height: 'auto',
+                                    touchAction: 'pinch-zoom pan-x pan-y'
+                                }}
+                            />
+                        </div>
+                        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-black/70 text-white text-sm px-4 py-2 rounded-full backdrop-blur-sm">
+                            📱 Pinch to zoom • Tap X to close
+                        </div>
                     </div>
-                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-black/70 text-white text-sm px-4 py-2 rounded-full backdrop-blur-sm">
-                        📱 Pinch to zoom • Tap X to close
-                    </div>
-                </div>
-            )}
+                )
+            }
 
             {/* Duplicate File Warning */}
             <ConfirmDialog
@@ -1780,7 +2286,7 @@ If you find no additional items, return: { "items": [] }`;
                     </div>
                 </div>
             </Modal>
-        </div>
+        </div >
     );
 };
 
@@ -2024,7 +2530,7 @@ const FamilyView = ({ familyMembers, setFamilyMembers }) => {
 // RECIPE ENGINE (with macros and smart deduction)
 // ============================================================================
 
-const RecipeEngine = ({ apiKey, model, inventory, setInventory, family, setSelectedRecipe, history, setHistory, recipes, setRecipes, favorites, setFavorites, shoppingList, setShoppingList, mealPlan, setMealPlan, leftovers, setLeftovers, onMoveToHistory, customRecipes, setCustomRecipes, allocatedIngredients, setAllocatedIngredients }) => {
+const RecipeEngine = ({ apiKey, model, inventory, setInventory, family, setSelectedRecipe, history, setHistory, recipes, setRecipes, favorites, setFavorites, shoppingList, setShoppingList, mealPlan, setMealPlan, leftovers, setLeftovers, onMoveToHistory, customRecipes, setCustomRecipes, allocatedIngredients, setAllocatedIngredients, onOpenWizard }) => {
     const [loading, setLoading] = useState(false);
 
     // Persisted form state (survives refresh)
@@ -2051,6 +2557,10 @@ const RecipeEngine = ({ apiKey, model, inventory, setInventory, family, setSelec
     const [pendingRecipeForCalendar, setPendingRecipeForCalendar] = useState(null);
     const [selectedHistoryLeftover, setSelectedHistoryLeftover] = useState(null);
 
+    // State for editing custom recipes via RecipeDetailModal
+    const [editingCustomRecipe, setEditingCustomRecipe] = useState(null);
+    const [isCreatingNewCustom, setIsCreatingNewCustom] = useState(false);
+
     const saveCustomRecipe = () => {
         if (!customRecipeName.trim()) return;
         const newRecipe = {
@@ -2073,6 +2583,100 @@ const RecipeEngine = ({ apiKey, model, inventory, setInventory, family, setSelec
         setCustomRecipeIngredients('');
         setCustomRecipeInstructions('');
         setShowCustomRecipeForm(false);
+    };
+
+    // Create blank recipe, add to customRecipes, and open for editing in global modal
+    const createBlankRecipeForEditing = () => {
+        const blankRecipe = {
+            id: generateId(),
+            name: 'New Recipe',
+            description: '',
+            servings: 4,
+            total_time: '30 min',
+            ingredients: [{ item: '', qty: '' }],
+            steps: [''],
+            macros: { calories: 0, protein: 0, carbs: 0, fat: 0 },
+            isCustom: true,
+            createdAt: new Date().toISOString()
+        };
+        // Don't add to customRecipes yet - will be added on Save
+        // Mark as new custom recipe so save handler knows to add it
+        const recipeWithFlags = { ...blankRecipe, _startInEditMode: true, _isNewCustomRecipe: true };
+        setSelectedRecipe(recipeWithFlags);
+        setShowCustomRecipeForm(false);
+    };
+
+    // AI formatting state and function
+    const [rawRecipeText, setRawRecipeText] = useState('');
+    const [formatLoading, setFormatLoading] = useState(false);
+
+    const formatWithAI = async () => {
+        if (!rawRecipeText.trim()) {
+            alert('Please paste or type a recipe to format');
+            return;
+        }
+        setFormatLoading(true);
+
+        const prompt = `Parse this recipe text and extract structured data. Return JSON only:
+
+Raw recipe text:
+${rawRecipeText}
+
+Return this exact JSON format:
+{
+    "name": "Recipe name",
+    "description": "Brief description",
+    "servings": 4,
+    "time": "30 min",
+    "ingredients": [{"item": "flour", "qty": "2 cups"}, {"item": "egg", "qty": "1"}],
+    "steps": ["Step 1 description", "Step 2 description"],
+    "macros": {"calories": 300, "protein": 15, "carbs": 40, "fat": 10}
+}
+
+Rules:
+- Extract the recipe name from the text
+- Write a brief description
+- Parse servings if mentioned, default to 4
+- Parse total time if mentioned
+- Each ingredient should have "item" (name) and "qty" (amount with unit)
+- List each instruction step clearly
+- Estimate macros per serving if possible, or default to 0`;
+
+        try {
+            let res = await callGemini(apiKey, prompt, null, model);
+            // Handle array response (Gemini sometimes returns array)
+            if (Array.isArray(res)) {
+                res = res[0] || {};
+            }
+            if (!res.error && res.name) {
+                // Create proper recipe object and open in edit modal
+                const parsedRecipe = {
+                    id: generateId(),
+                    name: res.name || 'Untitled Recipe',
+                    description: res.description || '',
+                    servings: res.servings || 4,
+                    total_time: res.time || '30 min',
+                    ingredients: (res.ingredients || []).map(ing =>
+                        typeof ing === 'string' ? { item: ing, qty: '' } : { item: ing.item || ing, qty: ing.qty || '' }
+                    ),
+                    steps: res.steps || res.instructions || [],
+                    macros: res.macros || { calories: 0, protein: 0, carbs: 0, fat: 0 },
+                    isCustom: true,
+                    createdAt: new Date().toISOString()
+                };
+                // Don't add to customRecipes yet - will be added on Save
+                setRawRecipeText('');
+                setShowCustomRecipeForm(false);
+                // Mark recipe to open in edit mode and as new
+                setSelectedRecipe({ ...parsedRecipe, _startInEditMode: true, _isNewCustomRecipe: true });
+            } else {
+                alert('Could not parse recipe. Please try formatting manually.');
+            }
+        } catch (e) {
+            console.error('AI format error:', e);
+            alert('Error formatting recipe. Please try again.');
+        }
+        setFormatLoading(false);
     };
 
     // Calculate total servings from individual family member servings + extras
@@ -2179,12 +2783,22 @@ STRICT JSON Output:
                     <button onClick={() => setActiveTab('history')} className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${activeTab === 'history' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-400'}`}>Cooked</button>
                 </div>
             </div>
+
+            {/* Plan Your Week Button */}
+            {onOpenWizard && (
+                <div className="px-4 pt-2">
+                    <button onClick={onOpenWizard} className="w-full btn-primary bg-gradient-to-r from-indigo-500 to-purple-500 text-white py-3">
+                        <Sparkles className="w-4 h-4 inline mr-2" /> Plan Your Week
+                    </button>
+                </div>
+            )}
+
             <div className="p-4 w-full space-y-6">
                 {activeTab === 'generate' ? (
                     <>
                         <div className="space-y-4 w-full">
                             <h2 className="text-xl font-bold text-slate-900 px-1">Configure</h2>
-                            <textarea value={urlInput} onChange={e => setUrlInput(e.target.value)} placeholder="What are you craving? (or paste a URL)" className="w-full input-field min-h-[100px]" />
+                            <textarea value={urlInput} onChange={e => setUrlInput(e.target.value)} placeholder="What are you craving?" className="w-full input-field min-h-[100px]" />
                             {family.length > 0 && (
                                 <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide w-full">
                                     {family.map(m => (
@@ -2300,73 +2914,181 @@ STRICT JSON Output:
                     <div className="space-y-4 w-full">
                         <div className="flex justify-between items-center">
                             <h2 className="text-xl font-bold text-slate-900 px-1">My Recipes</h2>
-                            <button
-                                onClick={() => setShowCustomRecipeForm(!showCustomRecipeForm)}
-                                className="btn-primary text-sm py-2"
-                            >
-                                <Plus className="w-4 h-4 inline mr-1" /> Add Recipe
-                            </button>
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => setShowCustomRecipeForm(!showCustomRecipeForm)}
+                                    className="btn-secondary text-sm py-2 flex items-center gap-1"
+                                >
+                                    <Sparkles className="w-4 h-4" /> Describe or Import
+                                </button>
+                                <button
+                                    onClick={createBlankRecipeForEditing}
+                                    className="btn-primary text-sm py-2"
+                                >
+                                    <Plus className="w-4 h-4 inline mr-1" /> Add Recipe
+                                </button>
+                            </div>
                         </div>
 
                         {showCustomRecipeForm && (
                             <div className="bg-slate-50 p-4 rounded-2xl space-y-3">
-                                <input
-                                    type="text"
-                                    value={customRecipeName}
-                                    onChange={e => setCustomRecipeName(e.target.value)}
-                                    placeholder="Recipe name *"
-                                    className="w-full input-field"
-                                />
-                                <textarea
-                                    value={customRecipeDesc}
-                                    onChange={e => setCustomRecipeDesc(e.target.value)}
-                                    placeholder="Description (optional)"
-                                    className="w-full input-field min-h-[60px]"
-                                />
-                                <div className="flex gap-2">
-                                    <div className="flex-1">
-                                        <label className="text-xs font-bold text-slate-500 block mb-1">Servings</label>
-                                        <input
-                                            type="number"
-                                            min="1"
-                                            value={customRecipeServings}
-                                            onChange={e => setCustomRecipeServings(e.target.value === '' ? '' : parseInt(e.target.value))}
-                                            className="w-full input-field"
-                                        />
+                                {/* AI Format Section */}
+                                <div className="bg-purple-50 border border-purple-200 rounded-xl p-3 space-y-3">
+                                    <div className="flex items-center gap-2">
+                                        <Sparkles className="w-4 h-4 text-purple-600" />
+                                        <span className="text-sm font-bold text-purple-700">Describe or Import a Recipe</span>
                                     </div>
-                                    <div className="flex-1">
-                                        <label className="text-xs font-bold text-slate-500 block mb-1">Time</label>
+                                    <textarea
+                                        value={rawRecipeText}
+                                        onChange={e => setRawRecipeText(e.target.value)}
+                                        placeholder="Describe your recipe in any way you like, or paste text from a website, cookbook, or your notes. Just write ingredients, steps, or even just the dish name - AI will figure out the rest!"
+                                        className="w-full input-field min-h-[100px] text-sm"
+                                    />
+
+                                    {/* Image upload options */}
+                                    <div className="flex gap-2">
                                         <input
-                                            type="text"
-                                            value={customRecipeTime}
-                                            onChange={e => setCustomRecipeTime(e.target.value)}
-                                            placeholder="30 min"
-                                            className="w-full input-field"
+                                            type="file"
+                                            accept="image/*"
+                                            className="hidden"
+                                            id="recipe-import-upload"
+                                            onChange={async (e) => {
+                                                const file = e.target.files?.[0];
+                                                if (!file) return;
+                                                setFormatLoading(true);
+                                                const reader = new FileReader();
+                                                reader.onloadend = async () => {
+                                                    const base64 = reader.result.replace("data:", "").replace(/^.+,/, "");
+                                                    const prompt = `Extract the recipe from this image. Return JSON:
+{
+    "name": "Recipe name",
+    "description": "Brief description", 
+    "servings": 4,
+    "time": "30 min",
+    "ingredients": [{"item": "flour", "qty": "2 cups"}],
+    "steps": ["Step 1", "Step 2"],
+    "macros": {"calories": 300, "protein": 15, "carbs": 40, "fat": 10}
+}`;
+                                                    try {
+                                                        const res = await callGemini(apiKey, prompt, base64, model);
+                                                        if (!res.error && res.name) {
+                                                            const parsedRecipe = {
+                                                                id: generateId(),
+                                                                name: res.name || 'Imported Recipe',
+                                                                description: res.description || '',
+                                                                servings: res.servings || 4,
+                                                                total_time: res.time || '30 min',
+                                                                ingredients: (res.ingredients || []).map(ing =>
+                                                                    typeof ing === 'string' ? { item: ing, qty: '' } : { item: ing.item || ing, qty: ing.qty || '' }
+                                                                ),
+                                                                steps: res.steps || res.instructions || [],
+                                                                macros: res.macros || { calories: 0, protein: 0, carbs: 0, fat: 0 },
+                                                                isCustom: true,
+                                                                createdAt: new Date().toISOString()
+                                                            };
+                                                            // Don't add to customRecipes yet - will be added on Save
+                                                            setShowCustomRecipeForm(false);
+                                                            setSelectedRecipe({ ...parsedRecipe, _startInEditMode: true, _isNewCustomRecipe: true });
+                                                        } else {
+                                                            alert('Could not read recipe from image. Try taking a clearer photo or typing it instead.');
+                                                        }
+                                                    } catch (err) {
+                                                        console.error('Image parse error:', err);
+                                                        alert('Error reading recipe. Please try again.');
+                                                    }
+                                                    setFormatLoading(false);
+                                                };
+                                                reader.readAsDataURL(file);
+                                            }}
                                         />
+                                        <label
+                                            htmlFor="recipe-import-upload"
+                                            className="flex-1 btn-secondary text-sm py-2 flex items-center justify-center gap-1 cursor-pointer"
+                                        >
+                                            <Upload className="w-4 h-4" /> Upload Photo
+                                        </label>
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            capture="environment"
+                                            className="hidden"
+                                            id="recipe-import-camera"
+                                            onChange={async (e) => {
+                                                const file = e.target.files?.[0];
+                                                if (!file) return;
+                                                setFormatLoading(true);
+                                                const reader = new FileReader();
+                                                reader.onloadend = async () => {
+                                                    const base64 = reader.result.replace("data:", "").replace(/^.+,/, "");
+                                                    const prompt = `Extract the recipe from this image. Return JSON:
+{
+    "name": "Recipe name",
+    "description": "Brief description", 
+    "servings": 4,
+    "time": "30 min",
+    "ingredients": [{"item": "flour", "qty": "2 cups"}],
+    "steps": ["Step 1", "Step 2"],
+    "macros": {"calories": 300, "protein": 15, "carbs": 40, "fat": 10}
+}`;
+                                                    try {
+                                                        const res = await callGemini(apiKey, prompt, base64, model);
+                                                        if (!res.error && res.name) {
+                                                            const parsedRecipe = {
+                                                                id: generateId(),
+                                                                name: res.name || 'Imported Recipe',
+                                                                description: res.description || '',
+                                                                servings: res.servings || 4,
+                                                                total_time: res.time || '30 min',
+                                                                ingredients: (res.ingredients || []).map(ing =>
+                                                                    typeof ing === 'string' ? { item: ing, qty: '' } : { item: ing.item || ing, qty: ing.qty || '' }
+                                                                ),
+                                                                steps: res.steps || res.instructions || [],
+                                                                macros: res.macros || { calories: 0, protein: 0, carbs: 0, fat: 0 },
+                                                                isCustom: true,
+                                                                createdAt: new Date().toISOString()
+                                                            };
+                                                            // Don't add to customRecipes yet - will be added on Save
+                                                            setShowCustomRecipeForm(false);
+                                                            setSelectedRecipe({ ...parsedRecipe, _startInEditMode: true, _isNewCustomRecipe: true });
+                                                        } else {
+                                                            alert('Could not read recipe from image. Try taking a clearer photo or typing it instead.');
+                                                        }
+                                                    } catch (err) {
+                                                        console.error('Image parse error:', err);
+                                                        alert('Error reading recipe. Please try again.');
+                                                    }
+                                                    setFormatLoading(false);
+                                                };
+                                                reader.readAsDataURL(file);
+                                            }}
+                                        />
+                                        <label
+                                            htmlFor="recipe-import-camera"
+                                            className="flex-1 btn-secondary text-sm py-2 flex items-center justify-center gap-1 cursor-pointer"
+                                        >
+                                            <Camera className="w-4 h-4" /> Take Photo
+                                        </label>
                                     </div>
+                                    <p className="text-xs text-purple-500 text-center">📷 Snap a cookbook page or handwritten recipe</p>
+
+                                    <button
+                                        onClick={formatWithAI}
+                                        disabled={formatLoading || !rawRecipeText.trim()}
+                                        className="w-full btn-primary text-sm disabled:opacity-50"
+                                    >
+                                        {formatLoading ? (
+                                            <><Loader2 className="w-4 h-4 inline mr-1 animate-spin" /> Processing...</>
+                                        ) : (
+                                            <><Sparkles className="w-4 h-4 inline mr-1" /> Create Recipe with AI</>
+                                        )}
+                                    </button>
                                 </div>
-                                <div>
-                                    <label className="text-xs font-bold text-slate-500 block mb-1">Ingredients (one per line)</label>
-                                    <textarea
-                                        value={customRecipeIngredients}
-                                        onChange={e => setCustomRecipeIngredients(e.target.value)}
-                                        placeholder="2 cups flour&#10;1 egg&#10;1/2 cup milk"
-                                        className="w-full input-field min-h-[100px] font-mono text-sm"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="text-xs font-bold text-slate-500 block mb-1">Instructions (one step per line)</label>
-                                    <textarea
-                                        value={customRecipeInstructions}
-                                        onChange={e => setCustomRecipeInstructions(e.target.value)}
-                                        placeholder="Mix dry ingredients&#10;Add wet ingredients&#10;Bake at 350°F for 25 min"
-                                        className="w-full input-field min-h-[100px] font-mono text-sm"
-                                    />
-                                </div>
-                                <div className="flex gap-2">
-                                    <button onClick={() => setShowCustomRecipeForm(false)} className="flex-1 btn-secondary">Cancel</button>
-                                    <button onClick={saveCustomRecipe} className="flex-1 btn-primary" disabled={!customRecipeName.trim()}>Save Recipe</button>
-                                </div>
+                                <button
+                                    onClick={() => setShowCustomRecipeForm(false)}
+                                    className="w-full text-sm text-slate-400 hover:text-slate-600"
+                                >
+                                    Cancel
+                                </button>
                             </div>
                         )}
 
@@ -2375,37 +3097,50 @@ STRICT JSON Output:
                         )}
 
                         {customRecipes.map(r => (
-                            <div key={r.id} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-                                <div className="flex justify-between items-start">
-                                    <div className="flex-1">
-                                        <h3 className="font-bold text-slate-800">{r.name}</h3>
-                                        {r.description && <p className="text-sm text-slate-500 mt-1">{r.description}</p>}
-                                        <div className="flex gap-3 mt-2 text-xs text-slate-400">
-                                            <span>{r.servings} servings</span>
-                                            <span>{r.total_time}</span>
-                                            <span>{r.ingredients?.length || 0} ingredients</span>
-                                        </div>
-                                    </div>
-                                    <button
-                                        onClick={() => setCustomRecipes(customRecipes.filter(c => c.id !== r.id))}
-                                        className="text-slate-400 hover:text-red-500 p-2"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
+                            <div
+                                key={r.id}
+                                className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm cursor-pointer hover:shadow-md hover:border-indigo-200 transition-all flex gap-4"
+                                onClick={() => setSelectedRecipe(r)}
+                            >
+                                <div className="w-20 h-20 bg-indigo-50 rounded-xl overflow-hidden shrink-0 flex items-center justify-center">
+                                    {r.imageUrl ? (
+                                        <img src={r.imageUrl} className="w-full h-full object-cover" alt={r.name} />
+                                    ) : (
+                                        <ChefHat className="text-indigo-300 w-8 h-8" />
+                                    )}
                                 </div>
-                                <div className="flex gap-2 mt-3">
-                                    <button
-                                        onClick={() => setSelectedRecipe(r)}
-                                        className="flex-1 btn-secondary text-sm"
-                                    >
-                                        View Details
-                                    </button>
-                                    <button
-                                        onClick={() => setFavorites([...favorites, { ...r, id: generateId() }])}
-                                        className="btn-secondary text-sm px-3"
-                                    >
-                                        <Heart className="w-4 h-4" />
-                                    </button>
+                                <div className="flex-1 min-w-0 flex flex-col justify-between">
+                                    <div>
+                                        <div className="flex justify-between items-start">
+                                            <h3 className="font-bold text-slate-800 truncate pr-2">{r.name}</h3>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setCustomRecipes(customRecipes.filter(c => c.id !== r.id));
+                                                }}
+                                                className="text-slate-400 hover:text-red-500 p-1 -mt-1 -mr-1"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                        {r.description && <p className="text-sm text-slate-500 mt-1 line-clamp-1">{r.description}</p>}
+                                    </div>
+                                    <div className="flex justify-between items-end mt-2">
+                                        <div className="flex gap-3 text-xs text-slate-400">
+                                            <span>{r.servings} svg</span>
+                                            <span>{r.total_time}</span>
+                                        </div>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setFavorites([...favorites, { ...r, id: generateId() }]);
+                                                alert('Saved to favorites!');
+                                            }}
+                                            className="text-slate-400 hover:text-pink-500"
+                                        >
+                                            <Heart className="w-4 h-4" />
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         ))}
@@ -2880,7 +3615,7 @@ Return JSON: {"storage": "...", "reheat": "...", "expiresInDays": 4}`;
 // CALENDAR VIEW (Agenda Style)
 // ============================================================================
 
-const CalendarView = ({ apiKey, model, mealPlan, setMealPlan, inventory, family, recipes, downloadICSFn, onCook, onFavorite, onAddToLeftovers, leftovers, setLeftovers, onMoveToHistory, allocatedIngredients, setAllocatedIngredients, onOpenWizard }) => {
+const CalendarView = ({ apiKey, model, mealPlan, setMealPlan, inventory, setInventory, family, recipes, downloadICSFn, onCook, onFavorite, onAddToLeftovers, leftovers, setLeftovers, onMoveToHistory, allocatedIngredients, setAllocatedIngredients, onOpenWizard }) => {
     const [activeTab, setActiveTab] = useState('upcoming');
     const [selectedMeal, setSelectedMeal] = useState(null);
     const [selectedLeftover, setSelectedLeftover] = useState(null);
@@ -2891,6 +3626,13 @@ const CalendarView = ({ apiKey, model, mealPlan, setMealPlan, inventory, family,
     const [calendarViewMode, setCalendarViewMode] = useState('agenda'); // 'agenda' or 'month'
     const [monthViewDate, setMonthViewDate] = useState(new Date()); // Current month being viewed
     const [selectedMonthDay, setSelectedMonthDay] = useState(null); // Selected day in month view
+    const [showAddLeftover, setShowAddLeftover] = useState(false);
+    const [newLeftoverName, setNewLeftoverName] = useState('');
+    const [newLeftoverPortions, setNewLeftoverPortions] = useState(2);
+    const [newLeftoverDays, setNewLeftoverDays] = useState(4);
+    const [showReschedule, setShowReschedule] = useState(null); // { meal, originalSlotKey, originalDate }
+    const [rescheduleTargetDate, setRescheduleTargetDate] = useState('');
+    const [rescheduleTargetMealType, setRescheduleTargetMealType] = useState('Dinner');
 
     // Generate 90 days for the agenda
     const today = new Date();
@@ -2947,24 +3689,223 @@ const CalendarView = ({ apiKey, model, mealPlan, setMealPlan, inventory, family,
         const slot = mealPlan[slotKey];
         if (!slot) return;
 
-        // Clean up allocated ingredients for this slot
-        if (allocatedIngredients && allocatedIngredients[slotKey]) {
+        // Find the meal being removed
+        const mealToRemove = slot.meals?.find(m => m.id === mealId) || slot.selected;
+
+        // Restore allocated ingredients back to inventory
+        if (allocatedIngredients && allocatedIngredients[slotKey] && setInventory) {
+            const allocations = allocatedIngredients[slotKey];
+            setInventory(prevInventory => {
+                let updated = [...prevInventory];
+                allocations.forEach(alloc => {
+                    // Find the inventory item and restore the reserved quantity
+                    const idx = updated.findIndex(item =>
+                        item.id === alloc.inventoryItemId ||
+                        item.name?.toLowerCase() === alloc.name?.toLowerCase()
+                    );
+                    if (idx !== -1) {
+                        updated[idx] = {
+                            ...updated[idx],
+                            quantity: updated[idx].quantity + (alloc.reserveAmount || alloc.qty || 0)
+                        };
+                    }
+                });
+                return updated;
+            });
+
+            // Clean up the allocation
             const { [slotKey]: _, ...restAlloc } = allocatedIngredients;
             setAllocatedIngredients(restAlloc);
         }
 
+        // If this is a cook day (not a leftover), also remove associated leftover days
+        let newMealPlan = { ...mealPlan };
+        if (mealToRemove && !mealToRemove.isLeftover) {
+            // Find and remove all leftover meals in mealPlan that match this recipe
+            Object.entries(newMealPlan).forEach(([key, slotData]) => {
+                if (slotData.meals) {
+                    const filtered = slotData.meals.filter(m => {
+                        // Keep meals that don't match this recipe as a leftover
+                        const isMatchingLeftover = m.isLeftover &&
+                            (m.recipeId === mealToRemove.id ||
+                                m.name === mealToRemove.name ||
+                                m.id?.startsWith?.(mealToRemove.id));
+                        return !isMatchingLeftover;
+                    });
+                    if (filtered.length === 0) {
+                        delete newMealPlan[key];
+                    } else if (filtered.length !== slotData.meals.length) {
+                        newMealPlan[key] = { meals: filtered };
+                    }
+                }
+            });
+        }
+
+        // Remove the main meal from its slot
         if (slot.meals) {
             const updatedMeals = slot.meals.filter(m => m.id !== mealId);
             if (updatedMeals.length === 0) {
-                const { [slotKey]: _, ...rest } = mealPlan;
-                setMealPlan(rest);
+                delete newMealPlan[slotKey];
             } else {
-                setMealPlan({ ...mealPlan, [slotKey]: { meals: updatedMeals } });
+                newMealPlan[slotKey] = { meals: updatedMeals };
             }
         } else {
-            const { [slotKey]: _, ...rest } = mealPlan;
-            setMealPlan(rest);
+            delete newMealPlan[slotKey];
         }
+
+        setMealPlan(newMealPlan);
+    };
+
+    // Reschedule a meal to a different date/meal type
+    const confirmReschedule = () => {
+        if (!showReschedule || !rescheduleTargetDate) return;
+
+        const { meal, originalSlotKey, originalDate } = showReschedule;
+        const newSlotKey = `${rescheduleTargetDate}-${rescheduleTargetMealType}`;
+
+        // Parse original date from slot key directly (more reliable than Date object)
+        // Format: YYYY-MM-DD-MealType
+        const lastDashOriginal = originalSlotKey.lastIndexOf('-');
+        const originalDateKey = originalSlotKey.substring(0, lastDashOriginal); // e.g. "2024-05-20"
+        const [oy, om, od] = originalDateKey.split('-').map(Number);
+        const normalizedOriginal = new Date(oy, om - 1, od); // Local midnight
+
+        // New date (rescheduleTargetDate is YYYY-MM-DD string from input)
+        const [ny, nm, nd] = rescheduleTargetDate.split('-').map(Number);
+        const normalizedNew = new Date(ny, nm - 1, nd); // Local midnight
+
+        const dayDiff = Math.round((normalizedNew - normalizedOriginal) / (1000 * 60 * 60 * 24));
+
+        // Remove from original slot
+        const originalSlot = mealPlan[originalSlotKey];
+        let newMealPlan = { ...mealPlan };
+
+        if (originalSlot?.meals) {
+            const updatedMeals = originalSlot.meals.filter(m => m.id !== meal.id);
+            if (updatedMeals.length === 0) {
+                delete newMealPlan[originalSlotKey];
+            } else {
+                newMealPlan[originalSlotKey] = { meals: updatedMeals };
+            }
+        } else {
+            delete newMealPlan[originalSlotKey];
+        }
+
+        // Add to new slot
+        const updatedMeal = {
+            ...meal,
+            mealType: rescheduleTargetMealType,
+            scheduledFor: normalizedNew.toISOString() // Use the local midnight timestamp
+        };
+
+        if (newMealPlan[newSlotKey]) {
+            newMealPlan[newSlotKey] = {
+                meals: [...(newMealPlan[newSlotKey].meals || []), updatedMeal]
+            };
+        } else {
+            newMealPlan[newSlotKey] = { meals: [updatedMeal] };
+        }
+
+        // Move scheduled leftover meals (isLeftover: true with matching name/id) by the same day difference
+        if (dayDiff !== 0 && !meal.isLeftover) {
+            // Collect all moves first to avoid modifying during iteration
+            const leftoverMoves = [];
+            Object.entries(newMealPlan).forEach(([slotKey, slot]) => {
+                if (slot.meals) {
+                    slot.meals.forEach(m => {
+                        if (m.isLeftover && (m.recipeId === meal.id || m.name === meal.name)) {
+                            const lastDashIndex = slotKey.lastIndexOf('-');
+                            if (lastDashIndex === -1) return;
+
+                            const dateStr = slotKey.substring(0, lastDashIndex);
+                            const mealType = slotKey.substring(lastDashIndex + 1);
+
+                            const [ly, lm, ld] = dateStr.split('-').map(Number);
+                            const oldDate = new Date(ly, lm - 1, ld);
+                            const newDate = new Date(oldDate);
+                            newDate.setDate(newDate.getDate() + dayDiff);
+                            const newSlotKey = `${getLocalDateKey(newDate)}-${mealType}`;
+
+                            leftoverMoves.push({
+                                mealId: m.id,
+                                oldSlotKey: slotKey,
+                                newSlotKey: newSlotKey,
+                                meal: { ...m, scheduledFor: newDate.toISOString() }
+                            });
+                        }
+                    });
+                }
+            });
+
+            // Apply all moves
+            leftoverMoves.forEach(move => {
+                // Remove from old slot
+                const oldSlot = newMealPlan[move.oldSlotKey];
+                if (oldSlot?.meals) {
+                    const updatedMeals = oldSlot.meals.filter(rm => rm.id !== move.mealId);
+                    if (updatedMeals.length === 0) {
+                        delete newMealPlan[move.oldSlotKey];
+                    } else {
+                        newMealPlan[move.oldSlotKey] = { meals: updatedMeals };
+                    }
+                }
+
+                // Add to new slot
+                if (newMealPlan[move.newSlotKey]) {
+                    newMealPlan[move.newSlotKey] = {
+                        meals: [...(newMealPlan[move.newSlotKey].meals || []), move.meal]
+                    };
+                } else {
+                    newMealPlan[move.newSlotKey] = { meals: [move.meal] };
+                }
+            });
+        }
+
+        setMealPlan(newMealPlan);
+
+        // Also move any allocations if they exist
+        if (allocatedIngredients[originalSlotKey]) {
+            const { [originalSlotKey]: allocation, ...restAlloc } = allocatedIngredients;
+            setAllocatedIngredients({ ...restAlloc, [newSlotKey]: allocation });
+        }
+
+        // Shift associated leftover entries (in fridge) by the same day difference
+        if (dayDiff !== 0 && meal.id) {
+            const updatedLeftovers = leftovers.map(leftover => {
+                // Match by recipeId or meal name
+                const isMatch = leftover.recipeId === meal.id ||
+                    leftover.name?.toLowerCase() === meal.name?.toLowerCase();
+                if (isMatch && leftover.expiresAt) {
+                    const oldExpiry = new Date(leftover.expiresAt);
+                    oldExpiry.setDate(oldExpiry.getDate() + dayDiff);
+                    return { ...leftover, expiresAt: oldExpiry.toISOString() };
+                }
+                return leftover;
+            });
+            setLeftovers(updatedLeftovers);
+        }
+
+        setShowReschedule(null);
+        setRescheduleTargetDate('');
+    };
+
+    const addManualLeftover = () => {
+        if (!newLeftoverName.trim()) return;
+        const leftoverEntry = {
+            id: generateId(),
+            name: newLeftoverName,
+            portions: newLeftoverPortions,
+            tip: 'Refrigerate in airtight container.',
+            reheat: 'Microwave 2-3 minutes or reheat on stovetop.',
+            expiresAt: new Date(Date.now() + newLeftoverDays * 24 * 60 * 60 * 1000).toISOString(),
+            addedAt: new Date().toISOString(),
+            isManual: true
+        };
+        setLeftovers([leftoverEntry, ...leftovers]);
+        setNewLeftoverName('');
+        setNewLeftoverPortions(2);
+        setNewLeftoverDays(4);
+        setShowAddLeftover(false);
     };
 
     const addCustomMeal = async () => {
@@ -3169,11 +4110,28 @@ Generate cooking/storage details. Return JSON:
                         ) : (
                             /* Leftovers Tab */
                             <div className="space-y-4">
+                                {/* Header with Add Button */}
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-lg font-bold text-slate-900">Your Leftovers</h3>
+                                    <button
+                                        onClick={() => setShowAddLeftover(true)}
+                                        className="flex items-center gap-1 text-sm font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg hover:bg-emerald-100"
+                                    >
+                                        <Plus className="w-4 h-4" /> Add
+                                    </button>
+                                </div>
+
                                 {leftovers.length === 0 ? (
                                     <div className="text-center py-10 text-slate-400">
                                         <ThermometerSnowflake className="w-12 h-12 mx-auto mb-3 text-slate-200" />
                                         <p className="font-medium">No leftovers</p>
                                         <p className="text-sm">Leftovers from cooked meals will appear here</p>
+                                        <button
+                                            onClick={() => setShowAddLeftover(true)}
+                                            className="mt-4 text-sm font-bold text-emerald-600 underline"
+                                        >
+                                            Add your first leftover
+                                        </button>
                                     </div>
                                 ) : (
                                     leftovers.map(leftover => (
@@ -3332,9 +4290,45 @@ Generate cooking/storage details. Return JSON:
                 isOpen={!!selectedMeal}
                 onClose={() => setSelectedMeal(null)}
                 onFavorite={(recipe) => { onFavorite?.(recipe); alert('Saved!'); }}
-                onCook={(recipe) => { onCook?.(recipe); setSelectedMeal(null); }}
+                onCook={(recipe) => {
+                    // First, deplete any allocated ingredients for this meal's slot
+                    if (recipe.slotKey && allocatedIngredients && allocatedIngredients[recipe.slotKey] && setInventory) {
+                        const allocations = allocatedIngredients[recipe.slotKey];
+                        setInventory(prevInventory => {
+                            let updated = [...prevInventory];
+                            allocations.forEach(alloc => {
+                                const idx = updated.findIndex(item =>
+                                    item.id === alloc.inventoryItemId ||
+                                    item.name?.toLowerCase() === alloc.name?.toLowerCase()
+                                );
+                                if (idx !== -1) {
+                                    // Deduct the reserved amount (item is already allocated, so just confirm the deduction)
+                                    const newQty = Math.max(0, updated[idx].quantity - (alloc.reserveAmount || alloc.qty || 0));
+                                    updated[idx] = { ...updated[idx], quantity: newQty };
+                                }
+                            });
+                            // Remove items with 0 quantity
+                            return updated.filter(item => item.quantity > 0);
+                        });
+
+                        // Clean up the allocation after cooking
+                        const { [recipe.slotKey]: _, ...restAlloc } = allocatedIngredients;
+                        setAllocatedIngredients(restAlloc);
+                    }
+
+                    // Call the original cook handler (which may do additional AI-based deduction for non-allocated items)
+                    onCook?.(recipe);
+                    setSelectedMeal(null);
+                }}
                 onAddToLeftovers={(recipe) => { onAddToLeftovers?.(recipe); alert('Added to leftovers!'); }}
+                onReschedule={(meal) => {
+                    setShowReschedule({ meal, originalSlotKey: meal.slotKey, originalDate: new Date(meal.scheduledFor || Date.now()) });
+                    setRescheduleTargetDate(getLocalDateKey(new Date())); // Default to today
+                    setRescheduleTargetMealType(meal.mealType || 'Dinner');
+                    setSelectedMeal(null);
+                }}
                 showScheduleButton={false}
+                showRescheduleButton={true}
                 showCookButton={true}
             />
 
@@ -3409,6 +4403,103 @@ Generate cooking/storage details. Return JSON:
                     onMoveToHistory={onMoveToHistory}
                 />
             </Modal>
+
+            {/* Add Leftover Modal */}
+            <Modal isOpen={showAddLeftover} onClose={() => setShowAddLeftover(false)}>
+                <div className="p-6 space-y-4">
+                    <h2 className="text-xl font-bold text-slate-900">Add Leftover</h2>
+                    <input
+                        value={newLeftoverName}
+                        onChange={e => setNewLeftoverName(e.target.value)}
+                        placeholder="What's the leftover?"
+                        className="input-field"
+                    />
+                    <div className="flex gap-4">
+                        <div className="flex-1">
+                            <label className="text-xs font-bold text-slate-500 mb-1 block">Portions</label>
+                            <input
+                                type="number"
+                                min="1"
+                                value={newLeftoverPortions}
+                                onChange={e => setNewLeftoverPortions(parseInt(e.target.value) || 1)}
+                                className="input-field text-center"
+                            />
+                        </div>
+                        <div className="flex-1">
+                            <label className="text-xs font-bold text-slate-500 mb-1 block">Good for (days)</label>
+                            <input
+                                type="number"
+                                min="1"
+                                value={newLeftoverDays}
+                                onChange={e => setNewLeftoverDays(parseInt(e.target.value) || 1)}
+                                className="input-field text-center"
+                            />
+                        </div>
+                    </div>
+                    <button
+                        onClick={addManualLeftover}
+                        disabled={!newLeftoverName.trim()}
+                        className="w-full btn-primary disabled:opacity-50"
+                    >
+                        <Plus className="w-4 h-4 inline mr-2" /> Add Leftover
+                    </button>
+                </div>
+            </Modal>
+
+            {/* Reschedule Modal */}
+            <Modal isOpen={!!showReschedule} onClose={() => setShowReschedule(null)}>
+                {showReschedule && (
+                    <div className="p-6 space-y-4">
+                        <h2 className="text-xl font-bold text-slate-900">Reschedule Meal</h2>
+                        <p className="text-slate-600 text-sm">
+                            Move <strong>{showReschedule.meal.name}</strong> to a different date or meal type.
+                        </p>
+
+                        <div className="space-y-3">
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 mb-1 block">New Date</label>
+                                <input
+                                    type="date"
+                                    value={rescheduleTargetDate}
+                                    onChange={e => setRescheduleTargetDate(e.target.value)}
+                                    min={getLocalDateKey(new Date())}
+                                    className="input-field"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 mb-1 block">Meal Type</label>
+                                <div className="flex gap-2">
+                                    {['Breakfast', 'Lunch', 'Dinner'].map(type => (
+                                        <button
+                                            key={type}
+                                            onClick={() => setRescheduleTargetMealType(type)}
+                                            className={`flex-1 py-2 rounded-lg text-sm font-bold transition-colors ${rescheduleTargetMealType === type
+                                                ? 'bg-indigo-500 text-white'
+                                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                                }`}
+                                        >
+                                            {type}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3 pt-2">
+                            <button onClick={() => setShowReschedule(null)} className="flex-1 btn-secondary">
+                                Cancel
+                            </button>
+                            <button
+                                onClick={confirmReschedule}
+                                disabled={!rescheduleTargetDate}
+                                className="flex-1 btn-primary disabled:opacity-50"
+                            >
+                                <CalendarDays className="w-4 h-4 inline mr-1" /> Move Meal
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </Modal>
         </div>
     );
 };
@@ -3424,18 +4515,42 @@ const MealSchedulerWizard = ({
     wizardLeftoverDays, setWizardLeftoverDays, wizardPrompt, setWizardPrompt,
     wizardCurrentIdx, setWizardCurrentIdx, wizardPhase, setWizardPhase,
     allocatedIngredients, setAllocatedIngredients,
-    shoppingList, setShoppingList, favorites, setFavorites
+    shoppingList, setShoppingList, favorites, setFavorites,
+    history, customRecipes
 }) => {
     const [recipes, setRecipes] = useState([]);
     const [loading, setLoading] = useState(false);
     const [scheduledMeals, setScheduledMeals] = useState([]);
     const [selectedWizardRecipe, setSelectedWizardRecipe] = useState(null);
     const [pendingAllocation, setPendingAllocation] = useState(null);
-    // dayStates: { [dateKey]: 'cook' | 'leftover' | null }
+    const [activeRecipeTab, setActiveRecipeTab] = useState('ai'); // 'ai', 'saved', 'history', 'custom'
+
+    // Reset to AI tab when moving to next meal
+    useEffect(() => {
+        setActiveRecipeTab('ai');
+    }, [wizardCurrentIdx]);
+
+    // dayStates: { 'YYYY-MM-DD': 'cook' | 'leftover' | null }
     const [dayStates, setDayStates] = useLocalStorage('mpm_wizard_day_states', {});
 
-    // Generate next 8 days
-    const upcomingDays = Array.from({ length: 8 }, (_, i) => {
+    // Calculate how many days to show - extend 7 days past the last selected date
+    const getLastSelectedDayOffset = () => {
+        const selectedDays = Object.entries(dayStates)
+            .filter(([_, state]) => state === 'cook' || state === 'leftover')
+            .map(([dateKey]) => new Date(dateKey));
+        if (selectedDays.length === 0) return 0;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const maxDate = new Date(Math.max(...selectedDays));
+        return Math.ceil((maxDate - today) / (1000 * 60 * 60 * 24));
+    };
+
+    // Start with 8 days, extend 8 days past last selected date (cook day + 7 leftover days)
+    const lastOffset = getLastSelectedDayOffset();
+    const daysToShow = lastOffset > 0 ? lastOffset + 8 : 8;
+
+    // Generate dynamic upcoming days
+    const upcomingDays = Array.from({ length: daysToShow }, (_, i) => {
         const d = new Date();
         d.setDate(d.getDate() + i);
         return {
@@ -3446,35 +4561,40 @@ const MealSchedulerWizard = ({
         };
     });
 
-    // When a cook day is selected, auto-fill subsequent days as leftovers
+
+
+    // When a cook day is selected, auto-fill subsequent 7 days as leftovers
     const handleDayClick = (dateKey) => {
         setDayStates(prev => {
             const current = prev[dateKey];
             const newStates = { ...prev };
 
             if (current === 'cook') {
-                // Remove cook day and clear its leftovers
+                // Remove cook day and clear its leftovers (next 7 days)
                 delete newStates[dateKey];
-                // Clear leftovers that belonged to this cook day
-                const clickedIdx = upcomingDays.findIndex(d => d.dateKey === dateKey);
-                for (let i = clickedIdx + 1; i < upcomingDays.length; i++) {
-                    const nextDate = upcomingDays[i].dateKey;
-                    if (newStates[nextDate] === 'cook') break;
-                    if (newStates[nextDate] === 'leftover') {
-                        delete newStates[nextDate];
+                const clickedDate = parseLocalDate(dateKey);
+                for (let i = 1; i <= 7; i++) {
+                    const nextD = new Date(clickedDate);
+                    nextD.setDate(nextD.getDate() + i);
+                    const nextDateKey = getLocalDateKey(nextD);
+                    if (newStates[nextDateKey] === 'cook') break;
+                    if (newStates[nextDateKey] === 'leftover') {
+                        delete newStates[nextDateKey];
                     }
                 }
             } else if (current === 'leftover') {
                 // Remove leftover
                 delete newStates[dateKey];
             } else {
-                // Add as cook day and auto-fill leftovers
+                // Add as cook day and auto-fill 7 leftover days
                 newStates[dateKey] = 'cook';
-                const clickedIdx = upcomingDays.findIndex(d => d.dateKey === dateKey);
-                for (let i = clickedIdx + 1; i < upcomingDays.length; i++) {
-                    const nextDate = upcomingDays[i].dateKey;
-                    if (newStates[nextDate] === 'cook') break;
-                    newStates[nextDate] = 'leftover';
+                const clickedDate = parseLocalDate(dateKey);
+                for (let i = 1; i <= 7; i++) {
+                    const nextD = new Date(clickedDate);
+                    nextD.setDate(nextD.getDate() + i);
+                    const nextDateKey = getLocalDateKey(nextD);
+                    if (newStates[nextDateKey] === 'cook') break;
+                    newStates[nextDateKey] = 'leftover';
                 }
             }
             return newStates;
@@ -3486,12 +4606,14 @@ const MealSchedulerWizard = ({
         setDayStates(prev => {
             const newStates = { ...prev };
             newStates[dateKey] = 'cook';
-            // Fill subsequent days as leftovers
-            const clickedIdx = upcomingDays.findIndex(d => d.dateKey === dateKey);
-            for (let i = clickedIdx + 1; i < upcomingDays.length; i++) {
-                const nextDate = upcomingDays[i].dateKey;
-                if (newStates[nextDate] === 'cook') break;
-                newStates[nextDate] = 'leftover';
+            // Fill subsequent 7 days as leftovers
+            const clickedDate = parseLocalDate(dateKey);
+            for (let i = 1; i <= 7; i++) {
+                const nextD = new Date(clickedDate);
+                nextD.setDate(nextD.getDate() + i);
+                const nextDateKey = getLocalDateKey(nextD);
+                if (newStates[nextDateKey] === 'cook') break;
+                newStates[nextDateKey] = 'leftover';
             }
             return newStates;
         });
@@ -3694,14 +4816,14 @@ JSON Output:
             alert('Please select at least one day to cook');
             return;
         }
+        // Select all family members by default if none selected
         if (wizardEaters.length === 0) {
-            alert('Please select who is eating');
-            return;
+            setWizardEaters(family.map(f => f.id));
         }
         setWizardPhase('review');
         setWizardCurrentIdx(0);
         setScheduledMeals([]);
-        setTimeout(generateRecipes, 100);
+        // Don't auto-generate - user will click Generate after setting preferences
     };
 
     // Action handlers for wizard recipe cards
@@ -3742,34 +4864,102 @@ JSON Output:
         alert(`Added ${newItem.name} to inventory!`);
     };
 
-    // Modified selectRecipe to show allocation prompt
-    const initiateSelectRecipe = (recipe) => {
-        // Show allocation confirmation modal
-        setPendingAllocation({
-            recipe,
-            slotKey: `${currentDay}-${wizardMealType}`,
-            ingredients: recipe.ingredients?.map(ing => ({
-                ...ing,
-                selected: ing.have !== false // Pre-select items we have
-            })) || []
-        });
+    // State for allocation loading
+    const [allocationLoading, setAllocationLoading] = useState(false);
+
+    // Modified selectRecipe to show allocation prompt with AI matching
+    const initiateSelectRecipe = async (recipe) => {
+        setAllocationLoading(true);
+
+        // Use AI to match recipe ingredients to inventory (like deduction screen)
+        const invStr = inventory.map(i => `ID:${i.id} ${i.name}: ${i.quantity} ${i.unit}`).join('\n');
+        const ingStr = recipe.ingredients?.map(i => `${i.item}: ${i.qty}`).join('\n') || '';
+
+        const prompt = `Match recipe ingredients to pantry for reservation. Use fuzzy matching.
+
+Recipe Ingredients:
+${ingStr}
+
+Current Inventory (with IDs):
+${invStr}
+
+Return JSON: {
+    "allocations": [{
+        "inventoryItemId": "actual_id_from_list",
+        "inventoryItemName": "Flour",
+        "currentQuantity": 2,
+        "currentUnit": "cups",
+        "reserveAmount": 1,
+        "remainingAfterReserve": 1,
+        "recipeIngredient": "1 cup flour",
+        "confidence": "high"
+    }]
+}
+
+Rules:
+- Only match items that exist in inventory
+- reserveAmount should be the amount needed from recipe
+- confidence: "high" if exact match, "medium" if similar name, "low" if uncertain`;
+
+        try {
+            const res = await callGemini(apiKey, prompt, null, model);
+            if (!res.error && res.allocations) {
+                // Show allocation confirmation modal with AI-matched items
+                setPendingAllocation({
+                    recipe,
+                    slotKey: `${currentDay}-${wizardMealType}`,
+                    ingredients: res.allocations.map(a => ({
+                        ...a,
+                        item: a.inventoryItemName,
+                        qty: a.recipeIngredient,
+                        selected: a.confidence !== 'low',
+                        reserveAmount: a.reserveAmount
+                    }))
+                });
+            } else {
+                // Fallback: use recipe ingredients directly
+                setPendingAllocation({
+                    recipe,
+                    slotKey: `${currentDay}-${wizardMealType}`,
+                    ingredients: recipe.ingredients?.map(ing => ({
+                        ...ing,
+                        selected: ing.have !== false
+                    })) || []
+                });
+            }
+        } catch (e) {
+            console.error('Allocation AI error:', e);
+            // Fallback to simple selection
+            setPendingAllocation({
+                recipe,
+                slotKey: `${currentDay}-${wizardMealType}`,
+                ingredients: recipe.ingredients?.map(ing => ({
+                    ...ing,
+                    selected: ing.have !== false
+                })) || []
+            });
+        }
+        setAllocationLoading(false);
     };
 
     const confirmAllocation = () => {
         if (!pendingAllocation) return;
         const { recipe, slotKey, ingredients } = pendingAllocation;
 
-        // Save allocation for selected ingredients
+        // Save allocation for selected ingredients with their editable reserve amounts and inventory IDs
         const selectedIngredients = ingredients.filter(ing => ing.selected);
         if (selectedIngredients.length > 0) {
             setAllocatedIngredients({
                 ...allocatedIngredients,
                 [slotKey]: {
                     recipeName: recipe.name,
+                    recipeId: recipe.id,
                     ingredients: selectedIngredients.map(ing => ({
-                        item: ing.item,
-                        amount: ing.qty,
-                        unit: ''
+                        inventoryItemId: ing.inventoryItemId, // From AI matching
+                        item: ing.item || ing.inventoryItemName,
+                        amount: ing.reserveAmount !== undefined ? ing.reserveAmount : (parseFloat(ing.qty) || 1),
+                        unit: ing.currentUnit || ing.unit || '',
+                        confidence: ing.confidence || 'high'
                     }))
                 }
             });
@@ -3792,6 +4982,7 @@ JSON Output:
 
     return (
         <>
+            {allocationLoading && <LoadingOverlay message="Matching ingredients to inventory..." />}
             <Modal isOpen={isOpen} onClose={onClose}>
                 <div className="flex flex-col h-full max-h-[90vh]">
                     {/* Scrollable Content */}
@@ -3826,111 +5017,200 @@ JSON Output:
                                                     key={day.dateKey}
                                                     onClick={() => handleDayClick(day.dateKey)}
                                                     onDoubleClick={() => isLeftover && convertToCook(day.dateKey)}
-                                                    className={`p-3 rounded-xl text-center transition-all ${isCook ? 'bg-indigo-600 text-white'
+                                                    className={`p-3 rounded-xl text-center transition-all min-h-[72px] flex flex-col justify-center ${isCook ? 'bg-indigo-600 text-white'
                                                         : isLeftover ? 'bg-orange-50 text-orange-700 border-2 border-orange-400'
                                                             : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                                                         }`}
                                                 >
                                                     <div className="font-bold text-sm">{day.dayOfWeek}</div>
                                                     <div className="text-xs">{day.dateLabel}</div>
-                                                    {isCook && <div className="text-[10px] mt-1 opacity-75">Cook</div>}
-                                                    {isLeftover && <div className="text-[10px] mt-1 text-orange-600 font-bold">Leftover</div>}
+                                                    <div className={`text-[10px] mt-1 font-bold h-3 ${isCook ? 'opacity-75' : isLeftover ? 'text-orange-600' : 'opacity-0'}`}>
+                                                        {isCook ? 'Cook' : isLeftover ? 'Leftover' : '·'}
+                                                    </div>
                                                 </button>
                                             );
                                         })}
                                     </div>
-                                    <div className="flex justify-between items-center mt-2">
-                                        <span className="text-xs text-slate-400">
-                                            <span className="text-indigo-600 font-bold">{cookCount}</span> cook •
-                                            <span className="text-orange-500 font-bold ml-1">{leftoverCount}</span> leftover
-                                        </span>
-                                        {leftoverCount > 0 && (
-                                            <button onClick={clearAllLeftovers} className="text-xs text-red-500 hover:underline">
-                                                Clear all leftovers
-                                            </button>
-                                        )}
-                                    </div>
-                                    {cookingDaysInfo.some(c => c.needsFreezing) && (
-                                        <div className="mt-2 p-2 bg-amber-50 rounded-lg text-xs text-amber-700">
-                                            ❄️ Some meals span 4+ days. AI will include freezing instructions.
+
+                                    {/* Meal summary info */}
+                                    {cookingDaysInfo.length > 0 && (
+                                        <div className="mt-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                                            <div className="text-xs font-bold text-slate-600 mb-2">Planned Meals</div>
+                                            <div className="space-y-1">
+                                                {cookingDaysInfo.map((cook, idx) => {
+                                                    const dayInfo = upcomingDays.find(d => d.dateKey === cook.dateKey);
+                                                    return (
+                                                        <div key={cook.dateKey} className="flex justify-between text-xs">
+                                                            <span className="text-slate-600">
+                                                                <span className="font-bold text-indigo-600">Meal {idx + 1}:</span> {dayInfo?.dayOfWeek} {dayInfo?.dateLabel}
+                                                            </span>
+                                                            <span className="text-orange-500 font-bold">
+                                                                {cook.leftoverDays} leftover{cook.leftoverDays !== 1 ? 's' : ''}
+                                                            </span>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
                                         </div>
                                     )}
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-bold text-slate-600 mb-2">Who's Eating?</label>
-                                    <div className="flex flex-wrap gap-2">
-                                        {family.map(f => (
-                                            <button key={f.id} onClick={() => toggleEater(f.id)}
-                                                className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${wizardEaters.includes(f.id) ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                                    }`}>{f.name}</button>
-                                        ))}
-                                    </div>
-                                    <div className="flex items-center gap-2 mt-3">
-                                        <span className="text-sm text-slate-500">Extra guests:</span>
-                                        <input type="number" min="0" value={wizardExtraGuests}
-                                            onChange={e => setWizardExtraGuests(e.target.value === '' ? 0 : parseInt(e.target.value))}
-                                            className="w-16 input-field text-center" />
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-bold text-slate-600 mb-2">Meal Type</label>
-                                    <select value={wizardMealType} onChange={e => setWizardMealType(e.target.value)} className="w-full select-field">
-                                        <option value="Dinner">Dinner</option>
-                                        <option value="Lunch">Lunch</option>
-                                        <option value="Breakfast">Breakfast</option>
-                                        <option value="Any">Any</option>
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-bold text-slate-600 mb-2">Preferences (optional)</label>
-                                    <textarea value={wizardPrompt} onChange={e => setWizardPrompt(e.target.value)}
-                                        placeholder="Quick meals, Tex-Mex, No mushrooms..." className="w-full input-field h-16 resize-none" />
                                 </div>
                             </>
                         ) : (
                             <>
-                                <div className="bg-slate-100 rounded-xl p-3 text-center">
-                                    <div className="text-sm text-slate-500">Planning for</div>
-                                    <div className="font-bold text-slate-800">
-                                        {upcomingDays.find(d => d.dateKey === currentDay)?.dayOfWeek} {upcomingDays.find(d => d.dateKey === currentDay)?.dateLabel}
-                                    </div>
-                                    <div className="text-xs text-slate-400 mt-1">
-                                        {totalServings} servings ({currentLeftoverDays} leftover days)
-                                        {currentDayInfo?.needsFreezing && <span className="text-amber-600 ml-2">❄️ Freezing</span>}
-                                    </div>
-                                </div>
-
-                                {loading && (
-                                    <div className="text-center py-12">
-                                        <Loader2 className="w-12 h-12 text-indigo-500 animate-spin mx-auto mb-4" />
-                                        <p className="text-slate-500">Generating 3 options...</p>
-                                    </div>
-                                )}
-
-                                {recipes.length > 0 && (
-                                    <div className="space-y-4 pb-20">
-                                        {recipes.map(r => (
-                                            <RecipeCard
-                                                key={r.id}
-                                                recipe={r}
-                                                onClick={() => setSelectedWizardRecipe(r)}
-                                                showUseButton={true}
-                                                onUseRecipe={() => initiateSelectRecipe(r)}
-                                            />
-                                        ))}
-                                        <div className="flex gap-2">
-                                            <button onClick={generateRecipes} className="flex-1 btn-secondary text-indigo-600">
-                                                <Sparkles className="w-4 h-4 inline mr-1" /> 3 More
-                                            </button>
-                                            <button onClick={skipDay} className="flex-1 btn-secondary text-slate-500">Skip</button>
+                                <div className="space-y-4">
+                                    {/* Current meal info - title at top */}
+                                    <div className="bg-indigo-50 rounded-xl p-4 text-center border border-indigo-100">
+                                        <div className="text-lg text-indigo-600 font-bold">
+                                            {upcomingDays.find(d => d.dateKey === currentDay)?.dayOfWeek} {upcomingDays.find(d => d.dateKey === currentDay)?.dateLabel} - {wizardMealType}
+                                        </div>
+                                        <div className="text-sm text-indigo-400 mt-1">
+                                            {currentLeftoverDays} leftover day{currentLeftoverDays !== 1 ? 's' : ''} • {totalServings} servings
                                         </div>
                                     </div>
-                                )}
 
-                                <button onClick={resetWizard} className="w-full btn-secondary text-slate-500 text-sm">← Back</button>
+                                    {/* Who's eating */}
+                                    <div className="bg-white rounded-xl p-3 border border-slate-200 space-y-3">
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-600 mb-1.5">Who's Eating?</label>
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {family.map(f => (
+                                                    <button key={f.id} onClick={() => toggleEater(f.id)}
+                                                        className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${wizardEaters.includes(f.id) ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{f.name} ({f.servings || 1})</button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-wrap gap-3 items-center">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs text-slate-500">Extra guests:</span>
+                                                <input type="number" min="0" value={wizardExtraGuests}
+                                                    onChange={e => setWizardExtraGuests(e.target.value === '' ? 0 : parseInt(e.target.value))}
+                                                    className="w-14 input-field text-center text-sm py-1" />
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs text-slate-500">Meal type:</span>
+                                                <select value={wizardMealType} onChange={e => setWizardMealType(e.target.value)} className="select-field text-sm py-1">
+                                                    <option value="Dinner">Dinner</option>
+                                                    <option value="Lunch">Lunch</option>
+                                                    <option value="Breakfast">Breakfast</option>
+                                                    <option value="Any">Any</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Recipe Source Tabs */}
+                                    <div className="flex bg-slate-100 p-1 rounded-xl">
+                                        {[
+                                            { id: 'ai', label: 'Generate', icon: Sparkles },
+                                            { id: 'saved', label: 'Saved', icon: Heart },
+                                            { id: 'custom', label: 'Custom', icon: ChefHat },
+                                            { id: 'history', label: 'History', icon: Clock },
+                                        ].map(tab => (
+                                            <button
+                                                key={tab.id}
+                                                onClick={() => setActiveRecipeTab(tab.id)}
+                                                className={`flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-all ${activeRecipeTab === tab.id
+                                                    ? 'bg-white text-indigo-600 shadow-sm'
+                                                    : 'text-slate-500 hover:text-slate-700'
+                                                    }`}
+                                            >
+                                                <tab.icon className="w-3 h-3" />
+                                                <span>{tab.label}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    {/* AI Tab Content */}
+                                    {activeRecipeTab === 'ai' && (
+                                        <>
+                                            {loading ? (
+                                                <div className="text-center py-12">
+                                                    <Loader2 className="w-12 h-12 text-indigo-500 animate-spin mx-auto mb-4" />
+                                                    <p className="text-slate-500">Generating 3 options...</p>
+                                                </div>
+                                            ) : recipes.length > 0 ? (
+                                                <div className="space-y-4 pb-4">
+                                                    {recipes.map(r => (
+                                                        <RecipeCard
+                                                            key={r.id}
+                                                            recipe={r}
+                                                            onClick={() => setSelectedWizardRecipe(r)}
+                                                            showUseButton={true}
+                                                            onUseRecipe={() => initiateSelectRecipe(r)}
+                                                        />
+                                                    ))}
+                                                    <div className="flex gap-2">
+                                                        <button onClick={generateRecipes} className="flex-1 btn-secondary text-indigo-600">
+                                                            <Sparkles className="w-4 h-4 inline mr-1" /> 3 More
+                                                        </button>
+                                                        <button onClick={skipDay} className="flex-1 btn-secondary text-slate-500">Skip</button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-4">
+                                                    <div>
+                                                        <label className="block text-xs font-bold text-slate-600 mb-1.5">Preferences (optional)</label>
+                                                        <textarea value={wizardPrompt} onChange={e => setWizardPrompt(e.target.value)}
+                                                            placeholder="Quick meals, Tex-Mex, No mushrooms..." className="w-full input-field h-16 resize-none text-sm" />
+                                                    </div>
+                                                    <button onClick={generateRecipes} className="w-full btn-primary">
+                                                        <Sparkles className="w-4 h-4 inline mr-2" />Generate 3 Recipes
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
+
+                                    {/* Other Tabs Content */}
+                                    {activeRecipeTab !== 'ai' && (
+                                        <div className="space-y-3 pb-4">
+                                            {(() => {
+                                                let list = [];
+                                                let emptyMsg = '';
+                                                if (activeRecipeTab === 'saved') {
+                                                    list = favorites;
+                                                    emptyMsg = 'No saved recipes found.';
+                                                } else if (activeRecipeTab === 'history') {
+                                                    list = history.slice(0, 20); // Limit to 20 recent
+                                                    emptyMsg = 'No cooking history found.';
+                                                } else if (activeRecipeTab === 'custom') {
+                                                    list = customRecipes;
+                                                    emptyMsg = 'No custom recipes found.';
+                                                }
+
+                                                if (list.length === 0) {
+                                                    return <div className="text-center py-8 text-slate-400 italic">{emptyMsg}</div>;
+                                                }
+
+                                                return list.map(r => (
+                                                    <div key={r.id}
+                                                        onClick={() => setSelectedWizardRecipe(r)}
+                                                        className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex items-center gap-3 cursor-pointer hover:border-indigo-200 transition-colors"
+                                                    >
+                                                        {r.imageUrl ? (
+                                                            <img src={r.imageUrl} className="w-12 h-12 rounded-lg object-cover" alt="" />
+                                                        ) : (
+                                                            <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
+                                                                <ChefHat className="w-6 h-6 text-orange-300" />
+                                                            </div>
+                                                        )}
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="font-bold text-slate-900 truncate">{r.name}</div>
+                                                            <div className="text-xs text-slate-500">{r.totalServings || r.servings} servings</div>
+                                                        </div>
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); initiateSelectRecipe(r); }}
+                                                            className="p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100"
+                                                        >
+                                                            <Check className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                ));
+                                            })()}
+                                        </div>
+                                    )}
+
+                                </div>
                             </>
                         )}
                     </div>
@@ -3938,11 +5218,15 @@ JSON Output:
                     {/* Sticky Footer with Action Buttons */}
                     <div className="shrink-0 bg-white border-t border-slate-100 p-4 pb-safe">
                         {wizardPhase === 'config' ? (
-                            <button onClick={startWizard} disabled={cookCount === 0 || wizardEaters.length === 0}
+                            <button onClick={startWizard} disabled={cookCount === 0}
                                 className="w-full btn-primary bg-indigo-600 disabled:opacity-50">
                                 <Sparkles className="w-4 h-4 inline mr-2" /> Start Planning ({cookCount} meals)
                             </button>
-                        ) : null}
+                        ) : (
+                            <button onClick={resetWizard} className="w-full btn-secondary text-slate-500">
+                                ← Back to Date Selection
+                            </button>
+                        )}
                     </div>
                 </div>
             </Modal>
@@ -3952,6 +5236,13 @@ JSON Output:
                 recipe={selectedWizardRecipe}
                 isOpen={!!selectedWizardRecipe}
                 onClose={() => setSelectedWizardRecipe(null)}
+                onSave={(editedRecipe) => {
+                    // Update in wizard's recipe list
+                    setRecipes(prev => prev.map(r => r.id === editedRecipe.id ? { ...r, ...editedRecipe } : r));
+                    // Also update in favorites if it exists there
+                    setFavorites(prev => prev.map(r => r.id === editedRecipe.id ? { ...r, ...editedRecipe } : r));
+                    setSelectedWizardRecipe(editedRecipe);
+                }}
                 onFavorite={(recipe) => { handleAddToFavorites(recipe); }}
                 onAddMissingToInventory={(ing) => handleAddMissingToPantry(ing)}
                 onAddToShoppingList={(recipe) => handleAddToShoppingList(recipe)}
@@ -3965,26 +5256,50 @@ JSON Output:
             <Modal isOpen={!!pendingAllocation} onClose={() => setPendingAllocation(null)}>
                 {pendingAllocation && (
                     <div className="p-6 space-y-4">
-                        <h2 className="text-xl font-bold text-slate-900">Reserve Ingredients?</h2>
+                        <h2 className="text-xl font-bold text-slate-900">Reserve Ingredients</h2>
                         <p className="text-slate-600 text-sm">
-                            Mark these ingredients as reserved for <strong>{pendingAllocation.recipe.name}</strong> on {new Date(currentDay).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}?
+                            Adjust quantities to reserve for <strong>{pendingAllocation.recipe.name}</strong> on {new Date(currentDay).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
                         </p>
 
-                        <div className="max-h-[40vh] overflow-y-auto space-y-2">
+                        <div className="max-h-[50vh] overflow-y-auto space-y-2">
                             {pendingAllocation.ingredients.map((ing, i) => (
-                                <div key={i} className={`flex items-center gap-3 p-2 rounded-lg ${ing.have !== false ? 'bg-emerald-50' : 'bg-slate-50'}`}>
-                                    <input
-                                        type="checkbox"
-                                        checked={ing.selected || false}
-                                        onChange={(e) => {
-                                            const newIngredients = [...pendingAllocation.ingredients];
-                                            newIngredients[i].selected = e.target.checked;
-                                            setPendingAllocation({ ...pendingAllocation, ingredients: newIngredients });
-                                        }}
-                                        className="w-4 h-4 rounded border-slate-300 text-emerald-500 focus:ring-emerald-500"
-                                    />
-                                    <span className="flex-1 text-sm">{ing.item}</span>
-                                    <span className="text-sm text-slate-500">{ing.qty}</span>
+                                <div key={i} className={`p-3 rounded-lg ${ing.have !== false ? 'bg-emerald-50' : 'bg-slate-50'}`}>
+                                    {/* Row 1: Checkbox + Item name */}
+                                    <div className="flex items-center gap-3 mb-2">
+                                        <input
+                                            type="checkbox"
+                                            checked={ing.selected || false}
+                                            onChange={(e) => {
+                                                const newIngredients = [...pendingAllocation.ingredients];
+                                                newIngredients[i].selected = e.target.checked;
+                                                setPendingAllocation({ ...pendingAllocation, ingredients: newIngredients });
+                                            }}
+                                            className="w-4 h-4 rounded border-slate-300 text-emerald-500 focus:ring-emerald-500"
+                                        />
+                                        <span className="flex-1 font-bold text-slate-800 text-sm">{ing.item}</span>
+                                    </div>
+
+                                    {/* Row 2: Quantity editing (only when selected) */}
+                                    {ing.selected && (
+                                        <div className="flex items-center gap-2 text-xs flex-wrap ml-7">
+                                            <span className="text-slate-500">Recipe needs: <span className="font-medium text-blue-600">{ing.qty}</span></span>
+                                            <span className="text-slate-400">•</span>
+                                            <span className="text-slate-500">Reserve:</span>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="0.1"
+                                                value={ing.reserveAmount || parseFloat(ing.qty) || 1}
+                                                onChange={(e) => {
+                                                    const newIngredients = [...pendingAllocation.ingredients];
+                                                    newIngredients[i].reserveAmount = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                                                    setPendingAllocation({ ...pendingAllocation, ingredients: newIngredients });
+                                                }}
+                                                className="w-16 text-center border border-emerald-500 rounded py-0.5 font-bold text-emerald-600 text-sm"
+                                            />
+                                            <span className="text-slate-500">{ing.unit || ''}</span>
+                                        </div>
+                                    )}
                                 </div>
                             ))}
                         </div>
@@ -3999,7 +5314,7 @@ JSON Output:
                         </div>
                     </div>
                 )}
-            </Modal>
+            </Modal >
         </>
     );
 };
@@ -4055,10 +5370,8 @@ function MealPrepMate() {
     const [isStandalone, setIsStandalone] = useState(false);
     const [scheduleDate, setScheduleDate] = useState(null);
 
-    // Reconstruct selectedRecipe from ID
-    const allRecipes = [...recipes, ...favorites, ...customRecipes, ...history];
-    const selectedRecipe = selectedRecipeId ? allRecipes.find(r => r.id === selectedRecipeId) || null : null;
-    const setSelectedRecipe = (recipe) => setSelectedRecipeId(recipe?.id || null);
+    // Store full recipe object directly (not ID-based) to support new unsaved recipes
+    const [selectedRecipe, setSelectedRecipe] = useState(null);
 
     useEffect(() => {
         // Check if app is installed (PWA mode)
@@ -4158,6 +5471,56 @@ function MealPrepMate() {
         setHistory([historyEntry, ...history]);
     };
 
+    // Save edited recipe - updates across all collections by ID
+    const handleSaveRecipe = (editedRecipe) => {
+        if (!editedRecipe?.id) {
+            console.warn('Cannot save recipe without ID');
+            return;
+        }
+
+        // Clean up internal flags before saving
+        const recipeToSave = { ...editedRecipe };
+        const isNewCustomRecipe = recipeToSave._isNewCustomRecipe;
+        delete recipeToSave._startInEditMode;
+        delete recipeToSave._isNewCustomRecipe;
+
+        // If this is a new custom recipe, add it instead of update
+        if (isNewCustomRecipe) {
+            setCustomRecipes(prev => [...prev, recipeToSave]);
+        } else {
+            // Update in custom recipes
+            setCustomRecipes(prev => prev.map(r => r.id === recipeToSave.id ? { ...r, ...recipeToSave } : r));
+        }
+
+        // Update in favorites
+        setFavorites(prev => prev.map(r => r.id === recipeToSave.id ? { ...r, ...recipeToSave } : r));
+
+        // Update in history
+        setHistory(prev => prev.map(r => r.id === recipeToSave.id ? { ...r, ...recipeToSave } : r));
+
+        // Update in generated recipes
+        setRecipes(prev => prev.map(r => r.id === recipeToSave.id ? { ...r, ...recipeToSave } : r));
+
+        // Update in meal plan (nested in slot.meals arrays)
+        setMealPlan(prev => {
+            const newPlan = { ...prev };
+            Object.keys(newPlan).forEach(slotKey => {
+                if (newPlan[slotKey]?.meals) {
+                    newPlan[slotKey] = {
+                        ...newPlan[slotKey],
+                        meals: newPlan[slotKey].meals.map(m =>
+                            m.id === recipeToSave.id ? { ...m, ...recipeToSave } : m
+                        )
+                    };
+                }
+            });
+            return newPlan;
+        });
+
+        // Update selectedRecipe to reflect changes immediately (clean version)
+        setSelectedRecipe(recipeToSave);
+    };
+
     const handleCook = async (recipe) => {
         // Include inventory item IDs for accurate deduction
         const invStr = inventory.map(i => `ID:${i.id} ${i.name}: ${i.quantity} ${i.unit} `).join('\n');
@@ -4198,16 +5561,25 @@ Return JSON: {
         if (!deductionData) return;
 
         let updatedInventory = [...inventory];
+        const deductedItemIds = new Set(); // Track which items were deducted
+
         deductionData.deductions.forEach(d => {
             updatedInventory = updatedInventory.map(item => {
                 // Match by ID first, then fall back to name matching
                 if (item.id === d.inventoryItemId ||
                     item.name.toLowerCase() === d.inventoryItemName?.toLowerCase()) {
+                    deductedItemIds.add(item.id);
                     return { ...item, quantity: Math.max(0, d.newQuantity) };
                 }
                 return item;
-            }).filter(item => item.quantity > 0);
+            });
         });
+
+        // Only filter out items that were deducted AND now have zero quantity
+        // This prevents accidentally removing items that weren't part of the deduction
+        updatedInventory = updatedInventory.filter(item =>
+            item.quantity > 0 || !deductedItemIds.has(item.id)
+        );
 
         setInventory(updatedInventory);
 
@@ -4372,10 +5744,10 @@ Return JSON: {
                 {view === 'dashboard' && <Dashboard />}
                 {view === 'inventory' && <InventoryView apiKey={apiKey} model={selectedModel} inventory={inventory} setInventory={setInventory} knownLocations={knownLocations} setKnownLocations={setKnownLocations} processedFiles={processedFiles} setProcessedFiles={setProcessedFiles} allocatedIngredients={allocatedIngredients} />}
                 {view === 'family' && <FamilyView familyMembers={family} setFamilyMembers={setFamily} />}
-                {view === 'recipes' && <RecipeEngine apiKey={apiKey} model={selectedModel} inventory={inventory} setInventory={setInventory} family={family} setSelectedRecipe={setSelectedRecipe} history={history} setHistory={setHistory} recipes={recipes} setRecipes={setRecipes} favorites={favorites} setFavorites={setFavorites} shoppingList={shoppingList} setShoppingList={setShoppingList} mealPlan={mealPlan} setMealPlan={setMealPlan} leftovers={leftovers} setLeftovers={setLeftovers} onMoveToHistory={handleMoveToHistory} customRecipes={customRecipes} setCustomRecipes={setCustomRecipes} allocatedIngredients={allocatedIngredients} setAllocatedIngredients={setAllocatedIngredients} />}
+                {view === 'recipes' && <RecipeEngine apiKey={apiKey} model={selectedModel} inventory={inventory} setInventory={setInventory} family={family} setSelectedRecipe={setSelectedRecipe} history={history} setHistory={setHistory} recipes={recipes} setRecipes={setRecipes} favorites={favorites} setFavorites={setFavorites} shoppingList={shoppingList} setShoppingList={setShoppingList} mealPlan={mealPlan} setMealPlan={setMealPlan} leftovers={leftovers} setLeftovers={setLeftovers} onMoveToHistory={handleMoveToHistory} customRecipes={customRecipes} setCustomRecipes={setCustomRecipes} allocatedIngredients={allocatedIngredients} setAllocatedIngredients={setAllocatedIngredients} onOpenWizard={() => setShowMealWizard(true)} />}
                 {view === 'shopping' && <ShoppingView apiKey={apiKey} model={selectedModel} list={shoppingList} setList={setShoppingList} />}
                 {view === 'leftovers' && <LeftoversView apiKey={apiKey} model={selectedModel} leftovers={leftovers} setLeftovers={setLeftovers} onMoveToHistory={handleMoveToHistory} />}
-                {view === 'calendar' && <CalendarView apiKey={apiKey} model={selectedModel} mealPlan={mealPlan} setMealPlan={setMealPlan} inventory={inventory} family={family} recipes={recipes} downloadICSFn={downloadICS} onCook={handleCook} onFavorite={(r) => setFavorites([...favorites, { ...r, id: generateId() }])} onAddToLeftovers={handleAddToLeftovers} leftovers={leftovers} setLeftovers={setLeftovers} onMoveToHistory={handleMoveToHistory} allocatedIngredients={allocatedIngredients} setAllocatedIngredients={setAllocatedIngredients} onOpenWizard={() => setShowMealWizard(true)} />}
+                {view === 'calendar' && <CalendarView apiKey={apiKey} model={selectedModel} mealPlan={mealPlan} setMealPlan={setMealPlan} inventory={inventory} setInventory={setInventory} family={family} recipes={recipes} history={history} customRecipes={customRecipes} downloadICSFn={downloadICS} onCook={handleCook} onFavorite={(r) => setFavorites([...favorites, { ...r, id: generateId() }])} onAddToLeftovers={handleAddToLeftovers} leftovers={leftovers} setLeftovers={setLeftovers} onMoveToHistory={handleMoveToHistory} allocatedIngredients={allocatedIngredients} setAllocatedIngredients={setAllocatedIngredients} onOpenWizard={() => setShowMealWizard(true)} favorites={favorites} />}
             </div>
 
             {/* Bottom Nav */}
@@ -4398,7 +5770,9 @@ Return JSON: {
                 recipe={selectedRecipe}
                 isOpen={!!selectedRecipe}
                 onClose={() => setSelectedRecipe(null)}
-                onFavorite={(recipe) => { setFavorites([...favorites, { ...recipe, id: generateId() }]); alert('Saved!'); }}
+                onSave={handleSaveRecipe}
+                startInEditMode={selectedRecipe?._startInEditMode}
+                onFavorite={(recipe) => { setFavorites([...favorites, { ...recipe, id: recipe.id || generateId() }]); alert('Saved!'); }}
                 onCook={(recipe) => handleCook(recipe)}
                 onSchedule={(recipe) => { setScheduleDate(new Date()); setShowScheduleModal(true); }}
                 onAddToLeftovers={(recipe) => { handleAddToLeftovers(recipe); alert('Added to leftovers!'); }}
@@ -4911,6 +6285,8 @@ Return JSON: {
                 setShoppingList={setShoppingList}
                 favorites={favorites}
                 setFavorites={setFavorites}
+                history={history}
+                customRecipes={customRecipes}
             />
         </div>
     );
