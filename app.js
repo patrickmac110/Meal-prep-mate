@@ -7,7 +7,7 @@ import {
     UserCheck, History, User, ThermometerSnowflake, Settings, Key, Bell,
     MessageCircle, Download, Upload, Leaf, Copy, Share, Calendar, CalendarDays,
     AlertTriangle, MapPin, Package, ChevronDown, ChevronRight, ChevronLeft,
-    Flame, Beef, Wheat, Droplet, GripVertical, MoreHorizontal, List, Grid3x3, ClipboardList
+    Flame, Beef, Wheat, Droplet, GripVertical, MoreHorizontal, List, Grid3x3, ClipboardList, Zap
 } from 'lucide-react';
 
 // ============================================================================
@@ -2530,7 +2530,7 @@ const FamilyView = ({ familyMembers, setFamilyMembers }) => {
 // RECIPE ENGINE (with macros and smart deduction)
 // ============================================================================
 
-const RecipeEngine = ({ apiKey, model, inventory, setInventory, family, setSelectedRecipe, history, setHistory, recipes, setRecipes, favorites, setFavorites, shoppingList, setShoppingList, mealPlan, setMealPlan, leftovers, setLeftovers, onMoveToHistory, customRecipes, setCustomRecipes, allocatedIngredients, setAllocatedIngredients, onOpenWizard }) => {
+const RecipeEngine = ({ apiKey, model, inventory, setInventory, family, setSelectedRecipe, history, setHistory, recipes, setRecipes, favorites, setFavorites, shoppingList, setShoppingList, mealPlan, setMealPlan, leftovers, setLeftovers, onMoveToHistory, customRecipes, setCustomRecipes, allocatedIngredients, setAllocatedIngredients, onOpenWizard, quickMeals, setQuickMeals, setToastData }) => {
     const [loading, setLoading] = useState(false);
 
     // Persisted form state (survives refresh)
@@ -2556,6 +2556,13 @@ const RecipeEngine = ({ apiKey, model, inventory, setInventory, family, setSelec
     const [showSlotPicker, setShowSlotPicker] = useState(false);
     const [pendingRecipeForCalendar, setPendingRecipeForCalendar] = useState(null);
     const [selectedHistoryLeftover, setSelectedHistoryLeftover] = useState(null);
+
+    // Quick Meals state
+    const [quickMealsEditMode, setQuickMealsEditMode] = useState(false);
+    const [showQuickMealsSuggestions, setShowQuickMealsSuggestions] = useState(false);
+    const [quickMealsSuggestions, setQuickMealsSuggestions] = useState([]);
+    const [quickMealsLoading, setQuickMealsLoading] = useState(false);
+    const [editingQuickMeal, setEditingQuickMeal] = useState(null);
 
     // State for editing custom recipes via RecipeDetailModal
     const [editingCustomRecipe, setEditingCustomRecipe] = useState(null);
@@ -2677,6 +2684,156 @@ Rules:
             alert('Error formatting recipe. Please try again.');
         }
         setFormatLoading(false);
+    };
+
+    // =========== QUICK MEALS FUNCTIONS ===========
+
+    // Scan inventory with AI to suggest quick meals
+    const scanForQuickMeals = async () => {
+        if (!apiKey) {
+            alert('Please add a Gemini API key in Settings first.');
+            return;
+        }
+        setQuickMealsLoading(true);
+
+        const invList = inventory.map(i => `"${i.name}" (qty: ${i.quantity} ${i.unit})`).join(', ');
+
+        const prompt = `Analyze this inventory and identify items that can be eaten as "quick meals" with minimal or no preparation. These are items like: canned soups, baby food, yogurt, pre-made meals, frozen dinners, ready-to-eat snacks, cereal, bread/toast, fruit, etc.
+
+Inventory: [${invList}]
+
+Return a JSON array. For each quick meal candidate:
+- inventoryItemName: the EXACT name of the inventory item (copy it exactly as shown in quotes above)
+- emoji: a single emoji representing the food
+- quantityToDeduct: how much to deduct when eaten (usually 1)
+
+IMPORTANT: Use the exact inventory item names as they appear above. Do NOT rename or shorten them.
+
+Only include items that truly require minimal/no cooking. Skip raw ingredients.
+
+Return JSON array only, example:
+[
+  {"inventoryItemName": "Campbell's Tomato Soup", "emoji": "🍅", "quantityToDeduct": 1},
+  {"inventoryItemName": "Chobani Greek Yogurt", "emoji": "🥛", "quantityToDeduct": 1}
+]`;
+
+        try {
+            const res = await callGemini(apiKey, prompt, null, model);
+            let suggestions = [];
+            if (Array.isArray(res)) {
+                suggestions = res;
+            } else if (res?.suggestions || res?.quick_meals) {
+                suggestions = res.suggestions || res.quick_meals;
+            }
+
+            // Enrich suggestions with data from inventory - use exact pantry names
+            const enrichedSuggestions = suggestions.map(s => {
+                const invItem = inventory.find(i =>
+                    i.name.toLowerCase() === s.inventoryItemName?.toLowerCase() ||
+                    i.name.toLowerCase().includes(s.inventoryItemName?.toLowerCase()) ||
+                    s.inventoryItemName?.toLowerCase().includes(i.name.toLowerCase())
+                );
+                // Use exact inventory name, not AI-provided name
+                return {
+                    name: invItem?.name || s.inventoryItemName,
+                    emoji: s.emoji || '🍽️',
+                    inventoryItemName: invItem?.name || s.inventoryItemName,
+                    quantityToDeduct: s.quantityToDeduct || 1,
+                    unit: invItem?.unit || 'each',
+                    inventoryItemId: invItem?.id
+                };
+            }).filter(s => s.inventoryItemId); // Only keep items that matched in inventory
+
+            if (enrichedSuggestions.length > 0) {
+                setQuickMealsSuggestions(enrichedSuggestions);
+                setShowQuickMealsSuggestions(true);
+            } else {
+                alert('No quick meal suggestions found.');
+            }
+        } catch (e) {
+            console.error('Quick meals scan error:', e);
+            alert('Error scanning inventory. Please try again.');
+        }
+        setQuickMealsLoading(false);
+    };
+
+    // Add quick meal from suggestions
+    const addQuickMealFromSuggestion = (suggestion) => {
+        const newQuickMeal = {
+            id: generateId(),
+            name: suggestion.name,
+            emoji: suggestion.emoji || '🍽️',
+            inventoryItemName: suggestion.inventoryItemName,
+            quantityToDeduct: suggestion.quantityToDeduct || 1,
+            createdAt: new Date().toISOString()
+        };
+        setQuickMeals(prev => [...prev, newQuickMeal]);
+    };
+
+    // Log quick meal (one-tap)
+    const logQuickMeal = (quickMeal) => {
+        // Find matching inventory item
+        const invItem = inventory.find(i =>
+            i.name.toLowerCase() === quickMeal.inventoryItemName?.toLowerCase() ||
+            i.name.toLowerCase().includes(quickMeal.name.toLowerCase()) ||
+            quickMeal.name.toLowerCase().includes(i.name.toLowerCase())
+        );
+
+        // Store undo data
+        const undoData = {
+            inventoryItemId: invItem?.id,
+            previousQuantity: invItem?.quantity,
+            historyEntryId: null
+        };
+
+        // Deduct from inventory if found
+        if (invItem) {
+            const newQty = Math.max(0, invItem.quantity - (quickMeal.quantityToDeduct || 1));
+            setInventory(prev => prev.map(i =>
+                i.id === invItem.id ? { ...i, quantity: newQty } : i
+            ));
+        }
+
+        // Add to history
+        const historyEntry = {
+            id: generateId(),
+            name: quickMeal.name,
+            emoji: quickMeal.emoji,
+            isQuickMeal: true,
+            cookedAt: new Date().toISOString(),
+            servings: 1
+        };
+        undoData.historyEntryId = historyEntry.id;
+        setHistory(prev => [historyEntry, ...prev]);
+
+        // Show toast with undo
+        setToastData({
+            message: `Logged ${quickMeal.emoji} ${quickMeal.name}`,
+            duration: 15000,
+            onUndo: () => {
+                // Restore inventory
+                if (undoData.inventoryItemId) {
+                    setInventory(prev => prev.map(i =>
+                        i.id === undoData.inventoryItemId ? { ...i, quantity: undoData.previousQuantity } : i
+                    ));
+                }
+                // Remove from history
+                setHistory(prev => prev.filter(h => h.id !== undoData.historyEntryId));
+            }
+        });
+    };
+
+    // Delete quick meal
+    const deleteQuickMeal = (id) => {
+        setQuickMeals(prev => prev.filter(qm => qm.id !== id));
+    };
+
+    // Update quick meal
+    const updateQuickMeal = (updatedMeal) => {
+        setQuickMeals(prev => prev.map(qm =>
+            qm.id === updatedMeal.id ? updatedMeal : qm
+        ));
+        setEditingQuickMeal(null);
     };
 
     // Calculate total servings from individual family member servings + extras
@@ -2928,6 +3085,117 @@ STRICT JSON Output:
                                     <Plus className="w-4 h-4 inline mr-1" /> Add Recipe
                                 </button>
                             </div>
+                        </div>
+
+                        {/* Quick Meals Section */}
+                        <div className="bg-gradient-to-r from-amber-50/50 to-orange-50/50 rounded-2xl p-3 border border-amber-100">
+                            <div className="flex items-center justify-between mb-2">
+                                <h3 className="text-sm font-bold text-amber-800 flex items-center gap-1.5">
+                                    <Zap className="w-4 h-4" /> Quick Meals
+                                </h3>
+                                <div className="flex gap-1">
+                                    {quickMeals?.length > 0 && (
+                                        <button
+                                            onClick={() => setQuickMealsEditMode(!quickMealsEditMode)}
+                                            className={`text-xs px-2 py-1 rounded-lg transition-colors ${quickMealsEditMode ? 'bg-red-100 text-red-600' : 'text-amber-600 hover:bg-amber-100'}`}
+                                        >
+                                            {quickMealsEditMode ? 'Done' : 'Edit'}
+                                        </button>
+                                    )}
+                                    <button
+                                        onClick={scanForQuickMeals}
+                                        disabled={quickMealsLoading}
+                                        className="text-xs px-2 py-1 rounded-lg bg-amber-100 text-amber-700 hover:bg-amber-200 flex items-center gap-1"
+                                    >
+                                        {quickMealsLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                                        Discover
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Quick Meal Pills - Balanced mixed layout */}
+                            {quickMeals?.length > 0 ? (
+                                <div className="flex flex-wrap gap-2 max-h-[150px] overflow-y-auto scrollbar-hide">
+                                    {(() => {
+                                        // Balanced row-filling: pair items from opposite ends for visual variety
+                                        const containerWidth = 480; // Target row width in pixels
+                                        const charWidth = 6.5; // Approx pixels per character
+                                        const pillPadding = 38; // px for emoji + padding
+                                        const gap = 8; // gap between pills
+
+                                        const withWidth = quickMeals.map(qm => ({
+                                            ...qm,
+                                            estimatedWidth: (qm.name?.length || 10) * charWidth + pillPadding
+                                        }));
+
+                                        // Sort by width: largest to smallest
+                                        const sorted = [...withWidth].sort((a, b) => b.estimatedWidth - a.estimatedWidth);
+                                        const result = [];
+
+                                        // Two-pointer approach: pick from front (large) and back (small) alternately
+                                        let left = 0;
+                                        let right = sorted.length - 1;
+                                        let pickFromLeft = true;
+
+                                        while (left <= right) {
+                                            const row = [];
+                                            let rowWidth = 0;
+
+                                            // Fill row by alternating between large and small items
+                                            while (left <= right) {
+                                                // Decide which end to pick from
+                                                let candidate;
+                                                let candidateIdx;
+
+                                                if (pickFromLeft && sorted[left].estimatedWidth <= containerWidth - rowWidth - (row.length > 0 ? gap : 0)) {
+                                                    candidate = sorted[left];
+                                                    candidateIdx = 'left';
+                                                } else if (!pickFromLeft && sorted[right].estimatedWidth <= containerWidth - rowWidth - (row.length > 0 ? gap : 0)) {
+                                                    candidate = sorted[right];
+                                                    candidateIdx = 'right';
+                                                } else if (sorted[right].estimatedWidth <= containerWidth - rowWidth - (row.length > 0 ? gap : 0)) {
+                                                    // If preferred side doesn't fit, try the other
+                                                    candidate = sorted[right];
+                                                    candidateIdx = 'right';
+                                                } else if (sorted[left].estimatedWidth <= containerWidth - rowWidth - (row.length > 0 ? gap : 0)) {
+                                                    candidate = sorted[left];
+                                                    candidateIdx = 'left';
+                                                } else {
+                                                    break; // Neither fits, start new row
+                                                }
+
+                                                row.push(candidate);
+                                                rowWidth += (row.length > 1 ? gap : 0) + candidate.estimatedWidth;
+
+                                                if (candidateIdx === 'left') {
+                                                    left++;
+                                                } else {
+                                                    right--;
+                                                }
+
+                                                pickFromLeft = !pickFromLeft; // Alternate
+                                            }
+
+                                            result.push(...row);
+                                        }
+
+                                        return result.map(qm => (
+                                            <QuickMealPill
+                                                key={qm.id}
+                                                quickMeal={qm}
+                                                onTap={logQuickMeal}
+                                                editMode={quickMealsEditMode}
+                                                onDelete={deleteQuickMeal}
+                                                onEdit={setEditingQuickMeal}
+                                            />
+                                        ));
+                                    })()}
+                                </div>
+                            ) : (
+                                <p className="text-xs text-amber-600/70 italic">
+                                    Tap "Discover" to scan your inventory for quick meals like soups, yogurt, or pre-made items.
+                                </p>
+                            )}
                         </div>
 
                         {showCustomRecipeForm && (
@@ -3328,6 +3596,172 @@ STRICT JSON Output:
                             <Calendar className="w-4 h-4 inline mr-2" />
                             Add to Calendar
                         </button>
+                    </div>
+                )}
+            </Modal>
+
+            {/* Quick Meals Suggestions Modal */}
+            <Modal isOpen={showQuickMealsSuggestions} onClose={() => setShowQuickMealsSuggestions(false)} size="large">
+                <div className="flex flex-col h-[80vh]">
+                    {/* Header */}
+                    <div className="p-4 pb-2 border-b border-slate-100">
+                        <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                            <Zap className="w-5 h-5 text-amber-500" /> Quick Meal Suggestions
+                        </h2>
+                        <p className="text-sm text-slate-500 mt-1">
+                            Select items to add as quick meals. Adjust quantities as needed.
+                        </p>
+                    </div>
+
+                    {/* Scrollable List - Flex-grow to fill remaining space */}
+                    <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                        {quickMealsSuggestions.length > 0 ? (
+                            quickMealsSuggestions.map((suggestion, idx) => {
+                                const alreadyAdded = quickMeals?.some(qm =>
+                                    qm.inventoryItemName?.toLowerCase() === suggestion.inventoryItemName?.toLowerCase()
+                                );
+                                return (
+                                    <div
+                                        key={idx}
+                                        className={`p-3 rounded-xl border transition-colors ${alreadyAdded ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-slate-200 hover:bg-slate-50'}`}
+                                    >
+                                        {/* Top row: Emoji + Name (editable) */}
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <span className="text-2xl flex-shrink-0">{suggestion.emoji || '🍽️'}</span>
+                                            {!alreadyAdded ? (
+                                                <input
+                                                    type="text"
+                                                    value={suggestion.name}
+                                                    onChange={(e) => {
+                                                        const newSuggestions = [...quickMealsSuggestions];
+                                                        newSuggestions[idx] = { ...suggestion, name: e.target.value };
+                                                        setQuickMealsSuggestions(newSuggestions);
+                                                    }}
+                                                    className="flex-1 font-medium text-slate-800 border border-slate-200 rounded-lg px-2 py-1 text-sm focus:ring-2 focus:ring-amber-400 focus:border-amber-400"
+                                                    placeholder="Quick meal name"
+                                                />
+                                            ) : (
+                                                <span className="font-medium text-slate-800">{suggestion.name}</span>
+                                            )}
+                                        </div>
+                                        {/* Bottom row: Pantry source + Qty + Unit + Add */}
+                                        <div className="flex items-center justify-between">
+                                            <div className="text-xs text-slate-500 truncate">from: {suggestion.inventoryItemName}</div>
+
+                                            {/* Quantity Input + Unit + Add Button */}
+                                            <div className="flex items-center gap-2 flex-shrink-0">
+                                                {!alreadyAdded && (
+                                                    <div className="flex items-center gap-1">
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            step="0.1"
+                                                            value={suggestion.quantityToDeduct ?? 1}
+                                                            onChange={(e) => {
+                                                                const newSuggestions = [...quickMealsSuggestions];
+                                                                const val = e.target.value === '' ? '' : parseFloat(e.target.value);
+                                                                newSuggestions[idx] = {
+                                                                    ...suggestion,
+                                                                    quantityToDeduct: val
+                                                                };
+                                                                setQuickMealsSuggestions(newSuggestions);
+                                                            }}
+                                                            className="w-16 text-center text-sm font-medium border border-slate-300 rounded-lg py-1 px-1 focus:ring-2 focus:ring-amber-400 focus:border-amber-400"
+                                                        />
+                                                        <span className="text-xs text-slate-500 font-medium min-w-[40px]">
+                                                            {suggestion.unit || 'each'}
+                                                        </span>
+                                                    </div>
+                                                )}
+
+                                                {alreadyAdded ? (
+                                                    <span className="text-xs text-emerald-600 font-bold flex items-center gap-1 px-2">
+                                                        <Check className="w-4 h-4" /> Added
+                                                    </span>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => addQuickMealFromSuggestion(suggestion)}
+                                                        disabled={!suggestion.quantityToDeduct || suggestion.quantityToDeduct <= 0}
+                                                        className="btn-primary text-xs py-1.5 px-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    >
+                                                        Add
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })
+                        ) : (
+                            <div className="flex items-center justify-center h-full">
+                                <p className="text-slate-400 text-center py-8">No suggestions found.</p>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Docked Footer */}
+                    <div className="p-4 pt-2 border-t border-slate-100 bg-white">
+                        <button
+                            onClick={() => setShowQuickMealsSuggestions(false)}
+                            className="w-full btn-primary"
+                        >
+                            Done
+                        </button>
+                    </div>
+                </div>
+            </Modal>
+
+            {/* Edit Quick Meal Modal */}
+            <Modal isOpen={!!editingQuickMeal} onClose={() => setEditingQuickMeal(null)}>
+                {editingQuickMeal && (
+                    <div className="p-6 space-y-4">
+                        <h2 className="text-xl font-bold text-slate-900">Edit Quick Meal</h2>
+
+                        <div>
+                            <label className="block text-sm font-bold text-slate-600 mb-1">Name</label>
+                            <input
+                                value={editingQuickMeal.name}
+                                onChange={(e) => setEditingQuickMeal({ ...editingQuickMeal, name: e.target.value })}
+                                className="input-field"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-bold text-slate-600 mb-1">Emoji</label>
+                            <input
+                                value={editingQuickMeal.emoji || ''}
+                                onChange={(e) => setEditingQuickMeal({ ...editingQuickMeal, emoji: e.target.value })}
+                                className="input-field w-20"
+                                placeholder="🍽️"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-bold text-slate-600 mb-1">Deduct Quantity</label>
+                            <input
+                                type="number"
+                                min="0.1"
+                                step="0.1"
+                                value={editingQuickMeal.quantityToDeduct || 1}
+                                onChange={(e) => setEditingQuickMeal({ ...editingQuickMeal, quantityToDeduct: parseFloat(e.target.value) || 1 })}
+                                className="input-field w-24"
+                            />
+                        </div>
+
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => setEditingQuickMeal(null)}
+                                className="flex-1 btn-secondary"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={() => updateQuickMeal(editingQuickMeal)}
+                                className="flex-1 btn-primary"
+                            >
+                                Save
+                            </button>
+                        </div>
                     </div>
                 )}
             </Modal>
@@ -5320,6 +5754,70 @@ Rules:
 };
 
 // ============================================================================
+// TOAST NOTIFICATION (with Undo support)
+// ============================================================================
+const Toast = ({ message, onUndo, duration = 5000, onClose }) => {
+    const [visible, setVisible] = useState(true);
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setVisible(false);
+            onClose?.();
+        }, duration);
+        return () => clearTimeout(timer);
+    }, [duration, onClose]);
+
+    if (!visible) return null;
+
+    return (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[200] bg-slate-900 text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-3 animate-fade-in max-w-[90vw]">
+            <span className="text-sm flex-1">{message}</span>
+            {onUndo && (
+                <button
+                    onClick={() => { onUndo(); setVisible(false); onClose?.(); }}
+                    className="text-orange-400 font-bold text-sm hover:text-orange-300"
+                >
+                    Undo
+                </button>
+            )}
+            <button
+                onClick={() => { setVisible(false); onClose?.(); }}
+                className="text-slate-400 hover:text-white"
+            >
+                <X className="w-4 h-4" />
+            </button>
+        </div>
+    );
+};
+
+// ============================================================================
+// QUICK MEAL PILL
+// ============================================================================
+const QuickMealPill = ({ quickMeal, onTap, editMode, onDelete, onEdit }) => {
+    return (
+        <button
+            onClick={() => editMode ? onEdit(quickMeal) : onTap(quickMeal)}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all
+                ${editMode
+                    ? 'bg-red-50 border border-red-200 text-red-700 hover:bg-red-100'
+                    : 'bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 text-amber-800 hover:from-amber-100 hover:to-orange-100 hover:shadow-sm active:scale-95'
+                }`}
+        >
+            <span>{quickMeal.emoji || '🍽️'}</span>
+            <span>{quickMeal.name}</span>
+            {editMode && (
+                <span
+                    onClick={(e) => { e.stopPropagation(); onDelete(quickMeal.id); }}
+                    className="ml-1 text-red-500 hover:text-red-700"
+                >
+                    <X className="w-3 h-3" />
+                </span>
+            )}
+        </button>
+    );
+};
+
+// ============================================================================
 // MAIN APP
 // ============================================================================
 
@@ -5343,6 +5841,10 @@ function MealPrepMate() {
     const [selectedModel, setSelectedModel] = useLocalStorage('mpm_selected_model', 'gemini-2.0-flash');
     const [customRecipes, setCustomRecipes] = useLocalStorage('mpm_custom_recipes', []);
     const [allocatedIngredients, setAllocatedIngredients] = useLocalStorage('mpm_allocated_ingredients', {});
+    const [quickMeals, setQuickMeals] = useLocalStorage('mpm_quick_meals', []);
+
+    // Toast state for undo notifications
+    const [toastData, setToastData] = useState(null);
 
     // Persisted modal/UI states
     const [showSettings, setShowSettings] = useLocalStorage('mpm_ui_show_settings', false);
@@ -5744,7 +6246,7 @@ Return JSON: {
                 {view === 'dashboard' && <Dashboard />}
                 {view === 'inventory' && <InventoryView apiKey={apiKey} model={selectedModel} inventory={inventory} setInventory={setInventory} knownLocations={knownLocations} setKnownLocations={setKnownLocations} processedFiles={processedFiles} setProcessedFiles={setProcessedFiles} allocatedIngredients={allocatedIngredients} />}
                 {view === 'family' && <FamilyView familyMembers={family} setFamilyMembers={setFamily} />}
-                {view === 'recipes' && <RecipeEngine apiKey={apiKey} model={selectedModel} inventory={inventory} setInventory={setInventory} family={family} setSelectedRecipe={setSelectedRecipe} history={history} setHistory={setHistory} recipes={recipes} setRecipes={setRecipes} favorites={favorites} setFavorites={setFavorites} shoppingList={shoppingList} setShoppingList={setShoppingList} mealPlan={mealPlan} setMealPlan={setMealPlan} leftovers={leftovers} setLeftovers={setLeftovers} onMoveToHistory={handleMoveToHistory} customRecipes={customRecipes} setCustomRecipes={setCustomRecipes} allocatedIngredients={allocatedIngredients} setAllocatedIngredients={setAllocatedIngredients} onOpenWizard={() => setShowMealWizard(true)} />}
+                {view === 'recipes' && <RecipeEngine apiKey={apiKey} model={selectedModel} inventory={inventory} setInventory={setInventory} family={family} setSelectedRecipe={setSelectedRecipe} history={history} setHistory={setHistory} recipes={recipes} setRecipes={setRecipes} favorites={favorites} setFavorites={setFavorites} shoppingList={shoppingList} setShoppingList={setShoppingList} mealPlan={mealPlan} setMealPlan={setMealPlan} leftovers={leftovers} setLeftovers={setLeftovers} onMoveToHistory={handleMoveToHistory} customRecipes={customRecipes} setCustomRecipes={setCustomRecipes} allocatedIngredients={allocatedIngredients} setAllocatedIngredients={setAllocatedIngredients} onOpenWizard={() => setShowMealWizard(true)} quickMeals={quickMeals} setQuickMeals={setQuickMeals} setToastData={setToastData} />}
                 {view === 'shopping' && <ShoppingView apiKey={apiKey} model={selectedModel} list={shoppingList} setList={setShoppingList} />}
                 {view === 'leftovers' && <LeftoversView apiKey={apiKey} model={selectedModel} leftovers={leftovers} setLeftovers={setLeftovers} onMoveToHistory={handleMoveToHistory} />}
                 {view === 'calendar' && <CalendarView apiKey={apiKey} model={selectedModel} mealPlan={mealPlan} setMealPlan={setMealPlan} inventory={inventory} setInventory={setInventory} family={family} recipes={recipes} history={history} customRecipes={customRecipes} downloadICSFn={downloadICS} onCook={handleCook} onFavorite={(r) => setFavorites([...favorites, { ...r, id: generateId() }])} onAddToLeftovers={handleAddToLeftovers} leftovers={leftovers} setLeftovers={setLeftovers} onMoveToHistory={handleMoveToHistory} allocatedIngredients={allocatedIngredients} setAllocatedIngredients={setAllocatedIngredients} onOpenWizard={() => setShowMealWizard(true)} favorites={favorites} />}
@@ -6288,6 +6790,16 @@ Return JSON: {
                 history={history}
                 customRecipes={customRecipes}
             />
+
+            {/* Toast Notification */}
+            {toastData && (
+                <Toast
+                    message={toastData.message}
+                    onUndo={toastData.onUndo}
+                    duration={toastData.duration || 15000}
+                    onClose={() => setToastData(null)}
+                />
+            )}
         </div>
     );
 }
