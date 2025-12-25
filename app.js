@@ -101,15 +101,23 @@ const useLocalStorage = (key, initialValue) => {
         }
     });
 
+    // Use a ref to always have access to the latest value for functional updates
+    const storedValueRef = useRef(storedValue);
+    useEffect(() => {
+        storedValueRef.current = storedValue;
+    }, [storedValue]);
+
     const setValue = useCallback((value) => {
         try {
-            const valueToStore = value instanceof Function ? value(storedValue) : value;
+            // For functional updates, use the latest value from the ref
+            const valueToStore = value instanceof Function ? value(storedValueRef.current) : value;
             setStoredValue(valueToStore);
+            storedValueRef.current = valueToStore; // Update ref immediately
             window.localStorage.setItem(key, JSON.stringify(valueToStore));
         } catch (error) {
             console.error('LocalStorage write error:', error);
         }
-    }, [key, storedValue]);
+    }, [key]);
 
     return [storedValue, setValue];
 };
@@ -160,6 +168,402 @@ const generateRecipeImage = (apiKey, recipeName) => {
     // Return the URL directly - the image will be loaded when displayed
     return imgUrl;
 };
+
+// Function calling helper for AI Assistant
+const callGeminiWithFunctions = async (apiKey, messages, functions, model = 'gemini-2.0-flash') => {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: messages,
+                tools: [{ functionDeclarations: functions }],
+                toolConfig: { functionCallingConfig: { mode: "AUTO" } }
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error?.message || `API Error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        const parts = data.candidates?.[0]?.content?.parts || [];
+
+        // Extract text and ALL function calls from parts (can have multiple)
+        let result = { functionCalls: [] };
+        for (const part of parts) {
+            if (part.text) {
+                result.text = part.text;
+            }
+            if (part.functionCall) {
+                result.functionCalls.push(part.functionCall);
+            }
+        }
+
+        // Backwards compatibility: also set single functionCall if only one
+        if (result.functionCalls.length === 1) {
+            result.functionCall = result.functionCalls[0];
+        } else if (result.functionCalls.length > 1) {
+            result.functionCall = result.functionCalls[0]; // First one for legacy code
+        }
+
+        return result;
+    } catch (error) {
+        console.error("Gemini Function Calling Failed:", error);
+        return { error: true, message: error.message };
+    }
+};
+
+// AI Assistant Function Definitions
+const APP_FUNCTIONS = [
+    // ============ MEAL LOGGING ============
+    {
+        name: "log_meal",
+        description: "Log a meal that was eaten. Use for 'I had...' or 'I ate...' statements about eating food (not leftovers).",
+        parameters: {
+            type: "object",
+            properties: {
+                mealName: { type: "string", description: "Name of the meal or food eaten" },
+                mealType: { type: "string", enum: ["Breakfast", "Lunch", "Dinner", "Snack"], description: "Type of meal" },
+                servings: { type: "number", description: "Number of servings eaten, default 1" }
+            },
+            required: ["mealName"]
+        }
+    },
+
+    // ============ INVENTORY MANAGEMENT ============
+    {
+        name: "update_inventory_item",
+        description: "Update quantity of an existing inventory item. Use for 'I have X left' or 'down to X' statements.",
+        parameters: {
+            type: "object",
+            properties: {
+                itemName: { type: "string", description: "Name of the inventory item to update" },
+                quantity: { type: "number", description: "New quantity" },
+                unit: { type: "string", description: "Unit of measurement (each, lb, oz, cups, jar, etc.)" }
+            },
+            required: ["itemName", "quantity"]
+        }
+    },
+    {
+        name: "add_inventory_item",
+        description: "Add a new item to inventory. Use for 'I bought...' or 'Add X to pantry' statements.",
+        parameters: {
+            type: "object",
+            properties: {
+                itemName: { type: "string", description: "Name of the item" },
+                quantity: { type: "number", description: "Quantity" },
+                unit: { type: "string", description: "Unit (each, lb, oz, cups, jar, etc.)" },
+                location: { type: "string", enum: ["Fridge", "Freezer", "Pantry", "Cabinet", "Countertop"], description: "Storage location" },
+                expiresAt: { type: "string", description: "Expiration date in YYYY-MM-DD format if mentioned" }
+            },
+            required: ["itemName", "quantity"]
+        }
+    },
+    {
+        name: "remove_inventory_item",
+        description: "Remove an item from inventory entirely.",
+        parameters: {
+            type: "object",
+            properties: {
+                itemName: { type: "string", description: "Name of the inventory item to remove" }
+            },
+            required: ["itemName"]
+        }
+    },
+    {
+        name: "remove_inventory_items",
+        description: "Remove MULTIPLE items from inventory at once. Use when user wants to remove several items or 'all' of something.",
+        parameters: {
+            type: "object",
+            properties: {
+                itemNames: {
+                    type: "array",
+                    items: { type: "string" },
+                    description: "Array of item names to remove"
+                }
+            },
+            required: ["itemNames"]
+        }
+    },
+    {
+        name: "get_inventory",
+        description: "Get current inventory status. Use for 'what's in my pantry/fridge' questions.",
+        parameters: {
+            type: "object",
+            properties: {
+                location: { type: "string", description: "Filter by location (Fridge, Freezer, Pantry, etc.)" },
+                search: { type: "string", description: "Search term to filter items" }
+            }
+        }
+    },
+
+    // ============ SHOPPING LIST ============
+    {
+        name: "add_to_shopping_list",
+        description: "Add items to shopping list.",
+        parameters: {
+            type: "object",
+            properties: {
+                items: {
+                    type: "array",
+                    items: {
+                        type: "object",
+                        properties: {
+                            name: { type: "string" },
+                            quantity: { type: "string" }
+                        }
+                    },
+                    description: "Items to add"
+                }
+            },
+            required: ["items"]
+        }
+    },
+    {
+        name: "remove_from_shopping_list",
+        description: "Remove an item from shopping list.",
+        parameters: {
+            type: "object",
+            properties: {
+                itemName: { type: "string", description: "Name of item to remove" }
+            },
+            required: ["itemName"]
+        }
+    },
+    {
+        name: "check_shopping_item",
+        description: "Mark a shopping list item as checked/bought.",
+        parameters: {
+            type: "object",
+            properties: {
+                itemName: { type: "string", description: "Name of item to check off" }
+            },
+            required: ["itemName"]
+        }
+    },
+    {
+        name: "get_shopping_list",
+        description: "Get current shopping list status.",
+        parameters: { type: "object", properties: {} }
+    },
+
+    // ============ LEFTOVERS ============
+    {
+        name: "add_leftover",
+        description: "Add leftovers from a meal to the fridge.",
+        parameters: {
+            type: "object",
+            properties: {
+                name: { type: "string", description: "Name of the leftover dish" },
+                portions: { type: "number", description: "Number of portions" },
+                daysUntilExpiry: { type: "number", description: "Days until it expires (default 4)" }
+            },
+            required: ["name", "portions"]
+        }
+    },
+    {
+        name: "eat_leftover",
+        description: "Consume/eat a leftover. Reduces portions or removes if finished.",
+        parameters: {
+            type: "object",
+            properties: {
+                name: { type: "string", description: "Name of the leftover to eat" },
+                servings: { type: "number", description: "Number of servings to eat (default 1)" }
+            },
+            required: ["name"]
+        }
+    },
+    {
+        name: "get_leftovers",
+        description: "Get current leftovers with expiration status.",
+        parameters: { type: "object", properties: {} }
+    },
+
+    // ============ RECIPES ============
+    {
+        name: "create_custom_recipe",
+        description: "Create a new custom recipe.",
+        parameters: {
+            type: "object",
+            properties: {
+                name: { type: "string", description: "Recipe name" },
+                description: { type: "string", description: "Brief description" },
+                servings: { type: "number", description: "Number of servings" },
+                ingredients: { type: "string", description: "Ingredients as text (one per line)" },
+                instructions: { type: "string", description: "Instructions as text (one step per line)" },
+                time: { type: "string", description: "Total cooking time" }
+            },
+            required: ["name"]
+        }
+    },
+    {
+        name: "search_recipes",
+        description: "Search for recipes by name, ingredient, or criteria in favorites/history/custom.",
+        parameters: {
+            type: "object",
+            properties: {
+                query: { type: "string", description: "Search query" },
+                source: { type: "string", enum: ["favorites", "history", "custom", "all"], description: "Where to search" }
+            },
+            required: ["query"]
+        }
+    },
+    {
+        name: "generate_recipe_suggestions",
+        description: "Generate new recipe suggestions based on inventory. Opens the recipe engine.",
+        parameters: {
+            type: "object",
+            properties: {
+                mealType: { type: "string", enum: ["Breakfast", "Lunch", "Dinner", "Snack", "Any"], description: "Type of meal" },
+                servings: { type: "number", description: "Number of servings needed" },
+                theme: { type: "string", description: "Theme or cuisine style (Italian, quick, healthy, etc.)" }
+            }
+        }
+    },
+    {
+        name: "add_recipe_to_favorites",
+        description: "Add a recipe to favorites.",
+        parameters: {
+            type: "object",
+            properties: {
+                recipeName: { type: "string", description: "Name of the recipe" }
+            },
+            required: ["recipeName"]
+        }
+    },
+
+    // ============ CALENDAR / MEAL PLANNING ============
+    {
+        name: "schedule_meal",
+        description: "Schedule a meal/recipe for a specific date.",
+        parameters: {
+            type: "object",
+            properties: {
+                recipeName: { type: "string", description: "Name of the recipe/meal" },
+                date: { type: "string", description: "Date in YYYY-MM-DD format" },
+                mealType: { type: "string", enum: ["Breakfast", "Lunch", "Dinner", "Snack", "Dessert"] }
+            },
+            required: ["recipeName", "date", "mealType"]
+        }
+    },
+    {
+        name: "reschedule_meal",
+        description: "Move a scheduled meal to a different date.",
+        parameters: {
+            type: "object",
+            properties: {
+                recipeName: { type: "string", description: "Name of the meal to reschedule" },
+                originalDate: { type: "string", description: "Original date (YYYY-MM-DD)" },
+                newDate: { type: "string", description: "New date (YYYY-MM-DD)" },
+                mealType: { type: "string", enum: ["Breakfast", "Lunch", "Dinner", "Snack", "Dessert"] }
+            },
+            required: ["recipeName", "newDate"]
+        }
+    },
+    {
+        name: "remove_scheduled_meal",
+        description: "Remove a meal from the calendar.",
+        parameters: {
+            type: "object",
+            properties: {
+                recipeName: { type: "string", description: "Name of the meal to remove" },
+                date: { type: "string", description: "Date of the meal (YYYY-MM-DD)" },
+                mealType: { type: "string", enum: ["Breakfast", "Lunch", "Dinner", "Snack", "Dessert"] }
+            },
+            required: ["recipeName"]
+        }
+    },
+    {
+        name: "get_meal_plan",
+        description: "Get the meal plan for a date range.",
+        parameters: {
+            type: "object",
+            properties: {
+                startDate: { type: "string", description: "Start date (YYYY-MM-DD)" },
+                days: { type: "number", description: "Number of days to show (default 7)" }
+            }
+        }
+    },
+    {
+        name: "set_cooking_days",
+        description: "Set preferred cooking days for the meal wizard. Use for 'I can only cook on...' statements.",
+        parameters: {
+            type: "object",
+            properties: {
+                days: {
+                    type: "array",
+                    items: { type: "string", enum: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] },
+                    description: "Days of the week to cook"
+                }
+            },
+            required: ["days"]
+        }
+    },
+    {
+        name: "open_meal_wizard",
+        description: "Open the meal scheduling wizard with optional pre-configuration.",
+        parameters: {
+            type: "object",
+            properties: {
+                cookingDays: { type: "array", items: { type: "string" }, description: "Pre-select cooking days" },
+                mealType: { type: "string", description: "Pre-select meal type" }
+            }
+        }
+    },
+
+    // ============ FAMILY ============
+    {
+        name: "add_family_member",
+        description: "Add a new family member.",
+        parameters: {
+            type: "object",
+            properties: {
+                name: { type: "string", description: "Name of the family member" },
+                age: { type: "number", description: "Age" },
+                gender: { type: "string", enum: ["male", "female"] },
+                diet: { type: "string", description: "Dietary restriction (Vegan, Vegetarian, Gluten-Free, etc.)" }
+            },
+            required: ["name"]
+        }
+    },
+    {
+        name: "get_family_info",
+        description: "Get current family members and their dietary needs.",
+        parameters: { type: "object", properties: {} }
+    },
+
+    // ============ NAVIGATION ============
+    {
+        name: "navigate_to",
+        description: "Navigate to a specific view in the app.",
+        parameters: {
+            type: "object",
+            properties: {
+                view: { type: "string", enum: ["dashboard", "inventory", "recipes", "calendar", "shopping", "leftovers", "family", "settings"] }
+            },
+            required: ["view"]
+        }
+    },
+
+    // ============ GENERAL QUERIES ============
+    {
+        name: "get_app_summary",
+        description: "Get overall app status summary.",
+        parameters: {
+            type: "object",
+            properties: {
+                include: {
+                    type: "array",
+                    items: { type: "string", enum: ["inventory", "mealPlan", "shopping", "leftovers", "family", "expiring"] }
+                }
+            }
+        }
+    }
+];
 
 // ============================================================================
 // UTILITY FUNCTIONS
@@ -5754,6 +6158,1008 @@ Rules:
 };
 
 // ============================================================================
+// CHAT AI ASSISTANT
+// ============================================================================
+const ChatAssistant = ({
+    isOpen,
+    onClose,
+    apiKey,
+    model,
+    inventory,
+    setInventory,
+    shoppingList,
+    setShoppingList,
+    leftovers,
+    setLeftovers,
+    mealPlan,
+    setMealPlan,
+    family,
+    setFamily,
+    favorites,
+    setFavorites,
+    history,
+    setHistory,
+    customRecipes,
+    setCustomRecipes,
+    setView,
+    setShowMealWizard,
+    wizardDays,
+    setWizardDays,
+    setToastData,
+    onMoveToHistory,
+    setSelectedRecipe
+}) => {
+    const [messages, setMessages] = useLocalStorage('mpm_chat_messages', []);
+    const [input, setInput] = useState('');
+    const [loading, setLoading] = useState(false);
+    const messagesEndRef = useRef(null);
+    const inputRef = useRef(null);
+
+    const scrollToBottom = () => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    };
+
+    useEffect(() => {
+        scrollToBottom();
+    }, [messages]);
+
+    // Build context for the AI
+    const buildSystemContext = () => {
+        const today = new Date();
+        const todayStr = getLocalDateKey(today);
+
+        // Get unchecked shopping items
+        const uncheckedShopping = shoppingList.filter(i => !i.checked).map(i => i.name);
+
+        return `You are a helpful AI assistant for MealPrepMate, a meal planning and pantry management app.
+        
+CURRENT APP STATE:
+- Date: ${todayStr}
+- Inventory: ${inventory.length} items
+- Leftovers: ${leftovers.length > 0 ? leftovers.map(l => `${l.name} (${l.portions} portions)`).join(', ') : 'none'}
+- Shopping list (unchecked): ${uncheckedShopping.length > 0 ? uncheckedShopping.join(', ') : 'empty'}
+- Family: ${family.map(f => f.name).join(', ') || 'Not configured'}
+- Upcoming meals: ${Object.keys(mealPlan).filter(k => k >= todayStr).length} scheduled
+
+BEHAVIOR RULES:
+1. BE PROACTIVE: Use the app state above to make smart decisions. If user says "I ate pasta" and there's leftover pasta, just call eat_leftover directly.
+2. DON'T OVER-CLARIFY: For simple queries like "what's expiring soon" or "show my inventory", just call the function immediately.
+3. ONLY ASK when truly necessary: Missing info like quantities for adding items, or which specific item when multiple match.
+4. ACKNOWLEDGE BRIEFLY: Say what you're doing ("Got it, checking expiring items...") then call the function.
+5. For dates, use YYYY-MM-DD format internally but speak naturally.
+
+SMART MATCHING:
+- If user says "I ate [food]" and there's a matching leftover → call eat_leftover
+- If user says "I ate [food]" and NO matching leftover → call log_meal
+- If user says "add [item]" without specifying where, ask once: "Shopping list or pantry?"
+- For "what's expiring" or similar → call get_app_summary with include: ['expiring']
+
+Be concise, friendly, and action-oriented. Don't ask for permission to check things - just check them.`;
+    };
+
+    // User-friendly labels for function names
+    const FUNCTION_LABELS = {
+        log_meal: 'Logged meal',
+        update_inventory_item: 'Updated inventory',
+        add_inventory_item: 'Added to pantry',
+        remove_inventory_item: 'Removed from pantry',
+        get_inventory: 'Checked inventory',
+        add_to_shopping_list: 'Added to shopping list',
+        remove_from_shopping_list: 'Removed from shopping list',
+        check_shopping_item: 'Checked off item',
+        get_shopping_list: 'Checked shopping list',
+        add_leftover: 'Added leftover',
+        eat_leftover: 'Updated leftover',
+        get_leftovers: 'Checked leftovers',
+        create_custom_recipe: 'Created recipe',
+        search_recipes: 'Searched recipes',
+        generate_recipe_suggestions: 'Opening recipe generator',
+        add_recipe_to_favorites: 'Added to favorites',
+        schedule_meal: 'Scheduled meal',
+        reschedule_meal: 'Rescheduled meal',
+        remove_scheduled_meal: 'Removed from calendar',
+        get_meal_plan: 'Checked meal plan',
+        set_cooking_days: 'Set cooking days',
+        open_meal_wizard: 'Opening meal wizard',
+        add_family_member: 'Added family member',
+        get_family_info: 'Checked family',
+        navigate_to: 'Navigating',
+        get_app_summary: 'App summary'
+    };
+
+    // Execute function calls from the AI
+    const executeFunction = async (functionName, args) => {
+        let result = { success: true, message: '' };
+        let undoAction = null;
+
+        switch (functionName) {
+            case 'log_meal': {
+                const historyEntry = {
+                    id: generateId(),
+                    name: args.mealName,
+                    mealType: args.mealType || 'Meal',
+                    servings: args.servings || 1,
+                    cookedAt: new Date().toISOString(),
+                    isQuickMeal: true
+                };
+                const oldHistory = [...history];
+                setHistory([historyEntry, ...history]);
+                result.message = `✅ Got it! Logged "${args.mealName}" as ${args.mealType || 'a meal'}. Enjoy!`;
+                undoAction = () => setHistory(oldHistory);
+                break;
+            }
+
+            case 'update_inventory_item': {
+                const item = inventory.find(i =>
+                    i.name.toLowerCase().includes(args.itemName.toLowerCase()) ||
+                    args.itemName.toLowerCase().includes(i.name.toLowerCase())
+                );
+                if (item) {
+                    const oldQty = item.quantity;
+                    const oldUnit = item.unit;
+                    setInventory(prev => prev.map(i =>
+                        i.id === item.id
+                            ? { ...i, quantity: args.quantity, unit: args.unit || i.unit }
+                            : i
+                    ));
+                    result.message = `✅ Updated! "${item.name}" is now ${args.quantity} ${args.unit || item.unit} (was ${oldQty}).`;
+                    undoAction = () => setInventory(prev => prev.map(i =>
+                        i.id === item.id ? { ...i, quantity: oldQty, unit: oldUnit } : i
+                    ));
+                } else {
+                    result.success = false;
+                    result.message = `Could not find "${args.itemName}" in inventory`;
+                }
+                break;
+            }
+
+            case 'add_inventory_item': {
+                const newItem = {
+                    id: generateId(),
+                    name: args.itemName,
+                    quantity: args.quantity,
+                    unit: args.unit || 'each',
+                    location: args.location || 'Pantry',
+                    expiresAt: args.expiresAt || null,
+                    addedAt: new Date().toISOString()
+                };
+                setInventory(prev => [...prev, newItem]);
+                result.message = `✅ Added ${args.quantity} ${args.unit || 'each'} of "${args.itemName}" to your ${args.location || 'Pantry'}!`;
+                undoAction = () => setInventory(prev => prev.filter(i => i.id !== newItem.id));
+                break;
+            }
+
+            case 'remove_inventory_item': {
+                const item = inventory.find(i =>
+                    i.name.toLowerCase().includes(args.itemName.toLowerCase())
+                );
+                if (item) {
+                    const oldInventory = [...inventory];
+                    setInventory(prev => prev.filter(i => i.id !== item.id));
+                    result.message = `✅ Removed "${item.name}" from your inventory.`;
+                    undoAction = () => setInventory(oldInventory);
+                } else {
+                    result.success = false;
+                    result.message = `Could not find "${args.itemName}" in inventory`;
+                }
+                break;
+            }
+
+            case 'remove_inventory_items': {
+                // Batch removal of multiple items
+                const itemNames = args.itemNames || [];
+                const removedItems = [];
+                const notFoundItems = [];
+                const oldInventory = [...inventory];
+
+                // Build list of items to remove
+                const itemsToRemove = [];
+                for (const itemName of itemNames) {
+                    const item = inventory.find(i =>
+                        i.name.toLowerCase().includes(itemName.toLowerCase()) &&
+                        !itemsToRemove.some(r => r.id === i.id) // Don't double-match
+                    );
+                    if (item) {
+                        itemsToRemove.push(item);
+                        removedItems.push(item.name);
+                    } else {
+                        notFoundItems.push(itemName);
+                    }
+                }
+
+                if (removedItems.length > 0) {
+                    const idsToRemove = new Set(itemsToRemove.map(i => i.id));
+                    setInventory(prev => prev.filter(i => !idsToRemove.has(i.id)));
+                    result.message = `✅ Removed ${removedItems.length} item(s): ${removedItems.join(', ')}`;
+                    if (notFoundItems.length > 0) {
+                        result.message += ` (couldn't find: ${notFoundItems.join(', ')})`;
+                    }
+                    undoAction = () => setInventory(oldInventory);
+                } else {
+                    result.success = false;
+                    result.message = `Could not find any of: ${itemNames.join(', ')}`;
+                }
+                break;
+            }
+
+            case 'get_inventory': {
+                let items = inventory;
+                if (args.location) {
+                    items = items.filter(i => i.location?.toLowerCase() === args.location.toLowerCase());
+                }
+                if (args.search) {
+                    items = items.filter(i => i.name.toLowerCase().includes(args.search.toLowerCase()));
+                }
+                if (items.length === 0) {
+                    result.message = args.location ? `No items in ${args.location}` : 'Inventory is empty';
+                } else {
+                    const summary = items.slice(0, 10).map(i => `• ${i.name}: ${i.quantity} ${i.unit}`).join('\n');
+                    result.message = `${args.location || 'Inventory'} (${items.length} items):\n${summary}${items.length > 10 ? `\n...and ${items.length - 10} more` : ''}`;
+                }
+                break;
+            }
+
+            case 'add_to_shopping_list': {
+                const newItems = args.items.map(item => ({
+                    id: generateId(),
+                    name: item.name,
+                    quantity: item.quantity || '',
+                    checked: false,
+                    category: 'Unsorted'
+                }));
+                setShoppingList(prev => [...prev, ...newItems]);
+                result.message = `✅ Added ${args.items.length} item(s) to your shopping list: ${args.items.map(i => i.name).join(', ')}. Happy shopping! 🛒`;
+                undoAction = () => setShoppingList(prev => prev.filter(i => !newItems.find(n => n.id === i.id)));
+                break;
+            }
+
+            case 'remove_from_shopping_list': {
+                const item = shoppingList.find(i =>
+                    i.name.toLowerCase().includes(args.itemName.toLowerCase())
+                );
+                if (item) {
+                    const oldList = [...shoppingList];
+                    setShoppingList(prev => prev.filter(i => i.id !== item.id));
+                    result.message = `✅ Removed "${item.name}" from your shopping list.`;
+                    undoAction = () => setShoppingList(oldList);
+                } else {
+                    result.success = false;
+                    result.message = `Could not find "${args.itemName}" in shopping list`;
+                }
+                break;
+            }
+
+            case 'check_shopping_item': {
+                const item = shoppingList.find(i =>
+                    i.name.toLowerCase().includes(args.itemName.toLowerCase()) && !i.checked
+                );
+                if (item) {
+                    setShoppingList(prev => prev.map(i =>
+                        i.id === item.id ? { ...i, checked: true } : i
+                    ));
+                    result.message = `✅ Checked off "${item.name}"! One less thing to buy.`;
+                    undoAction = () => setShoppingList(prev => prev.map(i =>
+                        i.id === item.id ? { ...i, checked: false } : i
+                    ));
+                } else {
+                    result.success = false;
+                    result.message = `Could not find unchecked "${args.itemName}" in shopping list`;
+                }
+                break;
+            }
+
+            case 'get_shopping_list': {
+                const unchecked = shoppingList.filter(i => !i.checked);
+                const checked = shoppingList.filter(i => i.checked);
+                if (shoppingList.length === 0) {
+                    result.message = 'Shopping list is empty';
+                } else {
+                    let msg = `Shopping list (${unchecked.length} remaining):\n`;
+                    msg += unchecked.slice(0, 10).map(i => `• ${i.quantity ? i.quantity + ' ' : ''}${i.name}`).join('\n');
+                    if (checked.length > 0) msg += `\n\n✓ ${checked.length} item(s) already checked`;
+                    result.message = msg;
+                }
+                break;
+            }
+
+            case 'add_leftover': {
+                const days = args.daysUntilExpiry || 4;
+                const newLeftover = {
+                    id: generateId(),
+                    name: args.name,
+                    portions: args.portions,
+                    tip: 'Store in airtight container',
+                    reheat: 'Microwave 2-3 minutes',
+                    expiresAt: new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString(),
+                    addedAt: new Date().toISOString()
+                };
+                setLeftovers(prev => [newLeftover, ...prev]);
+                result.message = `✅ Added ${args.portions} portions of "${args.name}" to leftovers. It'll stay fresh for ${days} days! 🍽️`;
+                undoAction = () => setLeftovers(prev => prev.filter(l => l.id !== newLeftover.id));
+                break;
+            }
+
+            case 'eat_leftover': {
+                const leftover = leftovers.find(l =>
+                    l.name.toLowerCase().includes(args.name.toLowerCase())
+                );
+                if (leftover) {
+                    const servings = args.servings || 1;
+                    const newPortions = Math.max(0, (leftover.portions || 1) - servings);
+                    const oldLeftovers = [...leftovers];
+
+                    if (newPortions <= 0) {
+                        onMoveToHistory?.(leftover, 'Finished');
+                        setLeftovers(prev => prev.filter(l => l.id !== leftover.id));
+                        result.message = `🍽️ Finished "${leftover.name}" - no portions left. Hope it was delicious!`;
+                    } else {
+                        setLeftovers(prev => prev.map(l =>
+                            l.id === leftover.id ? { ...l, portions: newPortions } : l
+                        ));
+                        result.message = `🍽️ Ate ${servings} serving(s) of "${leftover.name}". ${newPortions} portion(s) remaining.`;
+                    }
+                    undoAction = () => setLeftovers(oldLeftovers);
+                } else {
+                    result.success = false;
+                    result.message = `Could not find "${args.name}" in leftovers`;
+                }
+                break;
+            }
+
+            case 'get_leftovers': {
+                if (leftovers.length === 0) {
+                    result.message = 'No leftovers in the fridge';
+                } else {
+                    const summary = leftovers.map(l => {
+                        const days = Math.ceil((new Date(l.expiresAt) - new Date()) / 86400000);
+                        const status = days <= 1 ? '⚠️' : days <= 3 ? '🟡' : '✓';
+                        return `${status} ${l.name}: ${l.portions} portions (${days}d left)`;
+                    }).join('\n');
+                    result.message = `Leftovers (${leftovers.length}):\n${summary}`;
+                }
+                break;
+            }
+
+            case 'create_custom_recipe': {
+                const newRecipe = {
+                    id: generateId(),
+                    name: args.name,
+                    description: args.description || '',
+                    servings: args.servings || 4,
+                    total_time: args.time || '30 min',
+                    ingredients: args.ingredients ? args.ingredients.split('\n').filter(i => i.trim()).map(i => ({ item: i.trim() })) : [],
+                    steps: args.instructions ? args.instructions.split('\n').filter(i => i.trim()) : [],
+                    isCustom: true,
+                    createdAt: new Date().toISOString(),
+                    _startInEditMode: true,
+                    _isNewCustomRecipe: true
+                };
+                setSelectedRecipe(newRecipe);
+                result.message = `Created recipe "${args.name}" - opening editor...`;
+                onClose();
+                break;
+            }
+
+            case 'search_recipes': {
+                const query = args.query.toLowerCase();
+                let sources = [];
+                if (args.source === 'favorites' || args.source === 'all') sources.push(...favorites);
+                if (args.source === 'history' || args.source === 'all') sources.push(...history);
+                if (args.source === 'custom' || args.source === 'all') sources.push(...customRecipes);
+
+                const matches = sources.filter(r =>
+                    r.name?.toLowerCase().includes(query) ||
+                    r.ingredients?.some(i => (i.item || i).toLowerCase().includes(query))
+                ).slice(0, 5);
+
+                if (matches.length === 0) {
+                    result.message = `No recipes found matching "${args.query}"`;
+                } else {
+                    result.message = `Found ${matches.length} recipe(s):\n${matches.map(r => `• ${r.name}`).join('\n')}`;
+                }
+                break;
+            }
+
+            case 'generate_recipe_suggestions': {
+                setView('recipes');
+                result.message = `Opening recipe generator${args.mealType ? ` for ${args.mealType}` : ''}...`;
+                onClose();
+                break;
+            }
+
+            case 'add_recipe_to_favorites': {
+                const recipe = [...history, ...customRecipes].find(r =>
+                    r.name?.toLowerCase().includes(args.recipeName.toLowerCase())
+                );
+                if (recipe) {
+                    const newFav = { ...recipe, id: generateId() };
+                    setFavorites(prev => [...prev, newFav]);
+                    result.message = `Added "${recipe.name}" to favorites`;
+                    undoAction = () => setFavorites(prev => prev.filter(f => f.id !== newFav.id));
+                } else {
+                    result.success = false;
+                    result.message = `Could not find recipe "${args.recipeName}"`;
+                }
+                break;
+            }
+
+            case 'schedule_meal': {
+                const slotKey = `${args.date}-${args.mealType}`;
+                const newMeal = {
+                    id: generateId(),
+                    name: args.recipeName,
+                    mealType: args.mealType,
+                    scheduledFor: new Date(args.date).toISOString()
+                };
+                const oldMealPlan = { ...mealPlan };
+                setMealPlan(prev => ({
+                    ...prev,
+                    [slotKey]: {
+                        meals: [...(prev[slotKey]?.meals || []), newMeal]
+                    }
+                }));
+                result.message = `Scheduled "${args.recipeName}" for ${args.date} (${args.mealType})`;
+                undoAction = () => setMealPlan(oldMealPlan);
+                break;
+            }
+
+            case 'reschedule_meal': {
+                // Find the meal to reschedule
+                let found = null;
+                let originalSlotKey = null;
+                Object.entries(mealPlan).forEach(([key, slot]) => {
+                    if (slot.meals) {
+                        const meal = slot.meals.find(m =>
+                            m.name?.toLowerCase().includes(args.recipeName.toLowerCase())
+                        );
+                        if (meal && (!args.originalDate || key.startsWith(args.originalDate))) {
+                            found = meal;
+                            originalSlotKey = key;
+                        }
+                    }
+                });
+
+                if (found && originalSlotKey) {
+                    const oldMealPlan = { ...mealPlan };
+                    const mealType = args.mealType || found.mealType || 'Dinner';
+                    const newSlotKey = `${args.newDate}-${mealType}`;
+
+                    // Remove from old slot
+                    let newPlan = { ...mealPlan };
+                    const oldSlot = newPlan[originalSlotKey];
+                    if (oldSlot?.meals) {
+                        const updatedMeals = oldSlot.meals.filter(m => m.id !== found.id);
+                        if (updatedMeals.length === 0) {
+                            delete newPlan[originalSlotKey];
+                        } else {
+                            newPlan[originalSlotKey] = { meals: updatedMeals };
+                        }
+                    }
+
+                    // Add to new slot
+                    const updatedMeal = { ...found, scheduledFor: new Date(args.newDate).toISOString() };
+                    newPlan[newSlotKey] = {
+                        meals: [...(newPlan[newSlotKey]?.meals || []), updatedMeal]
+                    };
+
+                    setMealPlan(newPlan);
+                    result.message = `Rescheduled "${found.name}" to ${args.newDate}`;
+                    undoAction = () => setMealPlan(oldMealPlan);
+                } else {
+                    result.success = false;
+                    result.message = `Could not find scheduled meal "${args.recipeName}"`;
+                }
+                break;
+            }
+
+            case 'remove_scheduled_meal': {
+                let found = null;
+                let slotKey = null;
+                Object.entries(mealPlan).forEach(([key, slot]) => {
+                    if (slot.meals) {
+                        const meal = slot.meals.find(m =>
+                            m.name?.toLowerCase().includes(args.recipeName.toLowerCase())
+                        );
+                        if (meal && (!args.date || key.startsWith(args.date))) {
+                            found = meal;
+                            slotKey = key;
+                        }
+                    }
+                });
+
+                if (found && slotKey) {
+                    const oldMealPlan = { ...mealPlan };
+                    let newPlan = { ...mealPlan };
+                    const slot = newPlan[slotKey];
+                    if (slot?.meals) {
+                        const updatedMeals = slot.meals.filter(m => m.id !== found.id);
+                        if (updatedMeals.length === 0) {
+                            delete newPlan[slotKey];
+                        } else {
+                            newPlan[slotKey] = { meals: updatedMeals };
+                        }
+                    }
+                    setMealPlan(newPlan);
+                    result.message = `Removed "${found.name}" from the calendar`;
+                    undoAction = () => setMealPlan(oldMealPlan);
+                } else {
+                    result.success = false;
+                    result.message = `Could not find scheduled meal "${args.recipeName}"`;
+                }
+                break;
+            }
+
+            case 'get_meal_plan': {
+                const startDate = args.startDate || getLocalDateKey(new Date());
+                const days = args.days || 7;
+                const meals = [];
+
+                for (let i = 0; i < days; i++) {
+                    const date = new Date(startDate);
+                    date.setDate(date.getDate() + i);
+                    const dateKey = getLocalDateKey(date);
+
+                    ['Breakfast', 'Lunch', 'Dinner'].forEach(mealType => {
+                        const slotKey = `${dateKey}-${mealType}`;
+                        const slot = mealPlan[slotKey];
+                        if (slot?.meals) {
+                            slot.meals.forEach(m => {
+                                meals.push(`${dateKey} ${mealType}: ${m.name}`);
+                            });
+                        }
+                    });
+                }
+
+                if (meals.length === 0) {
+                    result.message = `No meals scheduled for the next ${days} days`;
+                } else {
+                    result.message = `Upcoming meals:\n${meals.slice(0, 10).join('\n')}${meals.length > 10 ? `\n...and ${meals.length - 10} more` : ''}`;
+                }
+                break;
+            }
+
+            case 'set_cooking_days': {
+                // Convert day names to date keys for the next 4 weeks
+                const today = new Date();
+                const dayNameToNum = { 'Sunday': 0, 'Monday': 1, 'Tuesday': 2, 'Wednesday': 3, 'Thursday': 4, 'Friday': 5, 'Saturday': 6 };
+                const newDays = [];
+
+                for (let week = 0; week < 4; week++) {
+                    args.days.forEach(dayName => {
+                        const dayNum = dayNameToNum[dayName];
+                        if (dayNum !== undefined) {
+                            const date = new Date(today);
+                            const daysUntil = (dayNum - today.getDay() + 7) % 7 + (week * 7);
+                            if (daysUntil > 0) {
+                                date.setDate(today.getDate() + daysUntil);
+                                newDays.push({
+                                    dateKey: getLocalDateKey(date),
+                                    dayType: 'cook'
+                                });
+                            }
+                        }
+                    });
+                }
+
+                setWizardDays(newDays);
+                result.message = `Set cooking days to: ${args.days.join(', ')}. Open the Meal Wizard to start planning!`;
+                break;
+            }
+
+            case 'open_meal_wizard': {
+                if (args.cookingDays) {
+                    // Pre-configure cooking days
+                    const today = new Date();
+                    const dayNameToNum = { 'Sunday': 0, 'Monday': 1, 'Tuesday': 2, 'Wednesday': 3, 'Thursday': 4, 'Friday': 5, 'Saturday': 6 };
+                    const newDays = [];
+
+                    args.cookingDays.forEach(dayName => {
+                        const dayNum = dayNameToNum[dayName];
+                        if (dayNum !== undefined) {
+                            const date = new Date(today);
+                            const daysUntil = (dayNum - today.getDay() + 7) % 7;
+                            date.setDate(today.getDate() + (daysUntil || 7));
+                            newDays.push({ dateKey: getLocalDateKey(date), dayType: 'cook' });
+                        }
+                    });
+                    setWizardDays(newDays);
+                }
+                setShowMealWizard(true);
+                result.message = 'Opening Meal Wizard...';
+                onClose();
+                break;
+            }
+
+            case 'add_family_member': {
+                const newMember = {
+                    id: generateId(),
+                    name: args.name,
+                    age: args.age || 30,
+                    gender: args.gender || 'female',
+                    diet: args.diet || 'None',
+                    servings: 1,
+                    addedAt: new Date().toISOString()
+                };
+                setFamily(prev => [...prev, newMember]);
+                result.message = `Added ${args.name} to family`;
+                undoAction = () => setFamily(prev => prev.filter(f => f.id !== newMember.id));
+                break;
+            }
+
+            case 'get_family_info': {
+                if (family.length === 0) {
+                    result.message = 'No family members configured. Add some in the Family view!';
+                } else {
+                    const summary = family.map(f =>
+                        `• ${f.name} (${f.age}y, ${f.gender})${f.diet !== 'None' ? ` - ${f.diet}` : ''}`
+                    ).join('\n');
+                    result.message = `Family members (${family.length}):\n${summary}`;
+                }
+                break;
+            }
+
+            case 'navigate_to': {
+                if (args.view === 'settings') {
+                    // Settings is a modal, not a view
+                    result.message = 'Opening settings...';
+                } else {
+                    setView(args.view);
+                    result.message = `Navigating to ${args.view}...`;
+                }
+                onClose();
+                break;
+            }
+
+            case 'get_app_summary': {
+                const include = args.include || ['inventory', 'mealPlan', 'shopping', 'leftovers'];
+                let summary = [];
+
+                if (include.includes('inventory')) {
+                    summary.push(`📦 Inventory: ${inventory.length} items`);
+                }
+                if (include.includes('mealPlan')) {
+                    const upcoming = Object.keys(mealPlan).filter(k => k >= getLocalDateKey(new Date())).length;
+                    summary.push(`📅 Meal Plan: ${upcoming} upcoming meals`);
+                }
+                if (include.includes('shopping')) {
+                    const unchecked = shoppingList.filter(i => !i.checked).length;
+                    summary.push(`🛒 Shopping: ${unchecked} items to buy`);
+                }
+                if (include.includes('leftovers')) {
+                    summary.push(`🍱 Leftovers: ${leftovers.length} in fridge`);
+                }
+                if (include.includes('family')) {
+                    summary.push(`👨‍👩‍👧‍👦 Family: ${family.length} members`);
+                }
+                if (include.includes('expiring')) {
+                    const expiringSoon = [
+                        ...inventory.filter(i => {
+                            if (!i.expiresAt) return false;
+                            const days = Math.ceil((new Date(i.expiresAt) - new Date()) / 86400000);
+                            return days <= 3;
+                        }),
+                        ...leftovers.filter(l => {
+                            if (!l.expiresAt) return false;
+                            const days = Math.ceil((new Date(l.expiresAt) - new Date()) / 86400000);
+                            return days <= 2;
+                        })
+                    ];
+                    if (expiringSoon.length > 0) {
+                        summary.push(`⚠️ Expiring soon: ${expiringSoon.length} items`);
+                        expiringSoon.slice(0, 5).forEach(item => {
+                            const days = Math.ceil((new Date(item.expiresAt) - new Date()) / 86400000);
+                            summary.push(`  • ${item.name} (${days}d left)`);
+                        });
+                    } else {
+                        summary.push('✅ Nothing expiring soon!');
+                    }
+                }
+
+                result.message = summary.length > 0 ? summary.join('\n') : 'Everything looks good! No alerts to report.';
+                break;
+            }
+
+            default:
+                result.success = false;
+                result.message = `Unknown function: ${functionName}`;
+        }
+
+        // Show toast for undoable actions
+        if (undoAction && result.success) {
+            setToastData({
+                message: result.message,
+                duration: 10000,
+                onUndo: undoAction
+            });
+        }
+
+        return result;
+    };
+
+    const sendMessage = async () => {
+        if (!input.trim() || loading) return;
+
+        const userMessage = { role: 'user', content: input };
+        setMessages(prev => [...prev, userMessage]);
+        setInput('');
+        setLoading(true);
+
+        try {
+            // Build initial conversation for Gemini
+            let conversationHistory = messages.slice(-10).map(m => ({
+                role: m.role === 'user' ? 'user' : 'model',
+                parts: [{ text: m.content }]
+            }));
+
+            conversationHistory.push({
+                role: 'user',
+                parts: [{ text: `${buildSystemContext()}\n\nUser: ${input}` }]
+            });
+
+            // Multi-turn loop: keep going until we get a final text response
+            let maxTurns = 3; // Prevent infinite loops
+            let turn = 0;
+            let lastFunctionResult = null;
+
+            while (turn < maxTurns) {
+                turn++;
+                const response = await callGeminiWithFunctions(apiKey, conversationHistory, APP_FUNCTIONS, model);
+
+                if (response.error) {
+                    // If we have a function result and the follow-up failed, just show the result
+                    if (lastFunctionResult) {
+                        setMessages(prev => [...prev, {
+                            role: 'assistant',
+                            content: lastFunctionResult.message,
+                            functionCall: lastFunctionResult.functionCall
+                        }]);
+                    } else {
+                        setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${response.message}` }]);
+                    }
+                    break;
+                }
+
+                // Check if we got function calls (could be multiple)
+                const functionCalls = response.functionCalls && response.functionCalls.length > 0
+                    ? response.functionCalls
+                    : (response.functionCall ? [response.functionCall] : []);
+
+                if (functionCalls.length > 0) {
+                    // If there's also text, show it first
+                    if (response.text) {
+                        setMessages(prev => [...prev, { role: 'assistant', content: response.text }]);
+                        conversationHistory.push({
+                            role: 'model',
+                            parts: [{ text: response.text }]
+                        });
+                    }
+
+                    // Execute ALL function calls and collect results
+                    const allResults = [];
+                    const functionCallParts = [];
+                    const functionResponseParts = [];
+
+                    for (const fc of functionCalls) {
+                        const { name, args } = fc;
+                        const result = await executeFunction(name, args);
+                        allResults.push({ name, args, ...result });
+                        functionCallParts.push({ functionCall: { name, args } });
+                        functionResponseParts.push({
+                            functionResponse: {
+                                name,
+                                response: { result: result.message, success: result.success }
+                            }
+                        });
+                    }
+
+                    // Save combined results for final display
+                    if (allResults.length === 1) {
+                        lastFunctionResult = {
+                            message: allResults[0].message,
+                            functionCall: { name: allResults[0].name, args: allResults[0].args, success: allResults[0].success }
+                        };
+                    } else {
+                        // Multiple function calls - combine messages
+                        lastFunctionResult = {
+                            message: allResults.map(r => r.message).join('\n'),
+                            functionCall: {
+                                name: 'batch_operation',
+                                count: allResults.length,
+                                success: allResults.every(r => r.success),
+                                details: allResults.map(r => r.name)
+                            }
+                        };
+                    }
+
+                    // Add all function calls to history
+                    conversationHistory.push({
+                        role: 'model',
+                        parts: functionCallParts
+                    });
+
+                    // Add all function responses to history
+                    conversationHistory.push({
+                        role: 'function',
+                        parts: functionResponseParts
+                    });
+
+                    // Continue the loop to get the AI's response to the function results
+                    continue;
+
+
+                } else if (response.text) {
+                    // Pure text response - we're done
+                    // If this was a follow-up to a function call, include the function badge
+                    if (lastFunctionResult) {
+                        setMessages(prev => [...prev, {
+                            role: 'assistant',
+                            content: response.text,
+                            functionCall: lastFunctionResult.functionCall
+                        }]);
+                    } else {
+                        setMessages(prev => [...prev, { role: 'assistant', content: response.text }]);
+                    }
+                    break;
+                } else {
+                    // No useful response - if we have a function result, show it
+                    if (lastFunctionResult) {
+                        setMessages(prev => [...prev, {
+                            role: 'assistant',
+                            content: lastFunctionResult.message,
+                            functionCall: lastFunctionResult.functionCall
+                        }]);
+                    } else {
+                        setMessages(prev => [...prev, {
+                            role: 'assistant',
+                            content: "I'm not sure how to help with that. Try asking me to check your inventory, add items to shopping list, log meals, or manage leftovers!"
+                        }]);
+                    }
+                    break;
+                }
+            }
+
+            // If we hit max turns but have a function result, show it
+            if (turn >= maxTurns && lastFunctionResult) {
+                setMessages(prev => [...prev, {
+                    role: 'assistant',
+                    content: lastFunctionResult.message,
+                    functionCall: lastFunctionResult.functionCall
+                }]);
+            }
+
+        } catch (error) {
+            console.error('Chat error:', error);
+            setMessages(prev => [...prev, { role: 'assistant', content: `Sorry, something went wrong: ${error.message}` }]);
+        }
+
+        setLoading(false);
+        // Refocus input after sending
+        setTimeout(() => inputRef.current?.focus(), 100);
+    };
+
+    const clearHistory = () => {
+        setMessages([]);
+    };
+
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 z-[100] bg-white flex flex-col animate-slide-up">
+            {/* Header */}
+            <div className="flex-none bg-gradient-to-r from-violet-600 to-purple-600 text-white px-5 py-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <div className="bg-white/20 p-2 rounded-xl">
+                        <MessageCircle className="w-6 h-6" />
+                    </div>
+                    <div>
+                        <h2 className="font-bold text-lg">AI Assistant</h2>
+                        <p className="text-violet-200 text-xs">Ask me anything about your meals</p>
+                    </div>
+                </div>
+                <div className="flex items-center gap-2">
+                    <button onClick={clearHistory} className="p-2 hover:bg-white/20 rounded-full transition-colors" title="Clear history">
+                        <Trash2 className="w-5 h-5" />
+                    </button>
+                    <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-full transition-colors">
+                        <X className="w-6 h-6" />
+                    </button>
+                </div>
+            </div>
+
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
+                {messages.length === 0 && (
+                    <div className="text-center py-8">
+                        <div className="bg-violet-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <Sparkles className="w-8 h-8 text-violet-500" />
+                        </div>
+                        <h3 className="font-bold text-lg text-slate-800 mb-2">How can I help?</h3>
+                        <p className="text-slate-500 text-sm mb-6">Try saying things like:</p>
+                        <div className="space-y-2 max-w-sm mx-auto">
+                            {[
+                                "I had a turkey sandwich for lunch",
+                                "I'm down to 3 jars of peanut butter",
+                                "Add milk and eggs to shopping list",
+                                "I ate the leftover pasta",
+                                "What's expiring soon?"
+                            ].map((suggestion, i) => (
+                                <button
+                                    key={i}
+                                    onClick={() => setInput(suggestion)}
+                                    className="w-full text-left p-3 bg-white rounded-xl border border-slate-200 text-sm text-slate-700 hover:border-violet-300 hover:bg-violet-50 transition-colors"
+                                >
+                                    {suggestion}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {messages.map((msg, i) => (
+                    <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[85%] rounded-2xl px-4 py-3 ${msg.role === 'user'
+                            ? 'bg-gradient-to-r from-violet-500 to-purple-500 text-white rounded-br-md'
+                            : 'bg-white border border-slate-200 text-slate-800 rounded-bl-md shadow-sm'
+                            }`}>
+                            <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                            {msg.functionCall && (
+                                <div className={`mt-2 text-xs flex items-center gap-1 ${msg.role === 'user' ? 'text-violet-200' : 'text-slate-400'}`}>
+                                    {msg.functionCall.success ? (
+                                        <Check className="w-3 h-3" />
+                                    ) : (
+                                        <AlertCircle className="w-3 h-3" />
+                                    )}
+                                    {FUNCTION_LABELS[msg.functionCall.name] || msg.functionCall.name}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                ))}
+
+                {loading && (
+                    <div className="flex justify-start">
+                        <div className="bg-white border border-slate-200 rounded-2xl rounded-bl-md px-4 py-3 shadow-sm">
+                            <div className="flex items-center gap-2">
+                                <Loader2 className="w-4 h-4 animate-spin text-violet-500" />
+                                <span className="text-sm text-slate-500">Thinking...</span>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                <div ref={messagesEndRef} />
+            </div>
+
+            {/* Input */}
+            <div className="flex-none bg-white border-t border-slate-200 p-4 pb-safe">
+                <form onSubmit={(e) => { e.preventDefault(); sendMessage(); }} className="flex gap-2">
+                    <input
+                        ref={inputRef}
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)}
+                        placeholder="Ask me anything..."
+                        className="flex-1 input-field"
+                        disabled={loading}
+                        autoFocus
+                    />
+                    <button
+                        type="submit"
+                        disabled={!input.trim() || loading}
+                        className="bg-gradient-to-r from-violet-500 to-purple-500 text-white p-3 rounded-xl disabled:opacity-50 shadow-lg shadow-violet-200"
+                    >
+                        {loading ? (
+                            <Loader2 className="w-6 h-6 animate-spin" />
+                        ) : (
+                            <ArrowLeft className="w-6 h-6 rotate-180" />
+                        )}
+                    </button>
+                </form>
+            </div>
+        </div>
+    );
+};
+
+// ============================================================================
 // TOAST NOTIFICATION (with Undo support)
 // ============================================================================
 const Toast = ({ message, onUndo, duration = 5000, onClose }) => {
@@ -5842,6 +7248,9 @@ function MealPrepMate() {
     const [customRecipes, setCustomRecipes] = useLocalStorage('mpm_custom_recipes', []);
     const [allocatedIngredients, setAllocatedIngredients] = useLocalStorage('mpm_allocated_ingredients', {});
     const [quickMeals, setQuickMeals] = useLocalStorage('mpm_quick_meals', []);
+
+    // Chat AI Assistant state
+    const [chatOpen, setChatOpen] = useLocalStorage('mpm_chat_open', false);
 
     // Toast state for undo notifications
     const [toastData, setToastData] = useState(null);
@@ -6192,6 +7601,22 @@ Return JSON: {
                 </div>
                 <ChefHat className="absolute -right-6 -bottom-6 w-40 h-40 text-white/10 rotate-12" />
             </div>
+
+            {/* AI Assistant Button */}
+            <div
+                onClick={() => setChatOpen(true)}
+                className="bg-gradient-to-br from-violet-500 to-purple-600 text-white p-5 rounded-3xl shadow-xl flex items-center gap-4 cursor-pointer hover:scale-[1.02] transition-transform active:scale-[0.98]"
+            >
+                <div className="bg-white/20 p-3 rounded-2xl">
+                    <MessageCircle className="w-7 h-7" />
+                </div>
+                <div className="flex-1">
+                    <h3 className="text-lg font-bold">AI Assistant</h3>
+                    <p className="text-violet-200 text-xs">"I had a turkey sandwich" • "Add milk to shopping"</p>
+                </div>
+                <Sparkles className="w-6 h-6 text-violet-200" />
+            </div>
+
             <div className="grid grid-cols-2 gap-4 w-full">
                 <div onClick={() => setView('calendar')} className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100">
                     <div className="bg-indigo-50 w-12 h-12 rounded-2xl flex items-center justify-center mb-3 text-indigo-500"><CalendarDays className="w-6 h-6" /></div>
@@ -6255,11 +7680,11 @@ Return JSON: {
             {/* Bottom Nav */}
             <div className="fixed bottom-0 left-0 right-0 w-full bg-white border-t border-slate-100 px-6 pb-safe pt-2 z-40 rounded-t-3xl shadow-[0_-5px_10px_rgba(0,0,0,0.02)]">
                 <div className="flex justify-between items-end pb-2">
-                    <NavBtn icon={ChefHat} label="Home" active={view === 'dashboard'} onClick={() => setView('dashboard')} />
+                    <NavBtn icon={Refrigerator} label="Pantry" active={view === 'inventory'} onClick={() => setView('inventory')} />
                     <NavBtn icon={Utensils} label="Plan" active={view === 'recipes'} onClick={() => setView('recipes')} />
                     <div className="relative -top-6 px-2">
-                        <button onClick={() => setView('inventory')} className="w-16 h-16 bg-gradient-to-tr from-emerald-400 to-emerald-600 rounded-full text-white flex items-center justify-center shadow-xl shadow-emerald-200">
-                            <Refrigerator className="w-7 h-7" />
+                        <button onClick={() => setView('dashboard')} className="w-16 h-16 bg-gradient-to-tr from-emerald-400 to-emerald-600 rounded-full text-white flex items-center justify-center shadow-xl shadow-emerald-200">
+                            <ChefHat className="w-7 h-7" />
                         </button>
                     </div>
                     <NavBtn icon={CalendarDays} label="Calendar" active={view === 'calendar'} onClick={() => setView('calendar')} />
@@ -6389,6 +7814,37 @@ Return JSON: {
                 setWizardPhase={setWizardPhase}
                 allocatedIngredients={allocatedIngredients}
                 setAllocatedIngredients={setAllocatedIngredients}
+            />
+
+            {/* Chat AI Assistant */}
+            <ChatAssistant
+                isOpen={chatOpen}
+                onClose={() => setChatOpen(false)}
+                apiKey={apiKey}
+                model={selectedModel}
+                inventory={inventory}
+                setInventory={setInventory}
+                shoppingList={shoppingList}
+                setShoppingList={setShoppingList}
+                leftovers={leftovers}
+                setLeftovers={setLeftovers}
+                mealPlan={mealPlan}
+                setMealPlan={setMealPlan}
+                family={family}
+                setFamily={setFamily}
+                favorites={favorites}
+                setFavorites={setFavorites}
+                history={history}
+                setHistory={setHistory}
+                customRecipes={customRecipes}
+                setCustomRecipes={setCustomRecipes}
+                setView={setView}
+                setShowMealWizard={setShowMealWizard}
+                wizardDays={wizardDays}
+                setWizardDays={setWizardDays}
+                setToastData={setToastData}
+                onMoveToHistory={handleMoveToHistory}
+                setSelectedRecipe={setSelectedRecipe}
             />
 
             {/* Settings Modal */}
