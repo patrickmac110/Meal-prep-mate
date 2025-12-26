@@ -129,7 +129,12 @@ const useLocalStorage = (key, initialValue) => {
 const callGemini = async (apiKey, prompt, imageBase64 = null, model = 'gemini-2.0-flash') => {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
     const parts = [{ text: prompt }];
-    if (imageBase64) parts.push({ inlineData: { mimeType: "image/jpeg", data: imageBase64 } });
+    if (imageBase64) {
+        const images = Array.isArray(imageBase64) ? imageBase64 : [imageBase64];
+        images.forEach(img => {
+            parts.push({ inlineData: { mimeType: "image/jpeg", data: img } });
+        });
+    }
 
     try {
         const response = await fetch(url, {
@@ -488,28 +493,13 @@ const APP_FUNCTIONS = [
             }
         }
     },
-    {
-        name: "set_cooking_days",
-        description: "Set preferred cooking days for the meal wizard. Use for 'I can only cook on...' statements.",
-        parameters: {
-            type: "object",
-            properties: {
-                days: {
-                    type: "array",
-                    items: { type: "string", enum: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] },
-                    description: "Days of the week to cook"
-                }
-            },
-            required: ["days"]
-        }
-    },
+
     {
         name: "open_meal_wizard",
-        description: "Open the meal scheduling wizard with optional pre-configuration.",
+        description: "Open the meal scheduling wizard.",
         parameters: {
             type: "object",
             properties: {
-                cookingDays: { type: "array", items: { type: "string" }, description: "Pre-select cooking days" },
                 mealType: { type: "string", description: "Pre-select meal type" }
             }
         }
@@ -926,13 +916,45 @@ const RecipeDetailModal = ({
     const [editMode, setEditMode] = useState(startInEditMode);
     const [editedRecipe, setEditedRecipe] = useState(null);
     const [imageGenerating, setImageGenerating] = useState(false);
+    const [targetServings, setTargetServings] = useState(recipe?.servings || 4);
     const fileInputRef = useRef(null);
+
+    // Scaling helpers
+    const getScaleRatio = () => {
+        const original = recipe?.servings || 4;
+        return targetServings / original;
+    };
+
+    const scaleQuantity = (qtyStr) => {
+        if (!qtyStr) return '';
+        const ratio = getScaleRatio();
+        if (ratio === 1) return qtyStr;
+
+        // Match numbers at the start (including decimals and fractions like 1/2)
+        const numMatch = qtyStr.match(/^(\d+\/\d+|\d+(\.\d+)?)(.*)$/);
+        if (numMatch) {
+            let num;
+            if (numMatch[1].includes('/')) {
+                const parts = numMatch[1].split('/');
+                num = parseInt(parts[0]) / parseInt(parts[1]);
+            } else {
+                num = parseFloat(numMatch[1]);
+            }
+            const unit = numMatch[3];
+            const scaledNum = (num * ratio).toLocaleString(undefined, { maximumFractionDigits: 2 });
+            return `${scaledNum}${unit}`;
+        }
+        return qtyStr;
+    };
 
     // Initialize editedRecipe when recipe changes or edit mode starts
     useEffect(() => {
         // Reset editMode when recipe changes based on startInEditMode prop
         if (startInEditMode) {
             setEditMode(true);
+        }
+        if (recipe) {
+            setTargetServings(recipe.scheduledServings || recipe.servings || 4);
         }
     }, [startInEditMode, recipe]);
 
@@ -1195,7 +1217,24 @@ const RecipeDetailModal = ({
                                 </div>
                             </div>
                         ) : (
-                            <MacroBadges macros={displayRecipe.macros} servings={displayRecipe.servings} />
+                            <div className="flex flex-wrap items-center gap-4">
+                                <MacroBadges macros={displayRecipe.macros} servings={displayRecipe.servings} />
+                                <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-full">
+                                    <Users className="w-4 h-4 text-slate-500" />
+                                    <span className="text-xs font-bold text-slate-600">Servings:</span>
+                                    <div className="flex items-center gap-1">
+                                        <button
+                                            onClick={() => setTargetServings(Math.max(1, targetServings - 1))}
+                                            className="w-5 h-5 flex items-center justify-center bg-white rounded-full shadow-sm text-slate-600 hover:bg-slate-50"
+                                        >-</button>
+                                        <span className="text-xs font-bold w-4 text-center">{targetServings}</span>
+                                        <button
+                                            onClick={() => setTargetServings(targetServings + 1)}
+                                            className="w-5 h-5 flex items-center justify-center bg-white rounded-full shadow-sm text-slate-600 hover:bg-slate-50"
+                                        >+</button>
+                                    </div>
+                                </div>
+                            </div>
                         )}
                     </div>
 
@@ -1273,7 +1312,9 @@ const RecipeDetailModal = ({
                                     ) : (
                                         <>
                                             <span className="text-slate-700">{i.item}</span>
-                                            <span className="text-emerald-600 font-bold text-sm">{i.qty}</span>
+                                            <span className="text-emerald-600 font-bold text-sm">
+                                                {scaleQuantity(i.qty)}
+                                            </span>
                                         </>
                                     )}
                                 </div>
@@ -1413,10 +1454,10 @@ const RecipeDetailModal = ({
                             </div>
                             {showScheduleButton && onSchedule && (
                                 <button
-                                    onClick={() => onSchedule(displayRecipe)}
+                                    onClick={() => onSchedule({ ...displayRecipe, scheduledServings: targetServings })}
                                     className="w-full btn-secondary text-indigo-600 border-indigo-200 flex items-center justify-center gap-2"
                                 >
-                                    <CalendarDays className="w-5 h-5" /> Schedule to Calendar
+                                    <CalendarDays className="w-5 h-5" /> Schedule to Calendar {targetServings !== displayRecipe.servings && `(${targetServings} servings)`}
                                 </button>
                             )}
                             {showRescheduleButton && onReschedule && (
@@ -3622,16 +3663,27 @@ STRICT JSON Output:
                                         <input
                                             type="file"
                                             accept="image/*"
+                                            multiple
                                             className="hidden"
                                             id="recipe-import-upload"
                                             onChange={async (e) => {
-                                                const file = e.target.files?.[0];
-                                                if (!file) return;
+                                                const files = Array.from(e.target.files || []);
+                                                if (files.length === 0) return;
                                                 setFormatLoading(true);
-                                                const reader = new FileReader();
-                                                reader.onloadend = async () => {
-                                                    const base64 = reader.result.replace("data:", "").replace(/^.+,/, "");
-                                                    const prompt = `Extract the recipe from this image. Return JSON:
+
+                                                try {
+                                                    const base64Images = await Promise.all(files.map(file => {
+                                                        return new Promise((resolve) => {
+                                                            const reader = new FileReader();
+                                                            reader.onloadend = () => {
+                                                                const base64 = reader.result.replace("data:", "").replace(/^.+,/, "");
+                                                                resolve(base64);
+                                                            };
+                                                            reader.readAsDataURL(file);
+                                                        });
+                                                    }));
+
+                                                    const prompt = `Extract the recipe from these images. They might be multiple pages of the same recipe. Return JSON:
 {
     "name": "Recipe name",
     "description": "Brief description", 
@@ -3641,58 +3693,65 @@ STRICT JSON Output:
     "steps": ["Step 1", "Step 2"],
     "macros": {"calories": 300, "protein": 15, "carbs": 40, "fat": 10}
 }`;
-                                                    try {
-                                                        const res = await callGemini(apiKey, prompt, base64, model);
-                                                        if (!res.error && res.name) {
-                                                            const parsedRecipe = {
-                                                                id: generateId(),
-                                                                name: res.name || 'Imported Recipe',
-                                                                description: res.description || '',
-                                                                servings: res.servings || 4,
-                                                                total_time: res.time || '30 min',
-                                                                ingredients: (res.ingredients || []).map(ing =>
-                                                                    typeof ing === 'string' ? { item: ing, qty: '' } : { item: ing.item || ing, qty: ing.qty || '' }
-                                                                ),
-                                                                steps: res.steps || res.instructions || [],
-                                                                macros: res.macros || { calories: 0, protein: 0, carbs: 0, fat: 0 },
-                                                                isCustom: true,
-                                                                createdAt: new Date().toISOString()
-                                                            };
-                                                            // Don't add to customRecipes yet - will be added on Save
-                                                            setShowCustomRecipeForm(false);
-                                                            setSelectedRecipe({ ...parsedRecipe, _startInEditMode: true, _isNewCustomRecipe: true });
-                                                        } else {
-                                                            alert('Could not read recipe from image. Try taking a clearer photo or typing it instead.');
-                                                        }
-                                                    } catch (err) {
-                                                        console.error('Image parse error:', err);
-                                                        alert('Error reading recipe. Please try again.');
+                                                    const res = await callGemini(apiKey, prompt, base64Images, model);
+                                                    if (!res.error && res.name) {
+                                                        const parsedRecipe = {
+                                                            id: generateId(),
+                                                            name: res.name || 'Imported Recipe',
+                                                            description: res.description || '',
+                                                            servings: res.servings || 4,
+                                                            total_time: res.time || '30 min',
+                                                            ingredients: (res.ingredients || []).map(ing =>
+                                                                typeof ing === 'string' ? { item: ing, qty: '' } : { item: ing.item || ing, qty: ing.qty || '' }
+                                                            ),
+                                                            steps: res.steps || res.instructions || [],
+                                                            macros: res.macros || { calories: 0, protein: 0, carbs: 0, fat: 0 },
+                                                            isCustom: true,
+                                                            createdAt: new Date().toISOString()
+                                                        };
+                                                        setShowCustomRecipeForm(false);
+                                                        setSelectedRecipe({ ...parsedRecipe, _startInEditMode: true, _isNewCustomRecipe: true });
+                                                    } else {
+                                                        alert('Could not read recipe from images. Try clearer photos.');
                                                     }
-                                                    setFormatLoading(false);
-                                                };
-                                                reader.readAsDataURL(file);
+                                                } catch (err) {
+                                                    console.error('Image parse error:', err);
+                                                    alert('Error reading recipe. Please try again.');
+                                                }
+                                                setFormatLoading(false);
                                             }}
                                         />
                                         <label
                                             htmlFor="recipe-import-upload"
                                             className="flex-1 btn-secondary text-sm py-2 flex items-center justify-center gap-1 cursor-pointer"
                                         >
-                                            <Upload className="w-4 h-4" /> Upload Photo
+                                            <Upload className="w-4 h-4" /> Upload Photos
                                         </label>
                                         <input
                                             type="file"
                                             accept="image/*"
                                             capture="environment"
+                                            multiple
                                             className="hidden"
                                             id="recipe-import-camera"
                                             onChange={async (e) => {
-                                                const file = e.target.files?.[0];
-                                                if (!file) return;
+                                                const files = Array.from(e.target.files || []);
+                                                if (files.length === 0) return;
                                                 setFormatLoading(true);
-                                                const reader = new FileReader();
-                                                reader.onloadend = async () => {
-                                                    const base64 = reader.result.replace("data:", "").replace(/^.+,/, "");
-                                                    const prompt = `Extract the recipe from this image. Return JSON:
+
+                                                try {
+                                                    const base64Images = await Promise.all(files.map(file => {
+                                                        return new Promise((resolve) => {
+                                                            const reader = new FileReader();
+                                                            reader.onloadend = () => {
+                                                                const base64 = reader.result.replace("data:", "").replace(/^.+,/, "");
+                                                                resolve(base64);
+                                                            };
+                                                            reader.readAsDataURL(file);
+                                                        });
+                                                    }));
+
+                                                    const prompt = `Extract the recipe from these photos. Return JSON:
 {
     "name": "Recipe name",
     "description": "Brief description", 
@@ -3702,43 +3761,39 @@ STRICT JSON Output:
     "steps": ["Step 1", "Step 2"],
     "macros": {"calories": 300, "protein": 15, "carbs": 40, "fat": 10}
 }`;
-                                                    try {
-                                                        const res = await callGemini(apiKey, prompt, base64, model);
-                                                        if (!res.error && res.name) {
-                                                            const parsedRecipe = {
-                                                                id: generateId(),
-                                                                name: res.name || 'Imported Recipe',
-                                                                description: res.description || '',
-                                                                servings: res.servings || 4,
-                                                                total_time: res.time || '30 min',
-                                                                ingredients: (res.ingredients || []).map(ing =>
-                                                                    typeof ing === 'string' ? { item: ing, qty: '' } : { item: ing.item || ing, qty: ing.qty || '' }
-                                                                ),
-                                                                steps: res.steps || res.instructions || [],
-                                                                macros: res.macros || { calories: 0, protein: 0, carbs: 0, fat: 0 },
-                                                                isCustom: true,
-                                                                createdAt: new Date().toISOString()
-                                                            };
-                                                            // Don't add to customRecipes yet - will be added on Save
-                                                            setShowCustomRecipeForm(false);
-                                                            setSelectedRecipe({ ...parsedRecipe, _startInEditMode: true, _isNewCustomRecipe: true });
-                                                        } else {
-                                                            alert('Could not read recipe from image. Try taking a clearer photo or typing it instead.');
-                                                        }
-                                                    } catch (err) {
-                                                        console.error('Image parse error:', err);
-                                                        alert('Error reading recipe. Please try again.');
+                                                    const res = await callGemini(apiKey, prompt, base64Images, model);
+                                                    if (!res.error && res.name) {
+                                                        const parsedRecipe = {
+                                                            id: generateId(),
+                                                            name: res.name || 'Imported Recipe',
+                                                            description: res.description || '',
+                                                            servings: res.servings || 4,
+                                                            total_time: res.time || '30 min',
+                                                            ingredients: (res.ingredients || []).map(ing =>
+                                                                typeof ing === 'string' ? { item: ing, qty: '' } : { item: ing.item || ing, qty: ing.qty || '' }
+                                                            ),
+                                                            steps: res.steps || res.instructions || [],
+                                                            macros: res.macros || { calories: 0, protein: 0, carbs: 0, fat: 0 },
+                                                            isCustom: true,
+                                                            createdAt: new Date().toISOString()
+                                                        };
+                                                        setShowCustomRecipeForm(false);
+                                                        setSelectedRecipe({ ...parsedRecipe, _startInEditMode: true, _isNewCustomRecipe: true });
+                                                    } else {
+                                                        alert('Could not read recipe from photos. Try clearer photos.');
                                                     }
-                                                    setFormatLoading(false);
-                                                };
-                                                reader.readAsDataURL(file);
+                                                } catch (err) {
+                                                    console.error('Image parse error:', err);
+                                                    alert('Error reading recipe. Please try again.');
+                                                }
+                                                setFormatLoading(false);
                                             }}
                                         />
                                         <label
                                             htmlFor="recipe-import-camera"
                                             className="flex-1 btn-secondary text-sm py-2 flex items-center justify-center gap-1 cursor-pointer"
                                         >
-                                            <Camera className="w-4 h-4" /> Take Photo
+                                            <Camera className="w-4 h-4" /> Take Photos
                                         </label>
                                     </div>
                                     <p className="text-xs text-purple-500 text-center">📷 Snap a cookbook page or handwritten recipe</p>
@@ -6195,6 +6250,30 @@ const ChatAssistant = ({
     const messagesEndRef = useRef(null);
     const inputRef = useRef(null);
 
+    // Simple markdown renderer for chat
+    const renderMarkdown = (text) => {
+        if (!text) return '';
+        let html = text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            // Bold
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            // Italic
+            .replace(/\*(.*?)\*/g, '<em>$1</em>')
+            // Inline code
+            .replace(/`(.*?)`/g, '<code class="bg-slate-100 text-violet-600 px-1 rounded font-mono text-xs">$1</code>')
+            // Bullet points (at start of line)
+            .replace(/^\s*[-*]\s+(.*)/gm, '<li class="ml-4">$1</li>')
+            // Wrap sets of <li> in <ul>
+            .replace(/(<li.*<\/li>)/gs, '<ul class="list-disc my-2">$1</ul>')
+            // Fix double <ul> wrapping
+            .replace(/<\/ul>\s*<ul.*?>/g, '')
+            // Newlines
+            .replace(/\n/g, '<br />');
+        return html;
+    };
+
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     };
@@ -6718,52 +6797,9 @@ Be concise, friendly, and action-oriented. Don't ask for permission to check thi
                 break;
             }
 
-            case 'set_cooking_days': {
-                // Convert day names to date keys for the next 4 weeks
-                const today = new Date();
-                const dayNameToNum = { 'Sunday': 0, 'Monday': 1, 'Tuesday': 2, 'Wednesday': 3, 'Thursday': 4, 'Friday': 5, 'Saturday': 6 };
-                const newDays = [];
 
-                for (let week = 0; week < 4; week++) {
-                    args.days.forEach(dayName => {
-                        const dayNum = dayNameToNum[dayName];
-                        if (dayNum !== undefined) {
-                            const date = new Date(today);
-                            const daysUntil = (dayNum - today.getDay() + 7) % 7 + (week * 7);
-                            if (daysUntil > 0) {
-                                date.setDate(today.getDate() + daysUntil);
-                                newDays.push({
-                                    dateKey: getLocalDateKey(date),
-                                    dayType: 'cook'
-                                });
-                            }
-                        }
-                    });
-                }
-
-                setWizardDays(newDays);
-                result.message = `Set cooking days to: ${args.days.join(', ')}. Open the Meal Wizard to start planning!`;
-                break;
-            }
 
             case 'open_meal_wizard': {
-                if (args.cookingDays) {
-                    // Pre-configure cooking days
-                    const today = new Date();
-                    const dayNameToNum = { 'Sunday': 0, 'Monday': 1, 'Tuesday': 2, 'Wednesday': 3, 'Thursday': 4, 'Friday': 5, 'Saturday': 6 };
-                    const newDays = [];
-
-                    args.cookingDays.forEach(dayName => {
-                        const dayNum = dayNameToNum[dayName];
-                        if (dayNum !== undefined) {
-                            const date = new Date(today);
-                            const daysUntil = (dayNum - today.getDay() + 7) % 7;
-                            date.setDate(today.getDate() + (daysUntil || 7));
-                            newDays.push({ dateKey: getLocalDateKey(date), dayType: 'cook' });
-                        }
-                    });
-                    setWizardDays(newDays);
-                }
                 setShowMealWizard(true);
                 result.message = 'Opening Meal Wizard...';
                 onClose();
@@ -7101,7 +7137,10 @@ Be concise, friendly, and action-oriented. Don't ask for permission to check thi
                             ? 'bg-gradient-to-r from-violet-500 to-purple-500 text-white rounded-br-md'
                             : 'bg-white border border-slate-200 text-slate-800 rounded-bl-md shadow-sm'
                             }`}>
-                            <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                            <div
+                                className="text-sm prose prose-slate prose-sm max-w-none"
+                                dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.content) }}
+                            />
                             {msg.functionCall && (
                                 <div className={`mt-2 text-xs flex items-center gap-1 ${msg.role === 'user' ? 'text-violet-200' : 'text-slate-400'}`}>
                                     {msg.functionCall.success ? (
@@ -7432,7 +7471,47 @@ function MealPrepMate() {
         setSelectedRecipe(recipeToSave);
     };
 
+    const getRecipeHash = (recipe) => {
+        if (!recipe.ingredients) return '';
+        // Create a stable string of ingredients and quantities
+        return recipe.ingredients
+            .map(i => `${(i.item || '').toLowerCase()}:${(i.qty || '').toLowerCase()}`)
+            .sort()
+            .join('|');
+    };
+
     const handleCook = async (recipe) => {
+        // Version control: Check if we've already confirmed deductions for this ingredient list
+        const currentHash = getRecipeHash(recipe);
+        if (recipe.lastDeductionHash === currentHash && recipe.lastDeductions) {
+            console.log('Skipping deduction modal - recipe version matches cached deductions');
+            // Auto-apply cached deductions immediately
+            const itemIds = new Set();
+            let updatedInventory = [...inventory];
+
+            recipe.lastDeductions.forEach(d => {
+                updatedInventory = updatedInventory.map(item => {
+                    if (item.id === d.inventoryItemId || item.name.toLowerCase() === d.inventoryItemName?.toLowerCase()) {
+                        itemIds.add(item.id);
+                        return { ...item, quantity: Math.max(0, item.quantity - d.deductAmount) };
+                    }
+                    return item;
+                });
+            });
+
+            updatedInventory = updatedInventory.filter(item => item.quantity > 0 || !itemIds.has(item.id));
+            setInventory(updatedInventory);
+
+            setHistory([{ ...recipe, id: generateId(), cookedAt: new Date().toISOString() }, ...history]);
+
+            if ((recipe.leftoverDays || 0) > 0) {
+                const portions = (recipe.totalServings || recipe.servings || 4) - (recipe.baseServings || 2);
+                handleAddToLeftovers(recipe, portions > 0 ? portions : recipe.servings);
+            }
+            setSelectedRecipe(null);
+            return;
+        }
+
         // Include inventory item IDs for accurate deduction
         const invStr = inventory.map(i => `ID:${i.id} ${i.name}: ${i.quantity} ${i.unit} `).join('\n');
         const ingStr = recipe.ingredients?.map(i => `${i.item}: ${i.qty} `).join('\n') || '';
@@ -7495,13 +7574,36 @@ Return JSON: {
         setInventory(updatedInventory);
 
         const recipe = deductionData.recipe;
-        setHistory([{ ...recipe, id: generateId(), cookedAt: new Date().toISOString() }, ...history]);
+        const currentHash = getRecipeHash(recipe);
+
+        // Save version info to the recipe
+        const updatedRecipe = {
+            ...recipe,
+            lastDeductionHash: currentHash,
+            lastDeductions: deductionData.deductions.map(d => ({
+                inventoryItemId: d.inventoryItemId,
+                inventoryItemName: d.inventoryItemName,
+                deductAmount: d.deductAmount
+            }))
+        };
+
+        setHistory([{ ...updatedRecipe, id: generateId(), cookedAt: new Date().toISOString() }, ...history]);
+
+        // Update the recipe in other lists if it was a saved/custom recipe
+        const updateInList = (list, setter) => {
+            if (list.some(r => r.id === recipe.id)) {
+                setter(list.map(r => r.id === recipe.id ? updatedRecipe : r));
+            }
+        };
+        updateInList(favorites, setFavorites);
+        updateInList(customRecipes, setCustomRecipes);
+        updateInList(recipes, setRecipes);
 
         // Automatically add to leftovers if recipe has leftoverDays > 0
         const leftoverDays = recipe.leftoverDays || 0;
         if (leftoverDays > 0) {
             const leftoverPortions = (recipe.totalServings || recipe.servings || 4) - (recipe.baseServings || 2);
-            handleAddToLeftovers(recipe, leftoverPortions > 0 ? leftoverPortions : recipe.servings);
+            handleAddToLeftovers(updatedRecipe, leftoverPortions > 0 ? leftoverPortions : recipe.servings);
         }
 
         setDeductionData(null);
