@@ -51,7 +51,7 @@ const SERVING_MULTIPLIERS = {
 };
 
 // App version - update with each deployment
-const APP_VERSION = '2025.12.28.5';
+const APP_VERSION = '2025.12.28.6';
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -8052,19 +8052,35 @@ Return JSON: {
                                     <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${notifsEnabled ? 'translate-x-7' : 'translate-x-1'}`} />
                                 </button>
                             </div>
-                            {Notification.permission === 'denied' && (
-                                <p className="text-[10px] text-red-500 px-1">
-                                    Notifications are blocked by your browser. You may need to reset permissions in your site settings.
-                                </p>
-                            )}
-                            {Notification.permission !== 'granted' && (
-                                <button
-                                    onClick={() => Notification.requestPermission()}
-                                    className="w-full text-xs font-bold text-emerald-600 bg-emerald-50 py-2 rounded-lg hover:bg-emerald-100 transition-colors"
-                                >
-                                    <Bell className="w-3 h-3 inline mr-1" /> {Notification.permission === 'denied' ? 'Re-request Permission' : 'Enable System Notifications'}
-                                </button>
-                            )}
+                            {/* Safe notification permission checks - iOS Safari crashes on Notification access */}
+                            {(() => {
+                                try {
+                                    if (typeof Notification !== 'undefined' && Notification.permission === 'denied') {
+                                        return (
+                                            <p className="text-[10px] text-red-500 px-1">
+                                                Notifications are blocked by your browser. You may need to reset permissions in your site settings.
+                                            </p>
+                                        );
+                                    }
+                                } catch (e) { return null; }
+                                return null;
+                            })()}
+                            {(() => {
+                                try {
+                                    if (typeof Notification !== 'undefined' && Notification.permission !== 'granted') {
+                                        const isDenied = Notification.permission === 'denied';
+                                        return (
+                                            <button
+                                                onClick={() => { try { Notification.requestPermission(); } catch (e) { } }}
+                                                className="w-full text-xs font-bold text-emerald-600 bg-emerald-50 py-2 rounded-lg hover:bg-emerald-100 transition-colors"
+                                            >
+                                                <Bell className="w-3 h-3 inline mr-1" /> {isDenied ? 'Re-request Permission' : 'Enable System Notifications'}
+                                            </button>
+                                        );
+                                    }
+                                } catch (e) { return null; }
+                                return null;
+                            })()}
                         </div>
                     </div>
 
