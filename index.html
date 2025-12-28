@@ -59,28 +59,40 @@
     </style>
   </div>
 
-  <!-- Force clear old service workers and caches -->
+  <!-- Force COMPLETELY unregister ALL old service workers and clear ALL caches -->
   <script>
     (function () {
-      // Clear old caches that might have pre-Vite files
+      // Delete ALL caches - start fresh
       if ('caches' in window) {
         caches.keys().then(function (names) {
           names.forEach(function (name) {
-            if (name.indexOf('mealprep-v') !== -1 && name !== 'mealprep-v7') {
-              caches.delete(name);
-            }
+            console.log('Deleting cache:', name);
+            caches.delete(name);
           });
         });
       }
-      // Unregister old service workers
+
+      // COMPLETELY unregister ALL service workers
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.getRegistrations().then(function (registrations) {
           registrations.forEach(function (registration) {
-            // Force update any existing SW
-            registration.update();
+            console.log('Unregistering SW:', registration.scope);
+            registration.unregister();
           });
         });
       }
+
+      // Detect if Tailwind failed to load (fallback message)
+      window.addEventListener('load', function () {
+        setTimeout(function () {
+          var root = document.getElementById('root');
+          var loader = document.getElementById('loading-screen');
+          // If root is still empty after 10 seconds, something is wrong
+          if (root && root.children.length === 0 && loader) {
+            loader.innerHTML = '<div style="text-align:center;padding:40px;font-family:system-ui,sans-serif;"><h2 style="color:#ef4444;margin-bottom:16px;">⚠️ App Failed to Load</h2><p style="color:#64748b;margin-bottom:24px;">This might be a caching issue.<br/>Please try these steps:</p><ol style="text-align:left;color:#475569;max-width:280px;margin:0 auto;"><li style="margin-bottom:8px;">Clear your browser cache</li><li style="margin-bottom:8px;">Delete the app if added to Home Screen</li><li>Refresh the page</li></ol><button onclick="location.reload(true)" style="margin-top:24px;background:#10b981;color:white;padding:12px 24px;border:none;border-radius:12px;font-weight:bold;cursor:pointer;">Refresh Now</button></div>';
+          }
+        }, 10000);
+      });
     })();
   </script>
 
