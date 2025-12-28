@@ -683,6 +683,10 @@ const ConfirmDialog = ({ isOpen, onClose, onConfirm, title, message, confirmText
 const ApiKeyModal = ({ isOpen, onSave }) => {
     const [key, setKey] = useState('');
     if (!isOpen) return null;
+
+    // Build version based on timestamp - updates with each deployment
+    const buildVersion = "2024.12.28.1";
+
     return (
         <div className="fixed inset-0 z-[100] bg-slate-900 flex items-center justify-center p-6 animate-fade-in">
             <div className="bg-white w-full max-w-md rounded-3xl p-8 shadow-2xl space-y-6">
@@ -702,6 +706,10 @@ const ApiKeyModal = ({ isOpen, onSave }) => {
                         className="input-field" />
                     <button onClick={() => key.length > 10 && onSave(key)} disabled={key.length < 10}
                         className="w-full btn-primary disabled:opacity-50">Start Cooking</button>
+                </div>
+                {/* Version info */}
+                <div className="text-center pt-2 border-t border-slate-100">
+                    <span className="text-xs text-slate-400">MealPrepMate v{buildVersion}</span>
                 </div>
             </div>
         </div>
