@@ -1,0 +1,552 @@
+/* MealPrepMate Styles - Using regular CSS (no @apply as CDN Tailwind doesn't support it) */
+
+/* Base Reset */
+html,
+body {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+    -webkit-tap-highlight-color: transparent;
+}
+
+#root {
+    height: 100%;
+    width: 100%;
+}
+
+/* DVH Fallback for older iOS (< 15.4) */
+.h-dvh-fallback {
+    height: 100vh;
+    height: 100dvh;
+}
+
+@supports (-webkit-touch-callout: none) and (not (height: 100dvh)) {
+
+    .h-dvh-fallback,
+    [class*="h-[100dvh]"] {
+        height: -webkit-fill-available;
+    }
+}
+
+body {
+    overscroll-behavior-y: none;
+}
+
+/* Hide Scrollbar */
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}
+
+.scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+/* Safe Area Padding */
+.pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+}
+
+.pt-safe {
+    padding-top: env(safe-area-inset-top);
+}
+
+/* Hide number input spinners/arrows */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+/* Custom Input Styles */
+.input-field {
+    width: 100%;
+    background-color: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+    padding: 0.75rem 1rem;
+    outline: none;
+    transition: all 0.2s;
+}
+
+.input-field:focus {
+    border-color: #10b981;
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+}
+
+/* Select Field */
+.select-field {
+    background-color: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    padding: 0.5rem 2rem 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    outline: none;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 0.5rem center;
+    background-size: 1.25em 1.25em;
+}
+
+.select-field:focus {
+    border-color: #10b981;
+}
+
+/* Editable Inventory Item */
+.inventory-item {
+    background-color: white;
+    border: 1px solid #f1f5f9;
+    border-radius: 1rem;
+    padding: 1rem;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    transition: box-shadow 0.2s;
+}
+
+.inventory-item:hover {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.inventory-item-field {
+    background-color: transparent;
+    border-bottom: 1px solid transparent;
+    padding: 0.125rem 0.25rem;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.inventory-item-field:hover {
+    border-bottom-color: #e2e8f0;
+}
+
+.inventory-item-field:focus {
+    border-bottom-color: #10b981;
+}
+
+/* Macro Badges */
+.macro-badge {
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.5rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.macro-calories {
+    background-color: #fef3c7;
+    color: #b45309;
+}
+
+.macro-protein {
+    background-color: #fee2e2;
+    color: #b91c1c;
+}
+
+.macro-carbs {
+    background-color: #dbeafe;
+    color: #1d4ed8;
+}
+
+.macro-fat {
+    background-color: #f3e8ff;
+    color: #7c3aed;
+}
+
+.macro-servings {
+    background-color: #d1fae5;
+    color: #047857;
+}
+
+/* Confidence Indicators */
+.confidence-high {
+    border-left: 4px solid #34d399;
+}
+
+.confidence-medium {
+    border-left: 4px solid #fbbf24;
+}
+
+.confidence-low {
+    border-left: 4px solid #f87171;
+    background-color: rgba(254, 202, 202, 0.3);
+}
+
+/* Calendar Grid */
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 0.5rem;
+}
+
+.calendar-cell {
+    background-color: white;
+    border: 1px solid #f1f5f9;
+    border-radius: 0.75rem;
+    padding: 0.5rem;
+    min-height: 100px;
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+
+.calendar-cell:hover {
+    border-color: #a7f3d0;
+}
+
+.calendar-cell-header {
+    font-size: 0.625rem;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.5rem;
+}
+
+.calendar-meal-card {
+    background: linear-gradient(to bottom right, #ecfdf5, #f0fdfa);
+    border-radius: 0.5rem;
+    padding: 0.5rem;
+    margin-bottom: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #334155;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transition: background 0.2s;
+}
+
+.calendar-meal-card:hover {
+    background: linear-gradient(to bottom right, #d1fae5, #ccfbf1);
+}
+
+/* Modal Overlay */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    background-color: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    padding: 0;
+    animation: fadeIn 0.3s ease-out;
+}
+
+@media (min-width: 640px) {
+    .modal-overlay {
+        align-items: center;
+        padding: 1rem;
+    }
+}
+
+.modal-content {
+    background-color: white;
+    width: 100%;
+    max-width: 36rem;
+    height: 95dvh;
+    border-radius: 1.5rem 1.5rem 0 0;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    margin: 0 auto;
+}
+
+@media (min-width: 640px) {
+    .modal-content {
+        height: auto;
+        max-height: 90vh;
+        border-radius: 1rem;
+    }
+}
+
+/* Staging Modal Image */
+.staging-image {
+    width: 100%;
+    height: 12rem;
+    object-fit: cover;
+    border-radius: 1rem 1rem 0 0;
+}
+
+/* Buttons */
+.btn-primary {
+    background-color: #10b981;
+    color: white;
+    font-weight: 700;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.75rem;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.3);
+}
+
+.btn-primary:hover {
+    background-color: #059669;
+}
+
+.btn-primary:active {
+    transform: scale(0.98);
+}
+
+.btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-secondary {
+    background-color: #f1f5f9;
+    color: #475569;
+    font-weight: 700;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.75rem;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-secondary:hover {
+    background-color: #e2e8f0;
+}
+
+.btn-secondary:active {
+    transform: scale(0.98);
+}
+
+.btn-danger {
+    background-color: #ef4444;
+    color: white;
+    font-weight: 700;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.75rem;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 4px 6px -1px rgba(239, 68, 68, 0.3);
+}
+
+.btn-danger:hover {
+    background-color: #dc2626;
+}
+
+.btn-danger:active {
+    transform: scale(0.98);
+}
+
+/* Action Chips */
+.action-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.375rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    background-color: #f1f5f9;
+    color: #64748b;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+}
+
+.action-chip:hover {
+    background-color: #e2e8f0;
+}
+
+.action-chip:active {
+    transform: scale(0.95);
+}
+
+.action-chip:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Deduction Arrow */
+.deduction-arrow {
+    color: #94a3b8;
+    font-weight: 700;
+    margin: 0 0.5rem;
+}
+
+/* Loading Shimmer */
+@keyframes shimmer {
+    0% {
+        background-position: -200% 0;
+    }
+
+    100% {
+        background-position: 200% 0;
+    }
+}
+
+.shimmer {
+    background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+}
+
+/* Recurring Event Badge */
+.recurring-badge {
+    position: absolute;
+    top: 0.25rem;
+    right: 0.25rem;
+    background-color: #8b5cf6;
+    color: white;
+    font-size: 0.625rem;
+    font-weight: 700;
+    padding: 0.125rem 0.375rem;
+    border-radius: 9999px;
+}
+
+/* Drag and Drop */
+.dragging {
+    opacity: 0.5;
+    transform: scale(0.95);
+}
+
+.drop-target {
+    box-shadow: 0 0 0 2px #34d399, 0 0 0 4px white;
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(100%);
+    }
+
+    to {
+        transform: translateY(0);
+    }
+}
+
+.animate-fade-in {
+    animation: fadeIn 0.3s ease-out;
+}
+
+.animate-slide-up {
+    animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Line clamp utility */
+.line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* Loading Overlay - Fixed to viewport */
+.loading-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(8px);
+}
+
+/* Agenda View Styles */
+.agenda-day {
+    background: white;
+    border: 1px solid #f1f5f9;
+    border-radius: 1rem;
+    margin-bottom: 0.75rem;
+    overflow: hidden;
+}
+
+.agenda-day-header {
+    background: linear-gradient(to right, #f8fafc, #f1f5f9);
+    padding: 0.75rem 1rem;
+    font-weight: 700;
+    font-size: 0.875rem;
+    color: #334155;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.agenda-day-header.today {
+    background: linear-gradient(to right, #ecfdf5, #d1fae5);
+    color: #059669;
+}
+
+.agenda-meal {
+    padding: 0.75rem 1rem;
+    border-top: 1px solid #f1f5f9;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.agenda-meal:hover {
+    background-color: #f8fafc;
+}
+
+.agenda-meal-image {
+    width: 3rem;
+    height: 3rem;
+    border-radius: 0.5rem;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.agenda-meal-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.agenda-meal-name {
+    font-weight: 600;
+    color: #334155;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.agenda-meal-meta {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.agenda-leftover-badge {
+    background-color: #14b8a6;
+    color: white;
+    font-size: 0.625rem;
+    font-weight: 700;
+    padding: 0.125rem 0.375rem;
+    border-radius: 9999px;
+}

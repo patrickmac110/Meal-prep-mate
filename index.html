@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>MealPrepMate</title>
+
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="/Meal-prep-mate/manifest.json" />
+
+  <!-- iOS PWA Meta Tags -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#10b981">
+  <meta name="application-name" content="MealPrepMate">
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="MealPrepMate" />
+  <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1830/1830839.png" />
+
+  <!-- TailwindCSS (CDN for dev convenience) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          animation: {
+            'fade-in': 'fadeIn 0.3s ease-out',
+            'slide-up': 'slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+            'pulse-soft': 'pulseSoft 2s ease-in-out infinite',
+          },
+          keyframes: {
+            fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+            slideUp: { '0%': { transform: 'translateY(100%)' }, '100%': { transform: 'translateY(0)' } },
+            pulseSoft: { '0%, 100%': { opacity: '1' }, '50%': { opacity: '0.7' } },
+          },
+        },
+      },
+    };
+  </script>
+</head>
+
+<body class="bg-slate-50 text-slate-900 select-none">
+  <div id="root" class="h-[100dvh] w-full flex flex-col items-stretch overflow-hidden bg-white"></div>
+  <script type="module" src="/src/main.jsx"></script>
+</body>
+
+</html>
