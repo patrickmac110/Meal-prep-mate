@@ -51,7 +51,7 @@ const SERVING_MULTIPLIERS = {
 };
 
 // App version - update with each deployment
-const APP_VERSION = '2025.12.28.4';
+const APP_VERSION = '2025.12.28.5';
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -7345,9 +7345,13 @@ function MealPrepMate() {
         };
         window.addEventListener('beforeinstallprompt', handler);
 
-        // Notification Permission Request (Initial)
-        if (notifsEnabled && 'Notification' in window && Notification.permission === 'default') {
-            Notification.requestPermission();
+        // Notification Permission Request (Initial) - wrapped in try-catch for iOS Safari
+        try {
+            if (notifsEnabled && typeof Notification !== 'undefined' && Notification.permission === 'default') {
+                Notification.requestPermission();
+            }
+        } catch (e) {
+            console.log('Notifications not supported:', e);
         }
 
         return () => window.removeEventListener('beforeinstallprompt', handler);
@@ -7355,8 +7359,17 @@ function MealPrepMate() {
 
     useEffect(() => {
         const todayStr = new Date().toDateString();
+
+        // Safe check for notification permission - iOS Safari crashes on Notification access
+        let hasNotificationPermission = false;
+        try {
+            hasNotificationPermission = typeof Notification !== 'undefined' && Notification.permission === 'granted';
+        } catch (e) {
+            console.log('Notifications not supported:', e);
+        }
+
         // Only check once per day if permission is granted and toggle is ON
-        if (notifsEnabled && lastNotifCheck !== todayStr && Notification.permission === 'granted') {
+        if (notifsEnabled && lastNotifCheck !== todayStr && hasNotificationPermission) {
             // Check leftovers
             const expiringLeftovers = leftovers.filter(l => {
                 const days = Math.ceil((new Date(l.expiresAt) - new Date()) / 86400000);
@@ -7381,9 +7394,14 @@ function MealPrepMate() {
 
             if (totalExpiring > 0 || lowStockStaples.length > 0) {
                 // Check if notifications are supported (not on iOS Safari)
-                const notificationsSupported = 'Notification' in window &&
-                    'serviceWorker' in navigator &&
-                    Notification.permission === 'granted';
+                let notificationsSupported = false;
+                try {
+                    notificationsSupported = typeof Notification !== 'undefined' &&
+                        'serviceWorker' in navigator &&
+                        Notification.permission === 'granted';
+                } catch (e) {
+                    console.log('Notifications not supported:', e);
+                }
 
                 if (notificationsSupported) {
                     navigator.serviceWorker.ready.then(reg => {
