@@ -18,85 +18,128 @@
   <meta name="apple-mobile-web-app-title" content="MealPrepMate" />
   <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1830/1830839.png" />
 
-  <!-- TailwindCSS (CDN for dev convenience) -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          animation: {
-            'fade-in': 'fadeIn 0.3s ease-out',
-            'slide-up': 'slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
-            'pulse-soft': 'pulseSoft 2s ease-in-out infinite',
-          },
-          keyframes: {
-            fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
-            slideUp: { '0%': { transform: 'translateY(100%)' }, '100%': { transform: 'translateY(0)' } },
-            pulseSoft: { '0%, 100%': { opacity: '1' }, '50%': { opacity: '0.7' } },
-          },
-        },
-      },
-    };
-  </script>
+  <!-- Critical inline styles for loading screen - NO external dependencies -->
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f8fafc;
+    }
+
+    #loading-screen {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #fff;
+      z-index: 9999;
+    }
+
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid #e2e8f0;
+      border-top-color: #10b981;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 16px;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    #root {
+      min-height: 100vh;
+      min-height: 100dvh;
+      background: #fff;
+    }
+  </style>
 </head>
 
-<body class="bg-slate-50 text-slate-900 select-none">
-  <!-- Loading indicator while JS loads -->
-  <div id="loading-screen"
-    style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#fff;z-index:9999;">
+<body>
+  <!-- Loading indicator - pure HTML/CSS, no JS needed -->
+  <div id="loading-screen">
     <div style="text-align:center;">
-      <div
-        style="width:48px;height:48px;border:4px solid #e2e8f0;border-top-color:#10b981;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px;">
-      </div>
-      <p style="color:#64748b;font-family:system-ui,sans-serif;">Loading MealPrepMate...</p>
+      <div class="spinner"></div>
+      <p style="color:#64748b;">Loading MealPrepMate...</p>
+      <p style="color:#94a3b8;font-size:12px;margin-top:8px;">v2025.12.28.3</p>
     </div>
-    <style>
-      @keyframes spin {
-        to {
-          transform: rotate(360deg)
-        }
-      }
-    </style>
   </div>
 
-  <!-- Force COMPLETELY unregister ALL old service workers and clear ALL caches -->
+  <!-- App container -->
+  <div id="root"></div>
+
+  <!-- Load Tailwind AFTER the page shows (non-blocking) -->
   <script>
+    // Load Tailwind asynchronously - won't block page render
+    var tw = document.createElement('script');
+    tw.src = 'https://cdn.tailwindcss.com';
+    tw.onload = function () {
+      // Configure Tailwind after it loads
+      if (window.tailwind) {
+        tailwind.config = {
+          theme: {
+            extend: {
+              animation: {
+                'fade-in': 'fadeIn 0.3s ease-out',
+                'slide-up': 'slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+                'pulse-soft': 'pulseSoft 2s ease-in-out infinite',
+              },
+              keyframes: {
+                fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+                slideUp: { '0%': { transform: 'translateY(100%)' }, '100%': { transform: 'translateY(0)' } },
+                pulseSoft: { '0%, 100%': { opacity: '1' }, '50%': { opacity: '0.7' } },
+              },
+            },
+          },
+        };
+      }
+      console.log('Tailwind loaded');
+    };
+    tw.onerror = function () {
+      console.error('Tailwind failed to load');
+    };
+    document.head.appendChild(tw);
+
+    // Clear ALL caches and unregister ALL service workers
     (function () {
-      // Delete ALL caches - start fresh
       if ('caches' in window) {
         caches.keys().then(function (names) {
-          names.forEach(function (name) {
-            console.log('Deleting cache:', name);
-            caches.delete(name);
-          });
+          names.forEach(function (name) { caches.delete(name); });
         });
       }
-
-      // COMPLETELY unregister ALL service workers
       if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then(function (registrations) {
-          registrations.forEach(function (registration) {
-            console.log('Unregistering SW:', registration.scope);
-            registration.unregister();
-          });
+        navigator.serviceWorker.getRegistrations().then(function (regs) {
+          regs.forEach(function (reg) { reg.unregister(); });
         });
       }
-
-      // Detect if Tailwind failed to load (fallback message)
-      window.addEventListener('load', function () {
-        setTimeout(function () {
-          var root = document.getElementById('root');
-          var loader = document.getElementById('loading-screen');
-          // If root is still empty after 10 seconds, something is wrong
-          if (root && root.children.length === 0 && loader) {
-            loader.innerHTML = '<div style="text-align:center;padding:40px;font-family:system-ui,sans-serif;"><h2 style="color:#ef4444;margin-bottom:16px;">⚠️ App Failed to Load</h2><p style="color:#64748b;margin-bottom:24px;">This might be a caching issue.<br/>Please try these steps:</p><ol style="text-align:left;color:#475569;max-width:280px;margin:0 auto;"><li style="margin-bottom:8px;">Clear your browser cache</li><li style="margin-bottom:8px;">Delete the app if added to Home Screen</li><li>Refresh the page</li></ol><button onclick="location.reload(true)" style="margin-top:24px;background:#10b981;color:white;padding:12px 24px;border:none;border-radius:12px;font-weight:bold;cursor:pointer;">Refresh Now</button></div>';
-          }
-        }, 10000);
-      });
     })();
+
+    // Failsafe - show error after 15 seconds if app doesn't load
+    setTimeout(function () {
+      var root = document.getElementById('root');
+      var loader = document.getElementById('loading-screen');
+      if (root && root.children.length === 0 && loader) {
+        loader.innerHTML = '<div style="text-align:center;padding:40px;">' +
+          '<h2 style="color:#ef4444;margin-bottom:16px;">⚠️ App Failed to Load</h2>' +
+          '<p style="color:#64748b;margin-bottom:24px;">Please try clearing your browser cache<br/>or delete and re-add the app.</p>' +
+          '<button onclick="location.reload(true)" style="background:#10b981;color:white;padding:12px 24px;border:none;border-radius:12px;font-weight:bold;cursor:pointer;">Refresh Now</button>' +
+          '<p style="color:#94a3b8;font-size:11px;margin-top:16px;">iOS Safari: Settings → Safari → Clear History</p>' +
+          '</div>';
+      }
+    }, 15000);
   </script>
 
-  <div id="root" class="h-[100dvh] w-full flex flex-col items-stretch overflow-hidden bg-white"></div>
+  <!-- Main app -->
   <script type="module" src="/src/main.jsx"></script>
 </body>
 
