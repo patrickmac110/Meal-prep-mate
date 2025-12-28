@@ -50,6 +50,9 @@ const SERVING_MULTIPLIERS = {
     adult_m: 1.5,   // Adult male
 };
 
+// App version - update with each deployment
+const APP_VERSION = '2024.12.28.1';
+
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
@@ -685,7 +688,7 @@ const ApiKeyModal = ({ isOpen, onSave }) => {
     if (!isOpen) return null;
 
     // Build version based on timestamp - updates with each deployment
-    const buildVersion = "2024.12.28.1";
+    const buildVersion = APP_VERSION;
 
     return (
         <div className="fixed inset-0 z-[100] bg-slate-900 flex items-center justify-center p-6 animate-fade-in">
@@ -8182,6 +8185,11 @@ Return JSON: {
                     </button>
 
                     <button onClick={() => setShowSettings(false)} className="w-full btn-primary">Done</button>
+
+                    {/* Version info */}
+                    <div className="text-center pt-4">
+                        <span className="text-xs text-slate-400">MealPrepMate v{APP_VERSION}</span>
+                    </div>
                 </div>
             </Modal>
 
