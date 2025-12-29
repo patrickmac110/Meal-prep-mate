@@ -51,7 +51,7 @@ const SERVING_MULTIPLIERS = {
 };
 
 // App version - update with each deployment
-const APP_VERSION = '2025.12.28.6';
+const APP_VERSION = '2025.12.28.7';
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -86,6 +86,63 @@ const getExpirationStatus = (dateStr) => {
     if (expDate < today) return 'expired';
     if (expDate < weekFromNow) return 'soon';
     return 'ok';
+};
+
+// ============================================================================
+// iOS & NOTIFICATION HELPERS
+// ============================================================================
+
+// Detect if running on iOS
+const isIOS = () => {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPad on iOS 13+
+};
+
+// Detect if running as installed PWA (standalone mode)
+const isStandalonePWA = () => {
+    return window.matchMedia('(display-mode: standalone)').matches ||
+        window.navigator.standalone === true; // iOS specific
+};
+
+// Check if we can safely use the Notification API
+// - On iOS Safari browser: NO (crashes)
+// - On iOS installed PWA (16.4+): YES
+// - On Android/Desktop: YES
+const canUseNotifications = () => {
+    // If not iOS, we can always try
+    if (!isIOS()) {
+        return typeof Notification !== 'undefined';
+    }
+
+    // On iOS, only try if running as installed PWA
+    if (isStandalonePWA()) {
+        return typeof Notification !== 'undefined';
+    }
+
+    // iOS Safari browser - don't even try
+    return false;
+};
+
+// Safe wrapper to get notification permission
+const getNotificationPermission = () => {
+    if (!canUseNotifications()) return 'unavailable';
+    try {
+        return Notification.permission;
+    } catch (e) {
+        console.log('Notification permission check failed:', e);
+        return 'unavailable';
+    }
+};
+
+// Safe wrapper to request notification permission
+const requestNotificationPermission = async () => {
+    if (!canUseNotifications()) return 'unavailable';
+    try {
+        return await Notification.requestPermission();
+    } catch (e) {
+        console.log('Notification permission request failed:', e);
+        return 'unavailable';
+    }
 };
 
 // ============================================================================
@@ -7345,13 +7402,9 @@ function MealPrepMate() {
         };
         window.addEventListener('beforeinstallprompt', handler);
 
-        // Notification Permission Request (Initial) - wrapped in try-catch for iOS Safari
-        try {
-            if (notifsEnabled && typeof Notification !== 'undefined' && Notification.permission === 'default') {
-                Notification.requestPermission();
-            }
-        } catch (e) {
-            console.log('Notifications not supported:', e);
+        // Notification Permission Request (Initial) - using safe helper
+        if (notifsEnabled && getNotificationPermission() === 'default') {
+            requestNotificationPermission();
         }
 
         return () => window.removeEventListener('beforeinstallprompt', handler);
@@ -7360,13 +7413,8 @@ function MealPrepMate() {
     useEffect(() => {
         const todayStr = new Date().toDateString();
 
-        // Safe check for notification permission - iOS Safari crashes on Notification access
-        let hasNotificationPermission = false;
-        try {
-            hasNotificationPermission = typeof Notification !== 'undefined' && Notification.permission === 'granted';
-        } catch (e) {
-            console.log('Notifications not supported:', e);
-        }
+        // Safe check for notification permission using helper
+        const hasNotificationPermission = getNotificationPermission() === 'granted';
 
         // Only check once per day if permission is granted and toggle is ON
         if (notifsEnabled && lastNotifCheck !== todayStr && hasNotificationPermission) {
@@ -7393,15 +7441,10 @@ function MealPrepMate() {
             const totalExpiring = expiringLeftovers + expiringInventory;
 
             if (totalExpiring > 0 || lowStockStaples.length > 0) {
-                // Check if notifications are supported (not on iOS Safari)
-                let notificationsSupported = false;
-                try {
-                    notificationsSupported = typeof Notification !== 'undefined' &&
-                        'serviceWorker' in navigator &&
-                        Notification.permission === 'granted';
-                } catch (e) {
-                    console.log('Notifications not supported:', e);
-                }
+                // Check if notifications are supported using helper
+                const notificationsSupported = canUseNotifications() &&
+                    'serviceWorker' in navigator &&
+                    getNotificationPermission() === 'granted';
 
                 if (notificationsSupported) {
                     navigator.serviceWorker.ready.then(reg => {
@@ -8052,35 +8095,30 @@ Return JSON: {
                                     <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${notifsEnabled ? 'translate-x-7' : 'translate-x-1'}`} />
                                 </button>
                             </div>
-                            {/* Safe notification permission checks - iOS Safari crashes on Notification access */}
-                            {(() => {
-                                try {
-                                    if (typeof Notification !== 'undefined' && Notification.permission === 'denied') {
-                                        return (
-                                            <p className="text-[10px] text-red-500 px-1">
-                                                Notifications are blocked by your browser. You may need to reset permissions in your site settings.
-                                            </p>
-                                        );
-                                    }
-                                } catch (e) { return null; }
-                                return null;
-                            })()}
-                            {(() => {
-                                try {
-                                    if (typeof Notification !== 'undefined' && Notification.permission !== 'granted') {
-                                        const isDenied = Notification.permission === 'denied';
-                                        return (
-                                            <button
-                                                onClick={() => { try { Notification.requestPermission(); } catch (e) { } }}
-                                                className="w-full text-xs font-bold text-emerald-600 bg-emerald-50 py-2 rounded-lg hover:bg-emerald-100 transition-colors"
-                                            >
-                                                <Bell className="w-3 h-3 inline mr-1" /> {isDenied ? 'Re-request Permission' : 'Enable System Notifications'}
-                                            </button>
-                                        );
-                                    }
-                                } catch (e) { return null; }
-                                return null;
-                            })()}
+                            {/* Notification permission UI using safe helpers */}
+                            {!canUseNotifications() && isIOS() && !isStandalonePWA() && (
+                                <p className="text-[10px] text-amber-600 bg-amber-50 p-2 rounded-lg px-1">
+                                    📱 Add this app to your Home Screen to enable notifications on iOS.
+                                </p>
+                            )}
+                            {canUseNotifications() && getNotificationPermission() === 'denied' && (
+                                <p className="text-[10px] text-red-500 px-1">
+                                    Notifications are blocked by your browser. You may need to reset permissions in your site settings.
+                                </p>
+                            )}
+                            {canUseNotifications() && getNotificationPermission() !== 'granted' && getNotificationPermission() !== 'denied' && (
+                                <button
+                                    onClick={() => requestNotificationPermission()}
+                                    className="w-full text-xs font-bold text-emerald-600 bg-emerald-50 py-2 rounded-lg hover:bg-emerald-100 transition-colors"
+                                >
+                                    <Bell className="w-3 h-3 inline mr-1" /> Enable System Notifications
+                                </button>
+                            )}
+                            {canUseNotifications() && getNotificationPermission() === 'granted' && (
+                                <p className="text-[10px] text-emerald-600 px-1">
+                                    ✓ Notifications enabled
+                                </p>
+                            )}
                         </div>
                     </div>
 
