@@ -6,7 +6,7 @@ import {
     UserCheck, History, User, ThermometerSnowflake, Settings, Key, Bell,
     MessageCircle, Download, Upload, Leaf, Copy, Share, Calendar, CalendarDays,
     AlertTriangle, MapPin, Package, ChevronDown, ChevronRight, ChevronLeft,
-    Flame, Beef, Wheat, Droplet, GripVertical, MoreHorizontal, List, Grid3x3, ClipboardList, Zap
+    Flame, Beef, Wheat, Droplet, GripVertical, MoreHorizontal, List, Grid3x3, ClipboardList, Zap, HelpCircle
 } from 'lucide-react';
 
 // ============================================================================
@@ -7330,6 +7330,283 @@ const QuickMealPill = ({ quickMeal, onTap, editMode, onDelete, onEdit }) => {
 };
 
 // ============================================================================
+// TUTORIAL DUMMY DATA
+// ============================================================================
+
+const TUTORIAL_DUMMY_DATA = {
+    inventory: [
+        { id: 'demo-inv-1', name: 'Chicken Breast', quantity: 2, unit: 'lb', location: 'Freezer', expiresAt: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0], _isDemo: true },
+        { id: 'demo-inv-2', name: 'Eggs', quantity: 12, unit: 'each', location: 'Fridge', expiresAt: new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0], _isDemo: true },
+        { id: 'demo-inv-3', name: 'Milk', quantity: 1, unit: 'gal', location: 'Fridge', expiresAt: new Date(Date.now() + 5 * 86400000).toISOString().split('T')[0], isStaple: true, _isDemo: true },
+        { id: 'demo-inv-4', name: 'Rice', quantity: 5, unit: 'lb', location: 'Pantry', _isDemo: true },
+        { id: 'demo-inv-5', name: 'Broccoli', quantity: 2, unit: 'bunch', location: 'Fridge', expiresAt: new Date(Date.now() + 3 * 86400000).toISOString().split('T')[0], _isDemo: true },
+        { id: 'demo-inv-6', name: 'Garlic', quantity: 1, unit: 'bunch', location: 'Pantry', _isDemo: true },
+    ],
+    family: [
+        { id: 'demo-fam-1', name: 'Alex', ageGroup: 'adult_m', dietaryNeeds: [], customMultiplier: null, _isDemo: true },
+        { id: 'demo-fam-2', name: 'Sam', ageGroup: 'child_8', dietaryNeeds: ['No Mushrooms'], customMultiplier: null, _isDemo: true },
+    ],
+    quickMeals: [
+        { id: 'demo-qm-1', name: 'Apple', emoji: '🍎', inventoryItem: 'Apple', calories: 95, _isDemo: true },
+        { id: 'demo-qm-2', name: 'Yogurt', emoji: '🥛', inventoryItem: 'Yogurt', calories: 150, _isDemo: true },
+        { id: 'demo-qm-3', name: 'Banana', emoji: '🍌', inventoryItem: 'Banana', calories: 105, _isDemo: true },
+    ],
+    leftovers: [
+        { id: 'demo-left-1', name: 'Pasta Primavera', portions: 3, addedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 4 * 86400000).toISOString(), storage_instructions: 'Keep in airtight container', reheating_tips: 'Microwave 2-3 min, stir halfway', _isDemo: true },
+    ],
+    shoppingList: [
+        { id: 'demo-shop-1', name: 'Olive Oil', quantity: 1, unit: 'bottle', checked: false, _isDemo: true },
+        { id: 'demo-shop-2', name: 'Parmesan Cheese', quantity: 1, unit: 'block', checked: false, _isDemo: true },
+    ],
+    favorites: [
+        {
+            id: 'demo-fav-1',
+            name: 'Honey Garlic Chicken',
+            servings: 4,
+            macros: { calories: 450, protein: 35, carbs: 25, fat: 18 },
+            ingredients: [
+                { item: 'Chicken Breast', qty: '2 lb' },
+                { item: 'Honey', qty: '1/4 cup' },
+                { item: 'Garlic', qty: '4 cloves' },
+                { item: 'Soy Sauce', qty: '3 tbsp' },
+            ],
+            steps: ['Season chicken with salt and pepper', 'Mix honey, garlic, and soy sauce', 'Cook chicken until golden', 'Add sauce and simmer'],
+            description: 'A family favorite with sweet and savory flavors',
+            _isDemo: true
+        },
+    ],
+};
+
+// ============================================================================
+// TUTORIAL SETUP MODAL (Final step)
+// ============================================================================
+
+const TutorialSetupModal = ({ existingApiKey, existingModel, onComplete }) => {
+    const [apiKey, setApiKey] = useState(existingApiKey || '');
+    const [selectedModel, setSelectedModel] = useState(existingModel || 'gemini-2.0-flash');
+    const [showKey, setShowKey] = useState(false);
+
+    return (
+        <div className="tutorial-setup-modal">
+            <div className="tutorial-setup-content space-y-5">
+                <div className="text-center">
+                    <div className="text-4xl mb-2">🎉</div>
+                    <h2 className="text-2xl font-bold text-slate-900">Almost Ready!</h2>
+                    <p className="text-slate-500 text-sm mt-1">Set up your AI to unlock all features</p>
+                </div>
+
+                <div>
+                    <label className="text-sm font-bold text-slate-600 block mb-2">
+                        <Key className="w-4 h-4 inline mr-1" /> Gemini API Key
+                    </label>
+                    <div className="relative">
+                        <input
+                            type={showKey ? 'text' : 'password'}
+                            value={apiKey}
+                            onChange={(e) => setApiKey(e.target.value)}
+                            placeholder="AIzaSy..."
+                            className="input-field pr-10"
+                        />
+                        <button
+                            type="button"
+                            onClick={() => setShowKey(!showKey)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                        >
+                            {showKey ? '🙈' : '👁️'}
+                        </button>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-2">
+                        Get your free API key from{' '}
+                        <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-emerald-600 underline">
+                            Google AI Studio
+                        </a>
+                    </p>
+                </div>
+
+                <div>
+                    <label className="text-sm font-bold text-slate-600 block mb-2">AI Model</label>
+                    <select
+                        value={selectedModel}
+                        onChange={(e) => setSelectedModel(e.target.value)}
+                        className="w-full select-field"
+                    >
+                        {GEMINI_MODELS.map(m => (
+                            <option key={m.id} value={m.id}>{m.name} - {m.desc}</option>
+                        ))}
+                    </select>
+                </div>
+                <div className="pt-2">
+                    <button
+                        onClick={() => onComplete(apiKey, selectedModel)}
+                        disabled={!apiKey.trim()}
+                        className="w-full btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <Sparkles className="w-4 h-4 inline mr-1" /> Start Cooking!
+                    </button>
+                </div>
+
+                {!apiKey.trim() && (
+                    <p className="text-xs text-center text-slate-500">
+                        Enter your API key above to continue
+                    </p>
+                )}
+            </div>
+        </div>
+    );
+};
+
+// ============================================================================
+// TUTORIAL OVERLAY
+// ============================================================================
+
+const TutorialOverlay = ({ step, steps, onNext, onPrev, onSkip }) => {
+    const [pos, setPos] = useState({
+        top: 'auto',
+        bottom: 'auto',
+        left: 0,
+        arrowLeft: 0,
+        isTop: true
+    });
+    const currentStep = steps[step];
+    const bubbleWidth = 300;
+    const margin = 10;
+    const gap = 15; // Gap between element and bubble
+
+    useEffect(() => {
+        if (step < 0 || !currentStep) return;
+
+        // Execute step action (like switching views)
+        if (currentStep.action) {
+            currentStep.action();
+        }
+
+        // Position tooltip
+        if (currentStep.target) {
+            // Small delay to allow view to render
+            const positionTimeout = setTimeout(() => {
+                const el = document.getElementById(currentStep.target);
+                if (el) {
+                    // Remove previous spotlight
+                    document.querySelectorAll('.tutorial-spotlight').forEach(e =>
+                        e.classList.remove('tutorial-spotlight')
+                    );
+                    // Add spotlight class to target
+                    el.classList.add('tutorial-spotlight');
+
+                    // Calculate position with clamping
+                    const rect = el.getBoundingClientRect();
+
+                    // Vertical flip: check if element is in top or bottom half
+                    const isTop = rect.top < window.innerHeight / 2;
+
+                    // Horizontal clamping
+                    // 1. Find the "ideal" center position
+                    const targetCenterX = rect.left + rect.width / 2;
+                    const rawLeft = targetCenterX - bubbleWidth / 2;
+
+                    // 2. Clamp to prevent overflow
+                    const clampedLeft = Math.max(margin, Math.min(window.innerWidth - bubbleWidth - margin, rawLeft));
+
+                    // Arrow position (where the target center is relative to viewport)
+                    setPos({
+                        top: isTop ? rect.bottom + gap : 'auto',
+                        bottom: isTop ? 'auto' : (window.innerHeight - rect.top) + gap,
+                        left: clampedLeft,
+                        arrowLeft: targetCenterX, // Actual target center for arrow positioning
+                        isTop: isTop
+                    });
+                }
+            }, 100);
+
+            return () => clearTimeout(positionTimeout);
+        } else {
+            // Centered modal - remove all spotlights
+            document.querySelectorAll('.tutorial-spotlight').forEach(e =>
+                e.classList.remove('tutorial-spotlight')
+            );
+            setPos({ top: 'auto', bottom: 'auto', left: 0, arrowLeft: 0, isTop: true });
+        }
+    }, [step, currentStep]);
+
+    // Cleanup spotlights on unmount
+    useEffect(() => {
+        return () => {
+            document.querySelectorAll('.tutorial-spotlight').forEach(e =>
+                e.classList.remove('tutorial-spotlight')
+            );
+        };
+    }, []);
+
+    if (step < 0 || !currentStep) return null;
+
+    const isFirst = step === 0;
+    const isLast = step === steps.length - 1;
+    const isCentered = !currentStep.target;
+
+    // Calculate arrow position relative to the bubble
+    const arrowRelX = pos.arrowLeft - pos.left;
+    // Clamp arrow so it doesn't slide off corners (20px min from edges)
+    const clampedArrowX = Math.max(20, Math.min(bubbleWidth - 20, arrowRelX));
+
+    return (
+        <>
+            {/* Backdrop for centered modals */}
+            {isCentered && (
+                <div className="fixed inset-0 bg-black/75 z-[10000]" />
+            )}
+
+            {/* Tooltip */}
+            <div
+                className="tutorial-tooltip"
+                style={isCentered ? {
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)'
+                } : {
+                    top: pos.top !== 'auto' ? pos.top : undefined,
+                    bottom: pos.bottom !== 'auto' ? pos.bottom : undefined,
+                    left: pos.left,
+                    width: bubbleWidth
+                }}
+            >
+                {/* Dynamic arrow */}
+                {!isCentered && (
+                    <div
+                        className="tutorial-arrow"
+                        style={{
+                            left: clampedArrowX,
+                            [pos.isTop ? 'top' : 'bottom']: -6,
+                            transform: pos.isTop ? 'translateX(-50%) rotate(45deg)' : 'translateX(-50%) rotate(45deg)'
+                        }}
+                    />
+                )}
+
+                <h3 className="text-lg font-bold text-slate-900 mb-2">{currentStep.title}</h3>
+                <p className="text-sm text-slate-600 mb-4 leading-relaxed">{currentStep.text}</p>
+
+                {/* Progress dots */}
+                <div className="flex items-center gap-1 mb-4">
+                    {steps.map((_, i) => (
+                        <div key={i} className={`h-1.5 flex-1 rounded-full transition-colors ${i <= step ? 'bg-emerald-500' : 'bg-slate-200'}`} />
+                    ))}
+                </div>
+
+                {/* Buttons */}
+                <div className="flex gap-2">
+                    {!isFirst && (
+                        <button onClick={onPrev} className="btn-secondary text-sm px-4 py-2">Back</button>
+                    )}
+                    <button onClick={onSkip} className="btn-secondary text-sm px-4 py-2">Skip</button>
+                    <button onClick={onNext} className="btn-primary text-sm px-4 py-2 flex-1">
+                        {isLast ? 'Get Started!' : 'Next'}
+                    </button>
+                </div>
+            </div>
+        </>
+    );
+};
+
+// ============================================================================
 // MAIN APP
 // ============================================================================
 
@@ -7389,6 +7666,105 @@ function MealPrepMate() {
 
     // Store full recipe object directly (not ID-based) to support new unsaved recipes
     const [selectedRecipe, setSelectedRecipe] = useState(null);
+
+    // Tutorial state
+    const [tutorialStep, setTutorialStep] = useState(-1); // -1 = not running
+    const [hasSeenTutorial, setHasSeenTutorial] = useLocalStorage('mpm_tutorial_seen', false);
+    const [showTutorialSetup, setShowTutorialSetup] = useState(false);
+    const [tutorialDataInjected, setTutorialDataInjected] = useState(false);
+
+    // Inject dummy data when tutorial starts
+    const injectTutorialData = useCallback(() => {
+        if (tutorialDataInjected) return;
+        setInventory(prev => [...TUTORIAL_DUMMY_DATA.inventory, ...prev.filter(i => !i._isDemo)]);
+        setFamily(prev => [...TUTORIAL_DUMMY_DATA.family, ...prev.filter(f => !f._isDemo)]);
+        setQuickMeals(prev => [...TUTORIAL_DUMMY_DATA.quickMeals, ...prev.filter(q => !q._isDemo)]);
+        setLeftovers(prev => [...TUTORIAL_DUMMY_DATA.leftovers, ...prev.filter(l => !l._isDemo)]);
+        setShoppingList(prev => [...TUTORIAL_DUMMY_DATA.shoppingList, ...prev.filter(s => !s._isDemo)]);
+        setFavorites(prev => [...TUTORIAL_DUMMY_DATA.favorites, ...prev.filter(f => !f._isDemo)]);
+        setTutorialDataInjected(true);
+    }, [tutorialDataInjected, setInventory, setFamily, setQuickMeals, setLeftovers, setShoppingList, setFavorites]);
+
+    // Clean up dummy data when tutorial ends
+    const cleanupTutorialData = useCallback(() => {
+        setInventory(prev => prev.filter(i => !i._isDemo));
+        setFamily(prev => prev.filter(f => !f._isDemo));
+        setQuickMeals(prev => prev.filter(q => !q._isDemo));
+        setLeftovers(prev => prev.filter(l => !l._isDemo));
+        setShoppingList(prev => prev.filter(s => !s._isDemo));
+        setFavorites(prev => prev.filter(f => !f._isDemo));
+        setTutorialDataInjected(false);
+        // Remove any leftover spotlight classes
+        document.querySelectorAll('.tutorial-spotlight').forEach(e => e.classList.remove('tutorial-spotlight'));
+    }, [setInventory, setFamily, setQuickMeals, setLeftovers, setShoppingList, setFavorites]);
+
+    // Tutorial steps definition - expanded with more detail
+    const tutorialSteps = [
+        {
+            title: "👋 Welcome to MealPrepMate!",
+            text: "Stop wondering 'what's for dinner?' or worrying about food going bad in the back of the fridge. This app is your kitchen brain—it tells you exactly what you have, suggests meals based on those ingredients, and handles the math so you can cook confidently. Let's take a quick tour!",
+            target: null
+        },
+        {
+            title: "📦 The Foundation: Your Inventory",
+            text: "This is your digital pantry. See those demo items? You can add items manually, or use Smart Scan to upload a photo of your receipt or open fridge—the AI will identify items automatically! Notice the expiration dates and 'Staple' badges.",
+            target: "nav-pantry",
+            action: () => setView('inventory')
+        },
+        {
+            title: "🍳 Recipe Ideas & Generation",
+            text: "The AI looks at your specific inventory and suggests recipes you can cook right now. You can also describe a recipe in plain English, paste a website URL, or even upload a photo of a recipe book!",
+            target: "nav-plan",
+            action: () => setView('recipes')
+        },
+        {
+            title: "⚡ Quick Meals",
+            text: "See those colorful pills below? Those are Quick Meals—one-tap buttons for simple foods like an apple or yogurt. Tap them to instantly log the snack and deduct from your inventory without opening a full recipe.",
+            target: "nav-plan",
+            action: () => setView('recipes')
+        },
+        {
+            title: "📅 Plan Your Week",
+            text: "Use the Calendar to structure your week. Tap 'Plan Your Week' to open the Wizard—select cooking days vs leftover days, and AI generates a plan that uses up your expiring ingredients first!",
+            target: "nav-calendar",
+            action: () => setView('calendar')
+        },
+        {
+            title: "🛒 Shopping Made Easy",
+            text: "Missing ingredients? They automatically appear here! Check items off as you shop. When you're done, they can be auto-added to your inventory.",
+            target: "nav-shop",
+            action: () => setView('shopping')
+        },
+        {
+            title: "🍲 Leftover Tracker",
+            text: "Stop guessing if that container is still safe! When you cook a large meal, log leftovers here. The app tracks when it was cooked, counts down to expiration, and provides storage/reheating tips.",
+            target: null,
+            action: () => setView('leftovers')
+        },
+        {
+            title: "👨‍👩‍👧‍👦 Family Profiles",
+            text: "Teach the AI who you're feeding! Add ages and dietary needs. The app calculates serving multipliers (e.g., a toddler = 0.4 servings) and adapts every recipe for allergies and preferences.",
+            target: "header-family-btn",
+            action: () => setView('family')
+        },
+        {
+            title: "🤖 Your Kitchen Concierge",
+            text: "Tap this purple card to open the AI Assistant! Use natural language like: 'I had a turkey sandwich for lunch' (logs meal), 'Add milk to shopping' (updates list), or 'What's expiring soon?' (checks fridge).",
+            target: "ai-assistant-card",
+            action: () => setView('dashboard')
+        },
+        {
+            title: "⚙️ Settings & Customization",
+            text: "Here you can configure notifications for expiring food, export/import your data, choose your AI model, and restart this tutorial anytime!",
+            target: "header-settings-btn"
+        },
+        {
+            title: "🚀 Final Setup",
+            text: "You're almost ready! Let's set up your AI-powered features.",
+            target: null,
+            isSetupStep: true
+        }
+    ];
 
     useEffect(() => {
         // Check if app is installed (PWA mode)
@@ -7479,6 +7855,16 @@ function MealPrepMate() {
             }
         }
     }, [leftovers, inventory, lastNotifCheck, expirationReminders]);
+
+    // Auto-start tutorial on first visit (regardless of API key)
+    useEffect(() => {
+        if (!hasSeenTutorial && tutorialStep === -1) {
+            setTimeout(() => {
+                injectTutorialData();
+                setTutorialStep(0);
+            }, 500);
+        }
+    }, [hasSeenTutorial, tutorialStep, injectTutorialData]);
 
     const handleInstall = async () => {
         if (!installPrompt) return;
@@ -7784,6 +8170,7 @@ Return JSON: {
 
             {/* AI Assistant Button */}
             <div
+                id="ai-assistant-card"
                 onClick={() => setChatOpen(true)}
                 className="bg-gradient-to-br from-violet-500 to-purple-600 text-white p-5 rounded-3xl shadow-xl flex items-center gap-4 cursor-pointer hover:scale-[1.02] transition-transform active:scale-[0.98]"
             >
@@ -7821,7 +8208,8 @@ Return JSON: {
 
     return (
         <div className="w-full h-[100dvh] flex flex-col relative bg-white overflow-hidden">
-            <ApiKeyModal isOpen={!apiKey} onSave={setApiKey} />
+            {/* Only show API key modal after tutorial is complete and no key exists */}
+            <ApiKeyModal isOpen={!apiKey && hasSeenTutorial && tutorialStep === -1 && !showTutorialSetup} onSave={setApiKey} />
 
             {/* Header */}
             <div className="flex-none bg-white/90 backdrop-blur-md px-5 py-3 flex justify-between items-center border-b border-slate-100 z-30 sticky top-0">
@@ -7841,8 +8229,8 @@ Return JSON: {
                             <Download className="w-4 h-4" />
                         </button>
                     )}
-                    <button onClick={() => setView('family')} className="p-2 rounded-full hover:bg-slate-100 text-slate-600"><User className="w-6 h-6" /></button>
-                    <button onClick={() => setShowSettings(true)} className="p-2 rounded-full hover:bg-slate-100 text-slate-600"><Settings className="w-6 h-6" /></button>
+                    <button id="header-family-btn" onClick={() => setView('family')} className="p-2 rounded-full hover:bg-slate-100 text-slate-600"><User className="w-6 h-6" /></button>
+                    <button id="header-settings-btn" onClick={() => setShowSettings(true)} className="p-2 rounded-full hover:bg-slate-100 text-slate-600"><Settings className="w-6 h-6" /></button>
                 </div>
             </div>
 
@@ -7860,15 +8248,15 @@ Return JSON: {
             {/* Bottom Nav */}
             <div className="fixed bottom-0 left-0 right-0 w-full bg-white border-t border-slate-100 px-6 pb-safe pt-2 z-40 rounded-t-3xl shadow-[0_-5px_10px_rgba(0,0,0,0.02)]">
                 <div className="flex justify-between items-end pb-2">
-                    <NavBtn icon={Refrigerator} label="Pantry" active={view === 'inventory'} onClick={() => setView('inventory')} />
-                    <NavBtn icon={Utensils} label="Plan" active={view === 'recipes'} onClick={() => setView('recipes')} />
+                    <div id="nav-pantry"><NavBtn icon={Refrigerator} label="Pantry" active={view === 'inventory'} onClick={() => setView('inventory')} /></div>
+                    <div id="nav-plan"><NavBtn icon={Utensils} label="Plan" active={view === 'recipes'} onClick={() => setView('recipes')} /></div>
                     <div className="relative -top-6 px-2">
                         <button onClick={() => setView('dashboard')} className="w-16 h-16 bg-gradient-to-tr from-emerald-400 to-emerald-600 rounded-full text-white flex items-center justify-center shadow-xl shadow-emerald-200">
                             <ChefHat className="w-7 h-7" />
                         </button>
                     </div>
-                    <NavBtn icon={CalendarDays} label="Calendar" active={view === 'calendar'} onClick={() => setView('calendar')} />
-                    <NavBtn icon={ShoppingCart} label="Shop" active={view === 'shopping'} onClick={() => setView('shopping')} />
+                    <div id="nav-calendar"><NavBtn icon={CalendarDays} label="Calendar" active={view === 'calendar'} onClick={() => setView('calendar')} /></div>
+                    <div id="nav-shop"><NavBtn icon={ShoppingCart} label="Shop" active={view === 'shopping'} onClick={() => setView('shopping')} /></div>
                 </div>
             </div>
 
@@ -8243,6 +8631,19 @@ Return JSON: {
                         </div>
                     </div>
 
+                    {/* Restart Tutorial */}
+                    <button
+                        onClick={() => {
+                            setHasSeenTutorial(false);
+                            injectTutorialData();
+                            setTutorialStep(0);
+                            setShowSettings(false);
+                        }}
+                        className="w-full btn-secondary text-indigo-600"
+                    >
+                        <HelpCircle className="w-4 h-4 inline mr-2" /> Restart App Tutorial
+                    </button>
+
                     {/* Clear Data */}
                     <button
                         onClick={() => {
@@ -8450,6 +8851,48 @@ Return JSON: {
                     onUndo={toastData.onUndo}
                     duration={toastData.duration || 15000}
                     onClose={() => setToastData(null)}
+                />
+            )}
+
+            {/* Tutorial Overlay */}
+            <TutorialOverlay
+                step={tutorialStep}
+                steps={tutorialSteps}
+                onNext={() => {
+                    const currentStep = tutorialSteps[tutorialStep];
+                    if (currentStep?.isSetupStep) {
+                        // Show setup modal instead of ending
+                        setTutorialStep(-1);
+                        setShowTutorialSetup(true);
+                    } else if (tutorialStep >= tutorialSteps.length - 1) {
+                        setTutorialStep(-1);
+                        setHasSeenTutorial(true);
+                        cleanupTutorialData();
+                    } else {
+                        setTutorialStep(tutorialStep + 1);
+                    }
+                }}
+                onPrev={() => setTutorialStep(Math.max(0, tutorialStep - 1))}
+                onSkip={() => {
+                    setTutorialStep(-1);
+                    setHasSeenTutorial(true);
+                    cleanupTutorialData();
+                }}
+            />
+
+            {/* Tutorial Setup Modal (Final Step) */}
+            {showTutorialSetup && (
+                <TutorialSetupModal
+                    existingApiKey={apiKey}
+                    existingModel={selectedModel}
+                    onComplete={(newApiKey, newModel) => {
+                        if (newApiKey) setApiKey(newApiKey);
+                        if (newModel) setSelectedModel(newModel);
+                        setShowTutorialSetup(false);
+                        setHasSeenTutorial(true);
+                        cleanupTutorialData();
+                        setView('dashboard');
+                    }}
                 />
             )}
         </div>

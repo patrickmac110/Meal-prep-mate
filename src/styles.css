@@ -542,11 +542,95 @@ input[type="number"] {
     gap: 0.5rem;
 }
 
-.agenda-leftover-badge {
-    background-color: #14b8a6;
+/* Tutorial Spotlight - Glowing Outline (no dark overlay) */
+.tutorial-spotlight {
+    position: relative;
+    z-index: 10001 !important;
+    outline: 3px solid #10b981;
+    outline-offset: 8px;
+    border-radius: 16px;
+    box-shadow:
+        0 0 0 4px rgba(16, 185, 129, 0.2),
+        0 0 20px 8px rgba(16, 185, 129, 0.3),
+        0 0 40px 16px rgba(16, 185, 129, 0.15);
+    animation: pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+
+    0%,
+    100% {
+        outline-color: #10b981;
+        box-shadow:
+            0 0 0 4px rgba(16, 185, 129, 0.2),
+            0 0 20px 8px rgba(16, 185, 129, 0.3),
+            0 0 40px 16px rgba(16, 185, 129, 0.15);
+    }
+
+    50% {
+        outline-color: #34d399;
+        box-shadow:
+            0 0 0 6px rgba(16, 185, 129, 0.3),
+            0 0 30px 12px rgba(16, 185, 129, 0.4),
+            0 0 60px 24px rgba(16, 185, 129, 0.2);
+    }
+}
+
+/* Tutorial Tooltip */
+.tutorial-tooltip {
+    position: fixed;
+    z-index: 10002;
+    background: white;
+    border-radius: 16px;
+    padding: 20px;
+    max-width: min(90vw, 340px);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    animation: fadeIn 0.3s ease-out;
+}
+
+/* Dynamic arrow element (positioned via inline styles) */
+.tutorial-arrow {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    background: white;
+    box-shadow: -2px -2px 4px rgba(0, 0, 0, 0.05);
+}
+
+/* Tutorial Setup Modal */
+.tutorial-setup-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 10003;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    animation: fadeIn 0.3s ease-out;
+}
+
+.tutorial-setup-content {
+    background: white;
+    border-radius: 24px;
+    padding: 32px;
+    max-width: 420px;
+    width: 90%;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Demo badge for tutorial items */
+.demo-badge {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    background: linear-gradient(135deg, #8b5cf6, #a855f7);
     color: white;
-    font-size: 0.625rem;
+    font-size: 9px;
     font-weight: 700;
-    padding: 0.125rem 0.375rem;
-    border-radius: 9999px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
