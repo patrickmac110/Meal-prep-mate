@@ -6,7 +6,8 @@ import {
     UserCheck, History, User, ThermometerSnowflake, Settings, Key, Bell,
     MessageCircle, Download, Upload, Leaf, Copy, Share, Calendar, CalendarDays,
     AlertTriangle, MapPin, Package, ChevronDown, ChevronRight, ChevronLeft,
-    Flame, Beef, Wheat, Droplet, GripVertical, MoreHorizontal, List, Grid3x3, ClipboardList, Zap, HelpCircle
+    Flame, Beef, Wheat, Droplet, GripVertical, MoreHorizontal, List, Grid3x3, ClipboardList, Zap, HelpCircle,
+    ArrowRight, Search
 } from 'lucide-react';
 
 // ============================================================================
@@ -35,9 +36,7 @@ const GEMINI_MODELS = [
     { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', desc: 'Fast, reliable' },
     { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite', desc: 'Lighter, most economical' },
     { id: 'gemini-2.0-flash-thinking-exp', name: 'Gemini 2.0 Flash Thinking', desc: 'Reasoning model (experimental)' },
-    { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', desc: 'Fast and versatile' },
-    { id: 'gemini-1.5-flash-8b', name: 'Gemini 1.5 Flash 8B', desc: 'Smaller, efficient' },
-    { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro', desc: 'Great quality, higher usage' },
+    // Deprecated: 1.5 series removed
 ];
 
 const SERVING_MULTIPLIERS = {
@@ -51,7 +50,7 @@ const SERVING_MULTIPLIERS = {
 };
 
 // App version - update with each deployment
-const APP_VERSION = '2025.12.28.7';
+const APP_VERSION = '2026.01.03.1';
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -222,15 +221,46 @@ const callGemini = async (apiKey, prompt, imageBase64 = null, model = 'gemini-2.
     }
 };
 
-const generateRecipeImage = (apiKey, recipeName) => {
-    // Use Pollinations API for free, reliable image generation
-    const prompt = `Professional food photography of ${recipeName}, appetizing, well-lit, on a clean white plate, restaurant quality, high resolution`;
-    const encodedPrompt = encodeURIComponent(prompt);
-    const seed = Math.floor(Math.random() * 10000);
-    const imgUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=800&height=600&seed=${seed}&nologo=true&model=flux`;
+const generateImageWithGemini = async (apiKey, prompt) => {
+    // Use Gemini 2.5 Flash Image for generation
+    // Endpoint: generativelanguage.googleapis.com
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${apiKey}`;
 
-    // Return the URL directly - the image will be loaded when displayed
-    return imgUrl;
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error?.message || `API Error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        // Check for inlineData (standard for Gemini image output)
+        const parts = data.candidates?.[0]?.content?.parts || [];
+        const imagePart = parts.find(p => p.inlineData);
+
+        if (imagePart) {
+            return `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
+        }
+
+        // Fallback or error if no image
+        throw new Error("Model did not return an image.");
+    } catch (error) {
+        console.error("Gemini Image API Failed:", error);
+        return null;
+    }
+};
+
+const generateRecipeImage = (apiKey, recipeName) => {
+    // Legacy support or fallback if needed, but we prefer Gemini now
+    // Keeping this structure if called synchronously elsewhere, but essentially unused
+    return null;
 };
 
 // Function calling helper for AI Assistant
@@ -282,6 +312,22 @@ const callGeminiWithFunctions = async (apiKey, messages, functions, model = 'gem
 };
 
 // AI Assistant Function Definitions
+const fetchAvailableModels = async (apiKey) => {
+    if (!apiKey) throw new Error("API Key required");
+    try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error?.message || 'Failed to fetch models');
+        }
+        const data = await response.json();
+        return data.models || [];
+    } catch (error) {
+        console.error("Error fetching models:", error);
+        throw error;
+    }
+};
+
 const APP_FUNCTIONS = [
     // ============ MEAL LOGGING ============
     {
@@ -628,21 +674,29 @@ const getLocalDateKey = (date) => {
     return `${year}-${month}-${day}`;
 };
 
+// Get serving multiplier based on age and gender - unified calculation
+const getServingMultiplier = (age, gender) => {
+    if (!age && age !== 0) return SERVING_MULTIPLIERS.adult_f; // default
+    if (age <= 2) return SERVING_MULTIPLIERS.infant;   // 0.3
+    if (age <= 4) return SERVING_MULTIPLIERS.toddler;  // 0.4
+    if (age <= 10) return SERVING_MULTIPLIERS.child;   // 0.6
+    if (age <= 13) return SERVING_MULTIPLIERS.preteen; // 0.8
+    if (age <= 15) return SERVING_MULTIPLIERS.teen;    // 1.0 (all teens 14-15)
+    if (age <= 18) return gender === 'male' ? SERVING_MULTIPLIERS.adult_m : SERVING_MULTIPLIERS.teen; // Males 16-18: 1.5, Females 16-18: 1.0
+    // Adults 19+: everyone gets 1.0
+    return SERVING_MULTIPLIERS.adult_f; // 1.0
+};
+
 const calculateFamilyServings = (familyMembers) => {
     if (!familyMembers || familyMembers.length === 0) return 2;
 
     return familyMembers.reduce((total, member) => {
-        const age = parseInt(member.age) || 30;
-        let multiplier = SERVING_MULTIPLIERS.adult_f;
-
-        if (age <= 2) multiplier = SERVING_MULTIPLIERS.infant;
-        else if (age <= 4) multiplier = SERVING_MULTIPLIERS.toddler;
-        else if (age <= 10) multiplier = SERVING_MULTIPLIERS.child;
-        else if (age <= 13) multiplier = SERVING_MULTIPLIERS.preteen;
-        else if (age <= 18) multiplier = SERVING_MULTIPLIERS.teen;
-        else if (member.gender === 'male' || member.diet === 'athlete') multiplier = SERVING_MULTIPLIERS.adult_m;
-
-        return total + multiplier;
+        // Use stored servings if available, otherwise calculate from age/gender
+        if (member.servings && member.servings > 0) {
+            return total + member.servings;
+        }
+        const age = parseInt(member.age) || parseInt(member.displayAge) || 30;
+        return total + getServingMultiplier(age, member.gender);
     }, 0);
 };
 
@@ -737,6 +791,237 @@ const ConfirmDialog = ({ isOpen, onClose, onConfirm, title, message, confirmText
                 </div>
             </div>
         </div>
+    );
+};
+
+// ============================================================================
+// UNIFIED INGREDIENT MATCH MODAL
+// Used for both allocation (scheduling) and deduction (cooking)
+// ============================================================================
+// Helper for picking inventory items
+const InventoryPickerModal = ({ isOpen, onClose, inventory, onSelect }) => {
+    const [search, setSearch] = useState('');
+    const [filteredItems, setFilteredItems] = useState([]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        const term = search.toLowerCase();
+        setFilteredItems(
+            inventory
+                .filter(i => i.quantity > 0)
+                .filter(i => i.name.toLowerCase().includes(term))
+                .sort((a, b) => a.name.localeCompare(b.name))
+        );
+    }, [search, inventory, isOpen]);
+
+    if (!isOpen) return null;
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose}>
+            <div className="flex flex-col h-[80vh]">
+                <div className="p-4 border-b">
+                    <h3 className="font-bold text-lg mb-2">Select Item</h3>
+                    <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <input
+                            type="text"
+                            autoFocus
+                            placeholder="Search pantry..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            className="input-field pl-11"
+                        />
+                    </div>
+                </div>
+                <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                    {filteredItems.map(item => (
+                        <button
+                            key={item.id}
+                            onClick={() => onSelect(item)}
+                            className="w-full text-left p-3 rounded-xl border border-slate-100 hover:bg-slate-50 active:bg-slate-100 transition-colors flex justify-between items-center"
+                        >
+                            <span className="font-medium text-slate-700">{item.name}</span>
+                            <span className="text-sm text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+                                {item.quantity} {item.unit}
+                            </span>
+                        </button>
+                    ))}
+                    {filteredItems.length === 0 && (
+                        <div className="text-center p-8 text-slate-400">
+                            No matching items found
+                        </div>
+                    )}
+                </div>
+                <div className="p-4 border-t bg-slate-50 rounded-b-xl">
+                    <button onClick={onClose} className="w-full btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </Modal>
+    );
+};
+
+const IngredientMatchModal = ({
+    isOpen,
+    onClose,
+    mode = 'allocate', // 'allocate' or 'deduct'
+    recipe,
+    matches, // Array of { inventoryItemId, inventoryItemName, currentQuantity, currentUnit, amount, recipeIngredient, confidence }
+    setMatches,
+    inventory, // Full inventory for swapping
+    onConfirm,
+    onSkip
+}) => {
+    // State for the picker modal
+    const [pickingForIndex, setPickingForIndex] = useState(null); // Index of match being edited
+
+    if (!isOpen || !matches) return null;
+
+    const isAllocate = mode === 'allocate';
+    const title = isAllocate ? 'Reserve Ingredients' : 'Review Deductions';
+    const subtitle = isAllocate
+        ? 'These ingredients will be reserved for this meal'
+        : 'Adjust amounts if needed';
+    const confirmText = isAllocate ? 'Reserve & Schedule' : 'Confirm & Mark as Cooked';
+    const skipText = isAllocate ? 'Skip Reservation' : null;
+
+    const handleSwap = (idx, newItem) => {
+        const updated = [...matches];
+        updated[idx] = {
+            ...updated[idx],
+            inventoryItemId: newItem.id,
+            inventoryItemName: newItem.name,
+            currentQuantity: newItem.quantity,
+            currentUnit: newItem.unit,
+            confidence: 'high' // User manually selected, so high confidence
+        };
+        setMatches(updated);
+        setPickingForIndex(null); // Close picker
+    };
+
+    const handleAmountChange = (idx, newAmount) => {
+        const updated = [...matches];
+        updated[idx] = {
+            ...updated[idx],
+            amount: newAmount === '' ? 0 : parseFloat(newAmount)
+        };
+        setMatches(updated);
+    };
+
+    return (
+        <>
+            <Modal isOpen={isOpen} onClose={onClose}>
+                <div className="flex flex-col h-[90vh] sm:h-[80vh]">
+                    {/* Header - Fixed */}
+                    <div className="p-4 pb-2 flex-shrink-0">
+                        <h2 className="text-xl font-bold text-slate-800">{title}</h2>
+                        <p className="text-slate-500 text-sm mt-1">{subtitle}</p>
+                    </div>
+
+                    {/* Scrollable Content */}
+                    <div className="flex-1 overflow-y-auto p-4 pt-2 space-y-4">
+                        {matches.map((match, idx) => {
+                            // Determine style based on confidence
+                            const isLowConf = match.confidence === 'low';
+                            const isMedConf = match.confidence === 'medium';
+                            const borderColor = isLowConf ? 'border-red-300' : isMedConf ? 'border-amber-200' : 'border-slate-200';
+                            const bgColor = isLowConf ? 'bg-red-50/50' : 'bg-white';
+
+                            return (
+                                <div
+                                    key={idx}
+                                    className={`rounded-xl border ${borderColor} ${bgColor} p-4 shadow-sm transition-all`}
+                                >
+                                    {/* Top Row: Inventory Item Selection Button */}
+                                    <button
+                                        onClick={() => setPickingForIndex(idx)}
+                                        className="w-full flex items-center justify-between group mb-3"
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-bold text-slate-800 text-lg text-left leading-tight">
+                                                {match.inventoryItemName || 'Select Item...'}
+                                            </span>
+                                            <ChevronDown className="w-4 h-4 text-slate-400 group-hover:text-slate-600" />
+                                        </div>
+                                        {/* Confidence Indicator (Dot) */}
+                                        <div className={`w-3 h-3 rounded-full flex-shrink-0 ${match.confidence === 'high' ? 'bg-emerald-500' :
+                                            match.confidence === 'medium' ? 'bg-amber-400' :
+                                                match.confidence === 'low' ? 'bg-red-500' : 'bg-slate-300'
+                                            }`} />
+                                    </button>
+
+                                    {/* Low Confidence Warning */}
+                                    {isLowConf && (
+                                        <div className="mb-3 text-xs text-red-600 bg-red-100 px-2 py-1 rounded flex items-center gap-1.5 font-medium">
+                                            <AlertCircle className="w-3 h-3" />
+                                            Uncertain match - please verify
+                                        </div>
+                                    )}
+
+                                    {/* Middle: Recipe Requirement */}
+                                    <div className="text-xs text-slate-500 mb-4 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                                        Recipe calls for: <span className="font-medium text-slate-700 block mt-0.5 text-sm">{match.recipeIngredient}</span>
+                                    </div>
+
+                                    {/* Bottom: Use/Reserve Logic */}
+                                    <div className="flex items-end justify-between gap-4">
+                                        <div className="flex-1">
+                                            <div className="text-xs text-slate-500 mb-1">Have in Pantry</div>
+                                            <div className="font-medium text-slate-700 bg-slate-100 px-3 py-2 rounded-lg text-sm">
+                                                {match.currentQuantity} <span className="text-slate-500 text-xs">{match.currentUnit}</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="pb-3 text-slate-300">
+                                            <ArrowRight className="w-5 h-5" />
+                                        </div>
+
+                                        <div className="flex-1">
+                                            <div className="text-xs font-bold text-indigo-600 mb-1">{isAllocate ? 'Reserve' : 'Use'}</div>
+                                            <div className="relative">
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.1"
+                                                    value={match.amount}
+                                                    onChange={(e) => handleAmountChange(idx, e.target.value)}
+                                                    className="w-full text-center border-2 border-indigo-100 rounded-lg py-1.5 font-bold text-indigo-700 focus:border-indigo-500 focus:ring-0 outline-none transition-colors bg-indigo-50/30"
+                                                />
+                                                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400 pointer-events-none">
+                                                    {match.currentUnit}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* Footer - Fixed */}
+                    <div className="p-4 border-t bg-white flex gap-3 flex-shrink-0">
+                        {skipText && onSkip && (
+                            <button onClick={onClose} className="flex-1 btn-secondary text-sm py-3">
+                                {skipText}
+                            </button>
+                        )}
+                        <button
+                            onClick={onConfirm}
+                            className="flex-1 btn-primary text-sm py-3 shadow-lg shadow-emerald-200"
+                        >
+                            {confirmText}
+                        </button>
+                    </div>
+                </div>
+            </Modal>
+
+            {/* Inventory Picker Modal */}
+            <InventoryPickerModal
+                isOpen={pickingForIndex !== null}
+                onClose={() => setPickingForIndex(null)}
+                inventory={inventory}
+                onSelect={(item) => handleSwap(pickingForIndex, item)}
+            />
+        </>
     );
 };
 
@@ -962,6 +1247,7 @@ const RecipeCard = ({ recipe, onClick, showUseButton, onUseRecipe }) => (
 // Reusable Recipe Detail Modal Content - for full recipe information
 // Props allow customizing which action buttons appear based on context
 const RecipeDetailModal = ({
+    apiKey, // Added apiKey prop
     recipe,
     isOpen,
     onClose,
@@ -973,6 +1259,7 @@ const RecipeDetailModal = ({
     onAddMissingToInventory,
     onAddToShoppingList,
     onUseRecipe,
+    onAddToQuickMeals, // New: add recipe as Quick Meal
     onSave, // New: callback to save edited recipe
     startInEditMode = false, // Open directly in edit mode for new recipes
     showScheduleButton = true,
@@ -1119,14 +1406,23 @@ const RecipeDetailModal = ({
     };
 
     const generateAIImage = async () => {
-        if (!editedRecipe?.name) return;
+        if (!editedRecipe?.name || !apiKey) {
+            if (!apiKey) alert("Please enter an API Key in settings first.");
+            return;
+        }
         setImageGenerating(true);
         try {
-            // Use Pollinations for quick image generation
-            const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(editedRecipe.name + ' food dish professional photo')}?width=512&height=512&nologo=true`;
-            updateField('imageUrl', imageUrl);
+            const prompt = `Professional food photography of ${editedRecipe.name}, appetizing, well-lit, on a clean white plate, restaurant quality, high resolution`;
+            const imageUrl = await generateImageWithGemini(apiKey, prompt);
+
+            if (imageUrl) {
+                updateField('imageUrl', imageUrl);
+            } else {
+                alert("Failed to generate image. Please check your API key/model access.");
+            }
         } catch (e) {
             console.error('Image generation error:', e);
+            alert(`Error: ${e.message}`);
         }
         setImageGenerating(false);
     };
@@ -1543,6 +1839,14 @@ const RecipeDetailModal = ({
                                     <ThermometerSnowflake className="w-5 h-5" /> Add to Leftovers
                                 </button>
                             )}
+                            {onAddToQuickMeals && (
+                                <button
+                                    onClick={() => onAddToQuickMeals(displayRecipe)}
+                                    className="w-full btn-secondary text-amber-600 border-amber-200 flex items-center justify-center gap-2"
+                                >
+                                    <Zap className="w-5 h-5" /> Add to Quick Meals
+                                </button>
+                            )}
                         </div>
                     )}
                 </div>
@@ -1721,7 +2025,7 @@ const LeftoverDetailModal = ({ leftover, leftovers, setLeftovers, onClose, onMov
 // INVENTORY VIEW (Enhanced with editable fields)
 // ============================================================================
 
-const InventoryView = ({ apiKey, model, inventory, setInventory, knownLocations, setKnownLocations, processedFiles, setProcessedFiles, allocatedIngredients }) => {
+const InventoryView = ({ apiKey, model, inventory, setInventory, knownLocations, setKnownLocations, processedFiles, setProcessedFiles, allocatedIngredients, expandedItemId, setExpandedItemId }) => {
     // Persisted form state (survives refresh)
     const [newItem, setNewItem] = useLocalStorage('mpm_inv_new_item', '');
     const [newQty, setNewQty] = useLocalStorage('mpm_inv_new_qty', 1);
@@ -1731,8 +2035,11 @@ const InventoryView = ({ apiKey, model, inventory, setInventory, knownLocations,
     const [showQuickAddExpanded, setShowQuickAddExpanded] = useLocalStorage('mpm_inv_quick_add_expanded', false);
     const [collapsedLocations, setCollapsedLocations] = useLocalStorage('mpm_inv_collapsed_locations', {});
     const [searchQuery, setSearchQuery] = useLocalStorage('mpm_inv_search', '');
-    const [expandedItemId, setExpandedItemId] = useLocalStorage('mpm_inv_expanded_item', null);
+    // expandedItemId is now passed as prop
     const [sortBy, setSortBy] = useLocalStorage('mpm_inv_sort', 'location'); // 'location', 'name', 'expiration', 'allocated'
+    const [showManualForm, setShowManualForm] = useState(false);
+    const [isStapleItem, setIsStapleItem] = useState(false);
+    const [alertBelow, setAlertBelow] = useState(1);
 
     // Transient state (not persisted)
     const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -1867,6 +2174,9 @@ const InventoryView = ({ apiKey, model, inventory, setInventory, knownLocations,
         setNewItem('');
         setNewQty(1);
         setNewExpDate('');
+        setIsStapleItem(false);
+        setAlertBelow(1);
+        setShowManualForm(false);
     };
 
     const updateItem = (id, updates) => {
@@ -2189,7 +2499,7 @@ If you find no additional items, return: { "items": [] }`;
                 </span>
             </div>
 
-            {/* Photo Capture Buttons - Camera & Upload */}
+            {/* Photo Capture Buttons - Camera, Upload & Manual Add */}
             <div className="flex gap-2">
                 <button onClick={() => cameraInputRef.current?.click()}
                     className="flex-1 flex flex-col items-center justify-center gap-1 bg-emerald-50 text-emerald-600 p-3 rounded-xl font-bold hover:bg-emerald-100 active:scale-[0.98] transition-all">
@@ -2201,48 +2511,75 @@ If you find no additional items, return: { "items": [] }`;
                     <ImageIcon className="w-6 h-6" />
                     <span className="text-xs">Upload Photos</span>
                 </button>
+                <button onClick={() => setShowManualForm(!showManualForm)}
+                    className={`flex-1 flex flex-col items-center justify-center gap-1 p-3 rounded-xl font-bold active:scale-[0.98] transition-all ${showManualForm ? 'bg-amber-100 text-amber-700' : 'bg-amber-50 text-amber-600 hover:bg-amber-100'}`}>
+                    <Edit3 className="w-6 h-6" />
+                    <span className="text-xs">Manually Add</span>
+                </button>
             </div>
             <p className="text-xs text-center text-slate-400 -mt-1">Snap your pantry, fridge, or grocery receipts</p>
             <input type="file" ref={cameraInputRef} className="hidden" accept="image/*" capture="environment" onChange={handleImageSelect} />
             <input type="file" ref={fileInputRef} className="hidden" accept="image/*" multiple onChange={handleImageSelect} />
 
-            {/* Enhanced Quick Add Form */}
-            <div className="bg-white p-4 rounded-2xl border border-slate-100 space-y-3">
-                <div className="flex gap-2">
+            {/* Manual Add Form - Collapsible */}
+            {showManualForm && (
+                <div className="bg-white p-4 rounded-2xl border border-amber-200 space-y-3 animate-fade-in">
                     <input value={newItem} onChange={(e) => setNewItem(e.target.value)}
                         placeholder="Item name..."
-                        className="flex-1 input-field"
-                        onFocus={() => setShowQuickAddExpanded(true)} />
-                    <button type="button" onClick={addItem} className="bg-emerald-500 text-white w-14 rounded-xl flex items-center justify-center active:bg-emerald-600">
-                        <Plus className="w-6 h-6" />
+                        className="w-full input-field" />
+                    <div className="flex gap-2 items-center">
+                        <input type="number" min="0.01" step="0.01" value={newQty} onChange={e => setNewQty(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                            className="w-16 input-field text-center" />
+                        <select value={newLocation} onChange={e => handleLocationChange(e.target.value)} className="select-field flex-1">
+                            {allLocations.map(l => <option key={l} value={l}>{l}</option>)}
+                            <option value="__new__">+ New Location</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-slate-500 mb-1 block">Unit</label>
+                        <UnitPicker value={newUnit} onChange={setNewUnit} compact />
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <label className="text-xs text-slate-500">Expires:</label>
+                        <input
+                            type="date"
+                            value={newExpDate}
+                            onChange={e => setNewExpDate(e.target.value)}
+                            className="flex-1 input-field text-sm"
+                        />
+                    </div>
+                    {/* Staple Item Toggle */}
+                    <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl">
+                        <div>
+                            <span className="text-sm font-bold text-slate-700">Staple Item</span>
+                            <p className="text-xs text-slate-400">Alert when running low</p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setIsStapleItem(!isStapleItem)}
+                            className={`w-12 h-6 rounded-full transition-colors ${isStapleItem ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                        >
+                            <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform ${isStapleItem ? 'translate-x-6' : 'translate-x-0.5'}`} />
+                        </button>
+                    </div>
+                    {isStapleItem && (
+                        <div className="flex items-center gap-2 animate-fade-in">
+                            <label className="text-xs text-slate-500">Alert when below:</label>
+                            <input
+                                type="number"
+                                min="1"
+                                value={alertBelow}
+                                onChange={e => setAlertBelow(parseInt(e.target.value) || 1)}
+                                className="w-16 input-field text-center text-sm"
+                            />
+                            <span className="text-xs text-slate-400">{newUnit}</span>
+                        </div>
+                    )}
+                    <button type="button" onClick={addItem} className="w-full btn-primary bg-amber-500 shadow-amber-200">
+                        <Plus className="w-5 h-5 inline mr-1" /> Add Item
                     </button>
                 </div>
-                {showQuickAddExpanded && (
-                    <div className="space-y-3 animate-fade-in">
-                        <div className="flex gap-2 items-center">
-                            <input type="number" min="0.01" step="0.01" value={newQty} onChange={e => setNewQty(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                                className="w-16 input-field text-center" />
-                            <select value={newLocation} onChange={e => handleLocationChange(e.target.value)} className="select-field flex-1">
-                                {allLocations.map(l => <option key={l} value={l}>{l}</option>)}
-                                <option value="__new__">+ New Location</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label className="text-xs font-bold text-slate-500 mb-1 block">Unit</label>
-                            <UnitPicker value={newUnit} onChange={setNewUnit} compact />
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <label className="text-xs text-slate-500">Expires:</label>
-                            <input
-                                type="date"
-                                value={newExpDate}
-                                onChange={e => setNewExpDate(e.target.value)}
-                                className="flex-1 input-field text-sm"
-                            />
-                        </div>
-                    </div>
-                )}
-            </div>
+            )}
 
             {/* Inventory List - Grouped by Location */}
             <div className="space-y-4">
@@ -2265,16 +2602,19 @@ If you find no additional items, return: { "items": [] }`;
                             </button>
                         )}
                     </div>
-                    <select
-                        value={sortBy}
-                        onChange={e => setSortBy(e.target.value)}
-                        className="select-field text-xs py-2 px-2 w-auto"
-                    >
-                        <option value="location">By Location</option>
-                        <option value="name">By Name</option>
-                        <option value="expiration">By Expiration</option>
-                        <option value="allocated">Reserved First</option>
-                    </select>
+                    <div className="flex items-center gap-1">
+                        <span className="text-xs text-slate-400 whitespace-nowrap">Sort by:</span>
+                        <select
+                            value={sortBy}
+                            onChange={e => setSortBy(e.target.value)}
+                            className="select-field text-xs py-2 px-2 w-auto"
+                        >
+                            <option value="location">Location</option>
+                            <option value="name">Name</option>
+                            <option value="expiration">Expiration</option>
+                            <option value="allocated">Reserved First</option>
+                        </select>
+                    </div>
                     {sortBy === 'location' && groupedInventory && (
                         <button
                             onClick={() => {
@@ -2325,7 +2665,7 @@ If you find no additional items, return: { "items": [] }`;
                         {!collapsedLocations[location] && (
                             <div className="space-y-2 pl-2">
                                 {groupedInventory[location].map((item) => (
-                                    <div key={item.id} className="inventory-item">
+                                    <div key={item.id} id={`inventory-item-${item.id}`} className="inventory-item">
                                         {/* Main Row - Always visible */}
                                         <div
                                             className="flex items-center gap-2 cursor-pointer"
@@ -2491,7 +2831,7 @@ If you find no additional items, return: { "items": [] }`;
                             Sorted by {sortBy === 'name' ? 'Name (A-Z)' : sortBy === 'expiration' ? 'Expiration Date' : 'Reserved Status'}
                         </p>
                         {sortedInventory.map((item) => (
-                            <div key={item.id} className="inventory-item">
+                            <div key={item.id} id={`inventory-item-${item.id}`} className="inventory-item">
                                 {/* Main Row */}
                                 <div
                                     className="flex items-center gap-2 cursor-pointer"
@@ -2522,7 +2862,7 @@ If you find no additional items, return: { "items": [] }`;
                                                 </span>
                                             )}
                                             {isItemAllocated(item.name) && (
-                                                <span className="text-xs text-indigo-500 font-bold">Reserved</span>
+                                                <span className="text-xs text-indigo-500 font-bold whitespace-nowrap">Reserved</span>
                                             )}
                                         </div>
                                     </div>
@@ -2616,6 +2956,30 @@ If you find no additional items, return: { "items": [] }`;
                                 </div>
                             )}
 
+                            {/* Items List Header with Action Buttons */}
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-sm font-bold text-slate-600">Items to Review</span>
+                                <div className="flex gap-2">
+                                    <button onClick={addManualStagingItem} className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-lg hover:bg-slate-200 flex items-center gap-1">
+                                        <Plus className="w-3 h-3" /> Add
+                                    </button>
+                                    {stagingData.imageUrl && (
+                                        <button
+                                            onClick={rescanWithContext}
+                                            disabled={isAnalyzing}
+                                            className="text-xs font-bold text-indigo-500 bg-indigo-50 px-2 py-1 rounded-lg hover:bg-indigo-100 flex items-center gap-1 disabled:opacity-50"
+                                        >
+                                            {isAnalyzing ? (
+                                                <Loader2 className="w-3 h-3 animate-spin" />
+                                            ) : (
+                                                <Sparkles className="w-3 h-3" />
+                                            )}
+                                            {isAnalyzing ? 'Scanning...' : 'Find More'}
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+
                             {/* Items List */}
                             <div ref={stagingListRef} className="space-y-3 max-h-[40vh] overflow-y-auto">
                                 {stagingData.items.map((item) => (
@@ -2673,20 +3037,52 @@ If you find no additional items, return: { "items": [] }`;
                                                     <option value="__new__">+ New</option>
                                                 </select>
                                             )}
+                                        </div>
+
+                                        {/* Row 3: Expiration Date */}
+                                        <div className="flex items-center gap-2 ml-7 mt-2">
+                                            <label className="text-xs text-slate-500 whitespace-nowrap">Expires:</label>
                                             <input
                                                 type="date"
                                                 value={item.expiresAt || ''}
                                                 onChange={(e) => updateStagingItem(item.id, { expiresAt: e.target.value || null })}
                                                 className="flex-1 min-w-0 input-field text-xs py-1.5"
                                                 disabled={item.excluded}
-                                                placeholder="Exp date"
-                                                title="Expiration date"
+                                                placeholder="Select date"
                                             />
+                                        </div>
+
+                                        {/* Row 4: Staple Item Toggle */}
+                                        <div className="flex items-center justify-between ml-7 mt-2 bg-slate-50 p-2 rounded-lg">
+                                            <span className="text-xs text-slate-600">Staple Item</span>
+                                            <div className="flex items-center gap-2">
+                                                {item.isStaple && (
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="text-xs text-slate-400">Alert below:</span>
+                                                        <input
+                                                            type="number"
+                                                            min="1"
+                                                            value={item.alertBelow || 1}
+                                                            onChange={(e) => updateStagingItem(item.id, { alertBelow: parseInt(e.target.value) || 1 })}
+                                                            className="w-12 text-center text-xs input-field py-0.5"
+                                                            disabled={item.excluded}
+                                                        />
+                                                    </div>
+                                                )}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => updateStagingItem(item.id, { isStaple: !item.isStaple, alertBelow: item.alertBelow || 1 })}
+                                                    disabled={item.excluded}
+                                                    className={`w-10 h-5 rounded-full transition-colors ${item.isStaple ? 'bg-emerald-500' : 'bg-slate-300'} ${item.excluded ? 'opacity-50' : ''}`}
+                                                >
+                                                    <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform ${item.isStaple ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                                                </button>
+                                            </div>
                                         </div>
 
                                         {/* Duplicate Warning */}
                                         {item.isDuplicate && (
-                                            <div className="mt-2 text-xs text-amber-600 flex items-center gap-1">
+                                            <div className="mt-2 text-xs text-amber-600 flex items-center gap-1 ml-7">
                                                 <AlertTriangle className="w-3 h-3" />
                                                 Already in inventory{item.duplicateMatch ? `: ${item.duplicateMatch}` : ''}
                                             </div>
@@ -2694,33 +3090,13 @@ If you find no additional items, return: { "items": [] }`;
 
                                         {/* Confidence Indicator */}
                                         {item.confidence === 'low' && (
-                                            <div className="mt-2 text-xs text-red-600">
+                                            <div className="mt-2 text-xs text-red-600 ml-7">
                                                 Low confidence - please verify
                                             </div>
                                         )}
                                     </div>
                                 ))}
                             </div>
-
-                            {/* Manual Add */}
-                            <button onClick={addManualStagingItem} className="w-full btn-secondary flex items-center justify-center gap-2">
-                                <Plus className="w-5 h-5" /> Add Item Manually
-                            </button>
-
-                            {/* Rescan for more items */}
-                            {stagingData.imageUrl && (
-                                <button
-                                    onClick={rescanWithContext}
-                                    disabled={isAnalyzing}
-                                    className="w-full btn-secondary text-indigo-600 border-indigo-200 flex items-center justify-center gap-2"
-                                >
-                                    {isAnalyzing ? (
-                                        <><Loader2 className="w-5 h-5 animate-spin" /> Searching...</>
-                                    ) : (
-                                        <><Sparkles className="w-5 h-5" /> Search for more items in image?</>
-                                    )}
-                                </button>
-                            )}
 
                             {/* Confirm */}
                             <button onClick={confirmStaging} className="w-full btn-primary">
@@ -2825,18 +3201,11 @@ const FamilyView = ({ familyMembers, setFamilyMembers }) => {
     const [gender, setGender] = useState('female');
     const [diet, setDiet] = useState('None');
     const [preferences, setPreferences] = useState('');
-    const [servings, setServings] = useState(1);
+    const [servings, setServings] = useState('');
     const [editingMember, setEditingMember] = useState(null);
 
-    // Calculate suggested servings based on age/gender
-    const getSuggestedServings = (age, genderVal) => {
-        if (!age) return 1;
-        if (age < 5) return 0.5;
-        if (age < 12) return 0.75;
-        if (age < 18) return genderVal === 'male' ? 1.25 : 1;
-        if (age < 65) return genderVal === 'male' ? 1.25 : 1;
-        return 0.9;
-    };
+    // Use global getServingMultiplier for suggested servings
+    const getSuggestedServings = (age, genderVal) => getServingMultiplier(age, genderVal);
 
     const addMember = (e) => {
         e.preventDefault();
@@ -2854,7 +3223,7 @@ const FamilyView = ({ familyMembers, setFamilyMembers }) => {
             servings: servings || suggestedServings,
             addedAt: new Date().toISOString()
         }]);
-        setName(''); setBirthdate(''); setPreferences(''); setServings(1);
+        setName(''); setBirthdate(''); setPreferences(''); setServings(''); setGender('female');
     };
 
     const updateMember = (id, updates) => {
@@ -2876,7 +3245,29 @@ const FamilyView = ({ familyMembers, setFamilyMembers }) => {
         setEditingMember(null);
     };
 
-    // Recalculate ages on render
+    // Recalculate ages on render and auto-update servings when age changes
+    useEffect(() => {
+        // Check if any member's current age differs from stored age (birthday passed)
+        const updates = familyMembers.filter(m => {
+            if (!m.birthdate) return false;
+            const currentAge = calculateAge(m.birthdate);
+            return currentAge !== m.age;
+        });
+
+        if (updates.length > 0) {
+            setFamilyMembers(familyMembers.map(m => {
+                if (!m.birthdate) return m;
+                const currentAge = calculateAge(m.birthdate);
+                if (currentAge !== m.age) {
+                    // Update age and recalculate suggested servings
+                    const newServings = getSuggestedServings(currentAge, m.gender);
+                    return { ...m, age: currentAge, servings: newServings };
+                }
+                return m;
+            }));
+        }
+    }, []); // Run once on mount to check for birthday updates
+
     const membersWithCurrentAge = familyMembers.map(m => ({
         ...m,
         displayAge: m.birthdate ? calculateAge(m.birthdate) : m.age
@@ -2912,20 +3303,27 @@ const FamilyView = ({ familyMembers, setFamilyMembers }) => {
                         className="input-field flex-1 min-w-0"
                         title="Birthdate"
                     />
-                    <select value={gender} onChange={e => setGender(e.target.value)} className="select-field w-20">
+                    <select value={gender} onChange={e => {
+                        setGender(e.target.value);
+                        if (birthdate) {
+                            const age = calculateAge(birthdate);
+                            setServings(getSuggestedServings(age, e.target.value));
+                        }
+                    }} className="select-field w-20">
                         <option value="female">F</option>
                         <option value="male">M</option>
                     </select>
                     <div className="flex items-center gap-1">
                         <input
                             type="number"
-                            step="0.25"
-                            min="0.25"
+                            step="0.1"
+                            min="0.1"
                             max="3"
                             value={servings}
                             onChange={e => setServings(e.target.value === '' ? '' : parseFloat(e.target.value))}
                             className="input-field w-16 text-center text-sm"
                             title="Servings"
+                            placeholder="srv"
                         />
                         <span className="text-xs text-slate-400">srv</span>
                     </div>
@@ -2987,12 +3385,19 @@ const FamilyView = ({ familyMembers, setFamilyMembers }) => {
                         <input
                             type="date"
                             value={editingMember.birthdate || ''}
-                            onChange={e => setEditingMember({ ...editingMember, birthdate: e.target.value, age: calculateAge(e.target.value) })}
+                            onChange={e => {
+                                const newAge = calculateAge(e.target.value);
+                                const newServings = getSuggestedServings(newAge, editingMember.gender);
+                                setEditingMember({ ...editingMember, birthdate: e.target.value, age: newAge, servings: newServings });
+                            }}
                             className="input-field"
                         />
                         <select
                             value={editingMember.gender}
-                            onChange={e => setEditingMember({ ...editingMember, gender: e.target.value })}
+                            onChange={e => {
+                                const newServings = getSuggestedServings(editingMember.age || calculateAge(editingMember.birthdate), e.target.value);
+                                setEditingMember({ ...editingMember, gender: e.target.value, servings: newServings });
+                            }}
                             className="select-field w-full"
                         >
                             <option value="female">Female</option>
@@ -3025,12 +3430,18 @@ const FamilyView = ({ familyMembers, setFamilyMembers }) => {
                                 step="0.25"
                                 min="0.25"
                                 max="3"
-                                value={editingMember.servings || 1}
+                                value={editingMember.servings === '' ? '' : editingMember.servings}
                                 onChange={e => setEditingMember({ ...editingMember, servings: e.target.value === '' ? '' : parseFloat(e.target.value) })}
                                 className="input-field w-24"
                             />
                         </div>
-                        <button onClick={saveMemberEdit} className="w-full btn-primary bg-purple-600">Save Changes</button>
+                        <button
+                            onClick={saveMemberEdit}
+                            disabled={!editingMember.servings && editingMember.servings !== 0}
+                            className={`w-full btn-primary bg-purple-600 ${(!editingMember.servings && editingMember.servings !== 0) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                            Save Changes
+                        </button>
                     </div>
                 )}
             </Modal>
@@ -3042,11 +3453,10 @@ const FamilyView = ({ familyMembers, setFamilyMembers }) => {
 // RECIPE ENGINE (with macros and smart deduction)
 // ============================================================================
 
-const RecipeEngine = ({ apiKey, model, inventory, setInventory, family, setSelectedRecipe, history, setHistory, recipes, setRecipes, favorites, setFavorites, shoppingList, setShoppingList, mealPlan, setMealPlan, leftovers, setLeftovers, onMoveToHistory, customRecipes, setCustomRecipes, allocatedIngredients, setAllocatedIngredients, onOpenWizard, quickMeals, setQuickMeals, setToastData }) => {
+const RecipeEngine = ({ apiKey, model, inventory, setInventory, family, setSelectedRecipe, history, setHistory, recipes, setRecipes, favorites, setFavorites, shoppingList, setShoppingList, mealPlan, setMealPlan, leftovers, setLeftovers, onMoveToHistory, customRecipes, setCustomRecipes, allocatedIngredients, setAllocatedIngredients, onOpenWizard, quickMeals, setQuickMeals, setToastData, activeTab, setActiveTab }) => {
     const [loading, setLoading] = useState(false);
 
     // Persisted form state (survives refresh)
-    const [activeTab, setActiveTab] = useLocalStorage('mpm_recipe_active_tab', 'generate');
     const [urlInput, setUrlInput] = useLocalStorage('mpm_recipe_url_input', '');
     const [showPrepOptions, setShowPrepOptions] = useLocalStorage('mpm_recipe_show_prep', false);
     const [extraGuests, setExtraGuests] = useLocalStorage('mpm_recipe_extra_guests', 0);
@@ -3284,6 +3694,30 @@ Return JSON array only, example:
 
     // Log quick meal (one-tap)
     const logQuickMeal = (quickMeal) => {
+        // Check if this Quick Meal is linked to a recipe
+        if (quickMeal.linkedRecipe || quickMeal.linkedRecipeId) {
+            // Get the linked recipe
+            let linkedRecipe = quickMeal.linkedRecipe;
+            if (!linkedRecipe && quickMeal.linkedRecipeId) {
+                linkedRecipe = [...customRecipes, ...favorites].find(r => r.id === quickMeal.linkedRecipeId);
+            }
+
+            if (linkedRecipe) {
+                // Check if this recipe has been cooked before (exists in history)
+                const hasBeenCooked = history.some(h =>
+                    h.name?.toLowerCase() === linkedRecipe.name?.toLowerCase() ||
+                    h.id === linkedRecipe.id
+                );
+
+                if (!hasBeenCooked) {
+                    // Recipe hasn't been cooked - show full deduction screen
+                    handleCook(linkedRecipe);
+                    return;
+                }
+            }
+        }
+
+        // Standard Quick Meal logging (no linked recipe or already cooked)
         // Find matching inventory item
         const invItem = inventory.find(i =>
             i.name.toLowerCase() === quickMeal.inventoryItemName?.toLowerCase() ||
@@ -3416,21 +3850,26 @@ STRICT JSON Output:
         if (res.error) {
             alert(`AI Error: ${res.message}`);
         } else if (res?.recipes || Array.isArray(res)) {
-            // Generate image URLs upfront (Pollinations URLs are synchronous)
-            const newRecipes = (res.recipes || res).map(r => {
-                const imageUrl = generateRecipeImage(apiKey, r.name);
-                return {
-                    ...r,
-                    id: generateId(),
-                    imageUrl,
-                    imageLoading: false,
-                    // Store meal prep metadata for calendar/leftovers
-                    leftoverDays,
-                    totalServings,
-                    baseServings
-                };
-            });
+            // Create recipes with loading state for images
+            const newRecipes = (res.recipes || res).map(r => ({
+                ...r,
+                id: generateId(),
+                imageUrl: null,
+                imageLoading: true,
+                leftoverDays,
+                totalServings,
+                baseServings
+            }));
             setRecipes(newRecipes);
+
+            // Generate images asynchronously
+            newRecipes.forEach(async (recipe) => {
+                const prompt = `Professional food photography of ${recipe.name}, appetizing, well-lit, on a clean white plate, restaurant quality, high resolution`;
+                const imageUrl = await generateImageWithGemini(apiKey, prompt);
+                setRecipes(prev => prev.map(r =>
+                    r.id === recipe.id ? { ...r, imageUrl, imageLoading: false } : r
+                ));
+            });
         } else {
             alert("No recipes generated. Try again.");
         }
@@ -3442,29 +3881,27 @@ STRICT JSON Output:
             {loading && <LoadingOverlay message="Creating recipes..." />}
             <div className="bg-white px-4 pt-4 pb-2 sticky top-0 z-20 border-b border-slate-50">
                 <div className="flex bg-slate-100 rounded-xl p-1 w-full">
-                    <button onClick={() => setActiveTab('generate')} className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${activeTab === 'generate' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-400'}`}>Ideas</button>
-                    <button onClick={() => setActiveTab('custom')} className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${activeTab === 'custom' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-400'}`}>
+                    <button id="recipe-tab-ideas" onClick={() => setActiveTab('generate')} className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${activeTab === 'generate' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-400'}`}>Ideas</button>
+                    <button id="recipe-tab-custom" onClick={() => setActiveTab('custom')} className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${activeTab === 'custom' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-400'}`}>
                         <span className="flex items-center justify-center gap-1"><Plus className="w-3 h-3" /> My</span>
                     </button>
-                    <button onClick={() => setActiveTab('favorites')} className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${activeTab === 'favorites' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-400'}`}>
+                    <button id="recipe-tab-favorites" onClick={() => setActiveTab('favorites')} className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${activeTab === 'favorites' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-400'}`}>
                         <span className="flex items-center justify-center gap-1"><Heart className="w-3 h-3" /> Saved</span>
                     </button>
-                    <button onClick={() => setActiveTab('history')} className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${activeTab === 'history' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-400'}`}>Cooked</button>
+                    <button id="recipe-tab-history" onClick={() => setActiveTab('history')} className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${activeTab === 'history' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-400'}`}>Cooked</button>
                 </div>
             </div>
-
-            {/* Plan Your Week Button */}
-            {onOpenWizard && (
-                <div className="px-4 pt-2">
-                    <button onClick={onOpenWizard} className="w-full btn-primary bg-gradient-to-r from-indigo-500 to-purple-500 text-white py-3">
-                        <Sparkles className="w-4 h-4 inline mr-2" /> Plan Your Week
-                    </button>
-                </div>
-            )}
 
             <div className="p-4 w-full space-y-6">
                 {activeTab === 'generate' ? (
                     <>
+                        {/* Plan Your Week Button - Only in Ideas tab */}
+                        {onOpenWizard && (
+                            <button onClick={onOpenWizard} className="w-full btn-primary bg-gradient-to-r from-indigo-500 to-purple-500 text-white py-3">
+                                <Sparkles className="w-4 h-4 inline mr-2" /> Plan Your Week
+                            </button>
+                        )}
+
                         <div className="space-y-4 w-full">
                             <h2 className="text-xl font-bold text-slate-900 px-1">Configure</h2>
                             <textarea value={urlInput} onChange={e => setUrlInput(e.target.value)} placeholder="What are you craving?" className="w-full input-field min-h-[100px]" />
@@ -3479,64 +3916,28 @@ STRICT JSON Output:
                                 </div>
                             )}
 
-                            {/* Expandable Meal Prep Options */}
-                            <button
-                                onClick={() => setShowPrepOptions(!showPrepOptions)}
-                                className="w-full flex items-center justify-between bg-slate-50 text-slate-600 px-4 py-3 rounded-xl text-sm font-bold hover:bg-slate-100 transition-colors"
-                            >
-                                <span className="flex items-center gap-2">
-                                    <Clock className="w-4 h-4" /> Meal Prep Options
-                                </span>
-                                <span className={`transform transition-transform ${showPrepOptions ? 'rotate-180' : ''}`}>▼</span>
-                            </button>
-
-                            {showPrepOptions && (
-                                <div className="bg-slate-50 p-4 rounded-xl space-y-4 animate-fade-in">
-                                    <div className="flex gap-4">
-                                        <div className="flex-1">
-                                            <label className="block text-xs font-bold text-slate-500 mb-1">Extra Guests</label>
-                                            <div className="flex items-center gap-2">
-                                                <button
-                                                    onClick={() => setExtraGuests(Math.max(0, extraGuests - 1))}
-                                                    className="w-8 h-8 flex items-center justify-center bg-white border rounded-lg text-slate-600 hover:bg-slate-100"
-                                                >-</button>
-                                                <input
-                                                    type="number"
-                                                    min="0"
-                                                    value={extraGuests}
-                                                    onChange={e => setExtraGuests(e.target.value === '' ? 0 : Math.max(0, parseInt(e.target.value)))}
-                                                    className="w-16 text-center input-field py-1"
-                                                />
-                                                <button
-                                                    onClick={() => setExtraGuests(extraGuests + 1)}
-                                                    className="w-8 h-8 flex items-center justify-center bg-white border rounded-lg text-slate-600 hover:bg-slate-100"
-                                                >+</button>
-                                            </div>
-                                        </div>
-                                        <div className="flex-1">
-                                            <label className="block text-xs font-bold text-slate-500 mb-1">Leftover Days</label>
-                                            <select
-                                                value={leftoverDays}
-                                                onChange={e => setLeftoverDays(parseInt(e.target.value))}
-                                                className="w-full select-field"
-                                            >
-                                                <option value={0}>No leftovers</option>
-                                                <option value={1}>+1 day leftovers</option>
-                                                <option value={2}>+2 days leftovers</option>
-                                                <option value={3}>+3 days leftovers</option>
-                                                <option value={4}>+4 days leftovers</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                    <div className="bg-white rounded-lg p-3 text-center">
-                                        <div className="text-xs text-slate-500">Total Servings Needed</div>
-                                        <div className="text-2xl font-bold text-indigo-600">{totalServings}</div>
-                                        <div className="text-xs text-slate-400">({baseServings} people + {extraGuests} guests) × {totalDays} day{totalDays > 1 ? 's' : ''}</div>
-                                    </div>
+                            {/* Compact Extra Guests + Total Servings */}
+                            <div className="flex items-center gap-3 bg-slate-50 px-3 py-2 rounded-xl">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs font-bold text-slate-500">Guests:</span>
+                                    <button
+                                        onClick={() => setExtraGuests(Math.max(0, extraGuests - 1))}
+                                        className="w-6 h-6 flex items-center justify-center bg-white border rounded text-slate-600 hover:bg-slate-100 text-sm"
+                                    >-</button>
+                                    <span className="w-5 text-center font-bold text-slate-700">{extraGuests}</span>
+                                    <button
+                                        onClick={() => setExtraGuests(extraGuests + 1)}
+                                        className="w-6 h-6 flex items-center justify-center bg-white border rounded text-slate-600 hover:bg-slate-100 text-sm"
+                                    >+</button>
                                 </div>
-                            )}
+                                <div className="h-4 w-px bg-slate-200" />
+                                <span className="text-xs text-slate-500">
+                                    <span className="font-bold text-indigo-600">{totalServings}</span> servings
+                                    <span className="text-slate-400 ml-1">({baseServings}+{extraGuests})</span>
+                                </span>
+                            </div>
 
-                            {/* Meal Type Selector */}
+
                             <div>
                                 <label className="block text-xs font-bold text-slate-500 mb-2">Meal Type</label>
                                 <div className="flex gap-2 flex-wrap">
@@ -3583,28 +3984,23 @@ STRICT JSON Output:
                     <div className="space-y-4 w-full">
                         <div className="flex justify-between items-center">
                             <h2 className="text-xl font-bold text-slate-900 px-1">My Recipes</h2>
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={() => setShowCustomRecipeForm(!showCustomRecipeForm)}
-                                    className="btn-secondary text-sm py-2 flex items-center gap-1"
-                                >
-                                    <Sparkles className="w-4 h-4" /> Describe or Import
-                                </button>
-                                <button
-                                    onClick={createBlankRecipeForEditing}
-                                    className="btn-primary text-sm py-2"
-                                >
-                                    <Plus className="w-4 h-4 inline mr-1" /> Add Recipe
-                                </button>
-                            </div>
+                            <button
+                                onClick={() => setShowCustomRecipeForm(!showCustomRecipeForm)}
+                                className="btn-primary text-sm py-2 flex items-center gap-1"
+                            >
+                                <Plus className="w-4 h-4" /> Add Recipe
+                            </button>
                         </div>
 
                         {/* Quick Meals Section */}
-                        <div className="bg-gradient-to-r from-amber-50/50 to-orange-50/50 rounded-2xl p-3 border border-amber-100">
-                            <div className="flex items-center justify-between mb-2">
-                                <h3 className="text-sm font-bold text-amber-800 flex items-center gap-1.5">
-                                    <Zap className="w-4 h-4" /> Quick Meals
-                                </h3>
+                        <div id="quick-meals-section" className="bg-gradient-to-r from-amber-50/50 to-orange-50/50 rounded-2xl p-3 border border-amber-100">
+                            <div className="flex items-center justify-between mb-1">
+                                <div>
+                                    <h3 className="text-sm font-bold text-amber-800 flex items-center gap-1.5">
+                                        <Zap className="w-4 h-4" /> Quick Meals
+                                    </h3>
+                                    <p className="text-xs text-amber-600/60">Long-press to view recipe</p>
+                                </div>
                                 <div className="flex gap-1">
                                     {quickMeals?.length > 0 && (
                                         <button
@@ -3620,72 +4016,58 @@ STRICT JSON Output:
                                         className="text-xs px-2 py-1 rounded-lg bg-amber-100 text-amber-700 hover:bg-amber-200 flex items-center gap-1"
                                     >
                                         {quickMealsLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                                        Discover
+                                        Auto-Discover
                                     </button>
                                 </div>
                             </div>
 
-                            {/* Quick Meal Pills - Balanced mixed layout */}
+                            {/* Quick Meal Pills - Aesthetic balanced packing */}
                             {quickMeals?.length > 0 ? (
-                                <div className="flex flex-wrap gap-2 max-h-[150px] overflow-y-auto scrollbar-hide">
+                                <div className="flex flex-wrap gap-2 max-h-[150px] overflow-y-auto scrollbar-hide mt-2">
                                     {(() => {
-                                        // Balanced row-filling: pair items from opposite ends for visual variety
-                                        const containerWidth = 480; // Target row width in pixels
-                                        const charWidth = 6.5; // Approx pixels per character
-                                        const pillPadding = 38; // px for emoji + padding
-                                        const gap = 8; // gap between pills
+                                        // Aesthetic balanced packing: mix large and small pills on each row
+                                        const containerWidth = 320; // Reasonable mobile width target
+                                        const charWidth = 6.5;
+                                        const pillPadding = 38;
+                                        const gap = 8;
 
                                         const withWidth = quickMeals.map(qm => ({
                                             ...qm,
                                             estimatedWidth: (qm.name?.length || 10) * charWidth + pillPadding
                                         }));
 
-                                        // Sort by width: largest to smallest
-                                        const sorted = [...withWidth].sort((a, b) => b.estimatedWidth - a.estimatedWidth);
+                                        // Shuffle for visual variety then pack intelligently
+                                        const shuffled = [...withWidth].sort(() => Math.random() - 0.5);
                                         const result = [];
+                                        const used = new Set();
 
-                                        // Two-pointer approach: pick from front (large) and back (small) alternately
-                                        let left = 0;
-                                        let right = sorted.length - 1;
-                                        let pickFromLeft = true;
-
-                                        while (left <= right) {
+                                        // Pack rows: for each row, try to fill with a mix
+                                        while (used.size < shuffled.length) {
                                             const row = [];
                                             let rowWidth = 0;
 
-                                            // Fill row by alternating between large and small items
-                                            while (left <= right) {
-                                                // Decide which end to pick from
-                                                let candidate;
-                                                let candidateIdx;
+                                            // First pass: add items that fit
+                                            for (let i = 0; i < shuffled.length; i++) {
+                                                if (used.has(i)) continue;
+                                                const item = shuffled[i];
+                                                const neededWidth = item.estimatedWidth + (row.length > 0 ? gap : 0);
 
-                                                if (pickFromLeft && sorted[left].estimatedWidth <= containerWidth - rowWidth - (row.length > 0 ? gap : 0)) {
-                                                    candidate = sorted[left];
-                                                    candidateIdx = 'left';
-                                                } else if (!pickFromLeft && sorted[right].estimatedWidth <= containerWidth - rowWidth - (row.length > 0 ? gap : 0)) {
-                                                    candidate = sorted[right];
-                                                    candidateIdx = 'right';
-                                                } else if (sorted[right].estimatedWidth <= containerWidth - rowWidth - (row.length > 0 ? gap : 0)) {
-                                                    // If preferred side doesn't fit, try the other
-                                                    candidate = sorted[right];
-                                                    candidateIdx = 'right';
-                                                } else if (sorted[left].estimatedWidth <= containerWidth - rowWidth - (row.length > 0 ? gap : 0)) {
-                                                    candidate = sorted[left];
-                                                    candidateIdx = 'left';
-                                                } else {
-                                                    break; // Neither fits, start new row
+                                                if (rowWidth + neededWidth <= containerWidth) {
+                                                    row.push(item);
+                                                    rowWidth += neededWidth;
+                                                    used.add(i);
                                                 }
+                                            }
 
-                                                row.push(candidate);
-                                                rowWidth += (row.length > 1 ? gap : 0) + candidate.estimatedWidth;
-
-                                                if (candidateIdx === 'left') {
-                                                    left++;
-                                                } else {
-                                                    right--;
+                                            // If no items fit and we still have items, force add smallest unused
+                                            if (row.length === 0 && used.size < shuffled.length) {
+                                                for (let i = 0; i < shuffled.length; i++) {
+                                                    if (!used.has(i)) {
+                                                        row.push(shuffled[i]);
+                                                        used.add(i);
+                                                        break;
+                                                    }
                                                 }
-
-                                                pickFromLeft = !pickFromLeft; // Alternate
                                             }
 
                                             result.push(...row);
@@ -3699,16 +4081,27 @@ STRICT JSON Output:
                                                 editMode={quickMealsEditMode}
                                                 onDelete={deleteQuickMeal}
                                                 onEdit={setEditingQuickMeal}
+                                                onLongPress={(qm) => {
+                                                    // If quick meal has linked recipe, open it
+                                                    if (qm.linkedRecipe) {
+                                                        setSelectedRecipe(qm.linkedRecipe);
+                                                    } else if (qm.linkedRecipeId) {
+                                                        // Find recipe in customRecipes or favorites
+                                                        const recipe = [...customRecipes, ...favorites].find(r => r.id === qm.linkedRecipeId);
+                                                        if (recipe) setSelectedRecipe(recipe);
+                                                    }
+                                                }}
                                             />
                                         ));
                                     })()}
                                 </div>
                             ) : (
-                                <p className="text-xs text-amber-600/70 italic">
-                                    Tap "Discover" to scan your inventory for quick meals like soups, yogurt, or pre-made items.
+                                <p className="text-xs text-amber-600/70 italic mt-2">
+                                    Tap "Auto-Discover" to scan your inventory, or add recipes as Quick Meals from any recipe card.
                                 </p>
                             )}
                         </div>
+
 
                         {showCustomRecipeForm && (
                             <div className="bg-slate-50 p-4 rounded-2xl space-y-3">
@@ -3877,6 +4270,20 @@ STRICT JSON Output:
                                         )}
                                     </button>
                                 </div>
+
+                                {/* Or Write Your Own */}
+                                <div className="flex items-center gap-3 py-2">
+                                    <div className="flex-1 h-px bg-slate-200" />
+                                    <span className="text-xs text-slate-400 font-medium">or</span>
+                                    <div className="flex-1 h-px bg-slate-200" />
+                                </div>
+                                <button
+                                    onClick={createBlankRecipeForEditing}
+                                    className="w-full btn-secondary text-sm flex items-center justify-center gap-2"
+                                >
+                                    <Edit3 className="w-4 h-4" /> Write Your Own Recipe
+                                </button>
+
                                 <button
                                     onClick={() => setShowCustomRecipeForm(false)}
                                     className="w-full text-sm text-slate-400 hover:text-slate-600"
@@ -4575,10 +4982,11 @@ Return JSON: {"storage": "...", "reheat": "...", "expiresInDays": 4}`;
 // CALENDAR VIEW (Agenda Style)
 // ============================================================================
 
-const CalendarView = ({ apiKey, model, mealPlan, setMealPlan, inventory, setInventory, family, recipes, downloadICSFn, onCook, onFavorite, onAddToLeftovers, leftovers, setLeftovers, onMoveToHistory, allocatedIngredients, setAllocatedIngredients, onOpenWizard }) => {
-    const [activeTab, setActiveTab] = useState('upcoming');
+const CalendarView = ({ apiKey, model, mealPlan, setMealPlan, inventory, setInventory, family, recipes, downloadICSFn, onCook, onFavorite, onAddToLeftovers, leftovers, setLeftovers, onMoveToHistory, allocatedIngredients, setAllocatedIngredients, onOpenWizard, activeTab, setActiveTab, selectedLeftoverId, setSelectedLeftoverId }) => {
     const [selectedMeal, setSelectedMeal] = useState(null);
-    const [selectedLeftover, setSelectedLeftover] = useState(null);
+    // Derive selectedLeftover from ID for compatibility
+    const selectedLeftover = selectedLeftoverId ? leftovers.find(l => l.id === selectedLeftoverId) : null;
+    const setSelectedLeftover = (leftover) => setSelectedLeftoverId(leftover?.id || null);
     const [showAddCustomMeal, setShowAddCustomMeal] = useState(null); // { date, mealType }
     const [customMealName, setCustomMealName] = useState('');
     const [customMealIngredients, setCustomMealIngredients] = useState('');
@@ -4976,12 +5384,14 @@ Generate cooking/storage details. Return JSON:
                         {/* Tabs */}
                         <div className="flex bg-slate-100 rounded-xl p-1">
                             <button
+                                id="calendar-tab-upcoming"
                                 onClick={() => setActiveTab('upcoming')}
                                 className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${activeTab === 'upcoming' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-400'}`}
                             >
                                 Upcoming
                             </button>
                             <button
+                                id="calendar-tab-leftovers"
                                 onClick={() => setActiveTab('leftovers')}
                                 className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${activeTab === 'leftovers' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-400'}`}
                             >
@@ -5694,10 +6104,20 @@ JSON Output:
             if (res?.recipes || Array.isArray(res)) {
                 const newRecipes = (res.recipes || res).map(r => ({
                     ...r, id: generateId(),
-                    imageUrl: generateRecipeImage(apiKey, r.name),
+                    imageUrl: null,
+                    imageLoading: true,
                     leftoverDays: currentLeftoverDays, totalServings, baseServings
                 }));
                 setRecipes(newRecipes);
+
+                // Generate images asynchronously
+                newRecipes.forEach(async (recipe) => {
+                    const prompt = `Professional food photography of ${recipe.name}, appetizing, well-lit, on a clean white plate, restaurant quality, high resolution`;
+                    const imageUrl = await generateImageWithGemini(apiKey, prompt);
+                    setRecipes(prev => prev.map(r =>
+                        r.id === recipe.id ? { ...r, imageUrl, imageLoading: false } : r
+                    ));
+                });
             } else {
                 alert('Failed to generate recipes.');
             }
@@ -5887,8 +6307,8 @@ Rules:
                     })) || []
                 });
             }
-        } catch (e) {
-            console.error('Allocation AI error:', e);
+        } catch (error) {
+            console.error('Allocation AI error:', error);
             // Fallback to simple selection
             setPendingAllocation({
                 recipe,
@@ -6269,7 +6689,7 @@ Rules:
                                 Skip
                             </button>
                             <button onClick={confirmAllocation} className="flex-1 btn-primary bg-emerald-600">
-                                <Check className="w-4 h-4 inline mr-1" /> Reserve & Use
+                                <Check className="w-4 h-4 inline mr-1" /> Reserve
                             </button>
                         </div>
                     </div>
@@ -7305,11 +7725,54 @@ const Toast = ({ message, onUndo, duration = 5000, onClose }) => {
 // ============================================================================
 // QUICK MEAL PILL
 // ============================================================================
-const QuickMealPill = ({ quickMeal, onTap, editMode, onDelete, onEdit }) => {
+const QuickMealPill = ({ quickMeal, onTap, editMode, onDelete, onEdit, onLongPress }) => {
+    const longPressTimer = useRef(null);
+    const isLongPress = useRef(false);
+
+    const handleStart = (e) => {
+        isLongPress.current = false;
+        longPressTimer.current = setTimeout(() => {
+            isLongPress.current = true;
+            if (onLongPress && !editMode) {
+                onLongPress(quickMeal);
+            }
+        }, 500);
+    };
+
+    const handleEnd = () => {
+        if (longPressTimer.current) {
+            clearTimeout(longPressTimer.current);
+            longPressTimer.current = null;
+        }
+    };
+
+    const handleClick = () => {
+        if (isLongPress.current) return; // Skip if was long-press
+        if (editMode) {
+            onEdit(quickMeal);
+        } else {
+            onTap(quickMeal);
+        }
+    };
+
+    const handleContextMenu = (e) => {
+        e.preventDefault();
+        if (onLongPress && !editMode) {
+            onLongPress(quickMeal);
+        }
+    };
+
     return (
         <button
-            onClick={() => editMode ? onEdit(quickMeal) : onTap(quickMeal)}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all
+            onClick={handleClick}
+            onTouchStart={handleStart}
+            onTouchEnd={handleEnd}
+            onTouchCancel={handleEnd}
+            onMouseDown={handleStart}
+            onMouseUp={handleEnd}
+            onMouseLeave={handleEnd}
+            onContextMenu={handleContextMenu}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all select-none
                 ${editMode
                     ? 'bg-red-50 border border-red-200 text-red-700 hover:bg-red-100'
                     : 'bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 text-amber-800 hover:from-amber-100 hover:to-orange-100 hover:shadow-sm active:scale-95'
@@ -7329,6 +7792,7 @@ const QuickMealPill = ({ quickMeal, onTap, editMode, onDelete, onEdit }) => {
     );
 };
 
+
 // ============================================================================
 // TUTORIAL DUMMY DATA
 // ============================================================================
@@ -7337,8 +7801,8 @@ const TUTORIAL_DUMMY_DATA = {
     inventory: [
         { id: 'demo-inv-1', name: 'Chicken Breast', quantity: 2, unit: 'lb', location: 'Freezer', expiresAt: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0], _isDemo: true },
         { id: 'demo-inv-2', name: 'Eggs', quantity: 12, unit: 'each', location: 'Fridge', expiresAt: new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0], _isDemo: true },
-        { id: 'demo-inv-3', name: 'Milk', quantity: 1, unit: 'gal', location: 'Fridge', expiresAt: new Date(Date.now() + 5 * 86400000).toISOString().split('T')[0], isStaple: true, _isDemo: true },
-        { id: 'demo-inv-4', name: 'Rice', quantity: 5, unit: 'lb', location: 'Pantry', _isDemo: true },
+        { id: 'demo-inv-3', name: 'Milk', quantity: 1, unit: 'gal', location: 'Fridge', expiresAt: new Date(Date.now() + 5 * 86400000).toISOString().split('T')[0], isStaple: true, minStockLevel: 1, _isDemo: true },
+        { id: 'demo-inv-4', name: 'Rice', quantity: 5, unit: 'lb', location: 'Pantry', isStaple: true, minStockLevel: 2, _isDemo: true },
         { id: 'demo-inv-5', name: 'Broccoli', quantity: 2, unit: 'bunch', location: 'Fridge', expiresAt: new Date(Date.now() + 3 * 86400000).toISOString().split('T')[0], _isDemo: true },
         { id: 'demo-inv-6', name: 'Garlic', quantity: 1, unit: 'bunch', location: 'Pantry', _isDemo: true },
     ],
@@ -7352,7 +7816,8 @@ const TUTORIAL_DUMMY_DATA = {
         { id: 'demo-qm-3', name: 'Banana', emoji: '🍌', inventoryItem: 'Banana', calories: 105, _isDemo: true },
     ],
     leftovers: [
-        { id: 'demo-left-1', name: 'Pasta Primavera', portions: 3, addedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 4 * 86400000).toISOString(), storage_instructions: 'Keep in airtight container', reheating_tips: 'Microwave 2-3 min, stir halfway', _isDemo: true },
+        { id: 'demo-left-1', name: 'Pasta Primavera', portions: 3, addedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 4 * 86400000).toISOString(), storage_instructions: 'Keep in airtight container in refrigerator', reheating_tips: 'Microwave 2-3 min, stir halfway. Add a splash of water to prevent drying.', _isDemo: true },
+        { id: 'demo-left-2', name: 'Grilled Chicken', portions: 2, addedAt: new Date(Date.now() - 86400000).toISOString(), expiresAt: new Date(Date.now() + 2 * 86400000).toISOString(), storage_instructions: 'Wrap tightly or store in sealed container', reheating_tips: 'Reheat in oven at 350°F for 10 min or slice and pan-fry.', _isDemo: true },
     ],
     shoppingList: [
         { id: 'demo-shop-1', name: 'Olive Oil', quantity: 1, unit: 'bottle', checked: false, _isDemo: true },
@@ -7375,6 +7840,88 @@ const TUTORIAL_DUMMY_DATA = {
             _isDemo: true
         },
     ],
+    customRecipes: [
+        {
+            id: 'demo-custom-1',
+            name: 'Quick Veggie Stir Fry',
+            servings: 2,
+            total_time: '15 min',
+            macros: { calories: 280, protein: 8, carbs: 35, fat: 12 },
+            ingredients: [
+                { item: 'Broccoli', qty: '1 bunch' },
+                { item: 'Garlic', qty: '2 cloves' },
+                { item: 'Soy Sauce', qty: '2 tbsp' },
+            ],
+            steps: ['Chop vegetables', 'Heat oil in wok', 'Stir fry until crisp-tender', 'Add sauce and serve'],
+            description: 'Fast and healthy weeknight meal',
+            isCustom: true,
+            createdAt: new Date().toISOString(),
+            _isDemo: true
+        },
+    ],
+    history: [
+        {
+            id: 'demo-history-1',
+            name: 'Spaghetti Bolognese',
+            servings: 4,
+            macros: { calories: 520, protein: 28, carbs: 55, fat: 22 },
+            ingredients: [{ item: 'Ground Beef', qty: '1 lb' }, { item: 'Pasta', qty: '1 lb' }],
+            steps: ['Brown meat', 'Add sauce', 'Cook pasta', 'Combine and serve'],
+            cookedAt: new Date(Date.now() - 2 * 86400000).toISOString(),
+            _isDemo: true
+        },
+    ],
+    // Scheduled meals for calendar - will be dynamically generated with correct date keys
+    getScheduledMeals: () => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const todayKey = getLocalDateKey(today);
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const tomorrowKey = getLocalDateKey(tomorrow);
+        const dayAfter = new Date(today);
+        dayAfter.setDate(dayAfter.getDate() + 2);
+        const dayAfterKey = getLocalDateKey(dayAfter);
+
+        return {
+            [`${todayKey}-Dinner`]: {
+                meals: [{
+                    id: 'demo-meal-1',
+                    name: 'Honey Garlic Chicken',
+                    servings: 4,
+                    macros: { calories: 450, protein: 35, carbs: 25, fat: 18 },
+                    ingredients: [{ item: 'Chicken Breast', qty: '2 lb' }],
+                    steps: ['Season chicken', 'Cook until done'],
+                    _isDemo: true
+                }],
+                _isDemo: true
+            },
+            [`${tomorrowKey}-Lunch`]: {
+                meals: [{
+                    id: 'demo-meal-2',
+                    name: 'Garden Salad',
+                    servings: 2,
+                    macros: { calories: 180, protein: 5, carbs: 15, fat: 12 },
+                    ingredients: [{ item: 'Mixed Greens', qty: '4 cups' }],
+                    steps: ['Wash and chop vegetables', 'Add dressing'],
+                    _isDemo: true
+                }],
+                _isDemo: true
+            },
+            [`${dayAfterKey}-Dinner`]: {
+                meals: [{
+                    id: 'demo-meal-3',
+                    name: 'Quick Veggie Stir Fry',
+                    servings: 2,
+                    macros: { calories: 280, protein: 8, carbs: 35, fat: 12 },
+                    ingredients: [{ item: 'Broccoli', qty: '1 bunch' }],
+                    steps: ['Stir fry vegetables'],
+                    _isDemo: true
+                }],
+                _isDemo: true
+            }
+        };
+    }
 };
 
 // ============================================================================
@@ -7435,6 +7982,12 @@ const TutorialSetupModal = ({ existingApiKey, existingModel, onComplete }) => {
                         ))}
                     </select>
                 </div>
+
+                {/* Cost/Limits Note */}
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800">
+                    <strong>💡 Note:</strong> Some AI models have free usage limits. If AI features stop working, you may have hit your free quota—enable billing on your Google Cloud account or try a different model. Typical usage costs around <strong>$5/month</strong> or less.
+                </div>
+
                 <div className="pt-2">
                     <button
                         onClick={() => onComplete(apiKey, selectedModel)}
@@ -7468,7 +8021,7 @@ const TutorialOverlay = ({ step, steps, onNext, onPrev, onSkip }) => {
         isTop: true
     });
     const currentStep = steps[step];
-    const bubbleWidth = 300;
+    const bubbleWidth = 480;
     const margin = 10;
     const gap = 15; // Gap between element and bubble
 
@@ -7496,25 +8049,36 @@ const TutorialOverlay = ({ step, steps, onNext, onPrev, onSkip }) => {
                     // Calculate position with clamping
                     const rect = el.getBoundingClientRect();
 
-                    // Vertical flip: check if element is in top or bottom half
-                    const isTop = rect.top < window.innerHeight / 2;
+                    // Check if this is a nav bar target (should position ABOVE the nav bar element)
+                    const isNavBarTarget = ['nav-pantry', 'nav-plan', 'nav-calendar', 'nav-shop'].includes(currentStep.target);
+
+                    // If bottomPosition flag is set OR not a nav bar target, position at very bottom
+                    const useBottomPosition = currentStep.bottomPosition || !isNavBarTarget;
 
                     // Horizontal clamping
-                    // 1. Find the "ideal" center position
                     const targetCenterX = rect.left + rect.width / 2;
                     const rawLeft = targetCenterX - bubbleWidth / 2;
-
-                    // 2. Clamp to prevent overflow
                     const clampedLeft = Math.max(margin, Math.min(window.innerWidth - bubbleWidth - margin, rawLeft));
 
-                    // Arrow position (where the target center is relative to viewport)
-                    setPos({
-                        top: isTop ? rect.bottom + gap : 'auto',
-                        bottom: isTop ? 'auto' : (window.innerHeight - rect.top) + gap,
-                        left: clampedLeft,
-                        arrowLeft: targetCenterX, // Actual target center for arrow positioning
-                        isTop: isTop
-                    });
+                    if (isNavBarTarget && !currentStep.bottomPosition) {
+                        // Nav bar targets: position ABOVE the element (tooltip appears above nav bar)
+                        setPos({
+                            top: 'auto',
+                            bottom: (window.innerHeight - rect.top) + gap,
+                            left: clampedLeft,
+                            arrowLeft: targetCenterX,
+                            isTop: false // Arrow points down since tooltip is above
+                        });
+                    } else {
+                        // All other targets: position at very bottom of screen (above nav bar)
+                        setPos({
+                            top: 'auto',
+                            bottom: 85, // Just above the nav bar
+                            left: clampedLeft,
+                            arrowLeft: targetCenterX,
+                            isTop: false
+                        });
+                    }
                 }
             }, 100);
 
@@ -7541,16 +8105,46 @@ const TutorialOverlay = ({ step, steps, onNext, onPrev, onSkip }) => {
 
     const isFirst = step === 0;
     const isLast = step === steps.length - 1;
-    const isCentered = !currentStep.target;
+    // Only center if NO target AND NOT specifically requested to be at bottom
+    const isCentered = !currentStep.target && !currentStep.bottomPosition;
 
     // Calculate arrow position relative to the bubble
     const arrowRelX = pos.arrowLeft - pos.left;
     // Clamp arrow so it doesn't slide off corners (20px min from edges)
     const clampedArrowX = Math.max(20, Math.min(bubbleWidth - 20, arrowRelX));
 
+    // For bottom-positioned modals without target, center them horizontally
+    const getModalStyle = () => {
+        if (isCentered) {
+            return {
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)'
+            };
+        }
+
+        // If it has a target, use calculated pos
+        if (currentStep.target) {
+            return {
+                top: pos.top !== 'auto' ? pos.top : undefined,
+                bottom: pos.bottom !== 'auto' ? pos.bottom : undefined,
+                left: pos.left,
+                width: bubbleWidth
+            };
+        }
+
+        // No target but bottom position requested (e.g. for modals)
+        return {
+            bottom: 85, // Just above nav bar
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: bubbleWidth
+        };
+    };
+
     return (
         <>
-            {/* Backdrop for centered modals */}
+            {/* Backdrop for centered modals ONLY */}
             {isCentered && (
                 <div className="fixed inset-0 bg-black/75 z-[10000]" />
             )}
@@ -7558,19 +8152,10 @@ const TutorialOverlay = ({ step, steps, onNext, onPrev, onSkip }) => {
             {/* Tooltip */}
             <div
                 className="tutorial-tooltip"
-                style={isCentered ? {
-                    top: '50%',
-                    left: '50%',
-                    transform: 'translate(-50%, -50%)'
-                } : {
-                    top: pos.top !== 'auto' ? pos.top : undefined,
-                    bottom: pos.bottom !== 'auto' ? pos.bottom : undefined,
-                    left: pos.left,
-                    width: bubbleWidth
-                }}
+                style={getModalStyle()}
             >
-                {/* Dynamic arrow */}
-                {!isCentered && (
+                {/* Dynamic arrow - only show if there is a specific target */}
+                {currentStep.target && (
                     <div
                         className="tutorial-arrow"
                         style={{
@@ -7627,10 +8212,14 @@ function MealPrepMate() {
     const [lastNotifCheck, setLastNotifCheck] = useLocalStorage('mpm_last_notif_check', '');
     const [notifsEnabled, setNotifsEnabled] = useLocalStorage('mpm_notifs_enabled', true);
     const [expirationReminders, setExpirationReminders] = useLocalStorage('mpm_expiration_reminders', [7, 3, 1]);
-    const [selectedModel, setSelectedModel] = useLocalStorage('mpm_selected_model', 'gemini-2.0-flash');
+    const [selectedModel, setSelectedModel] = useLocalStorage('mpm_selected_model', 'gemini-3-flash-preview');
     const [customRecipes, setCustomRecipes] = useLocalStorage('mpm_custom_recipes', []);
     const [allocatedIngredients, setAllocatedIngredients] = useLocalStorage('mpm_allocated_ingredients', {});
     const [quickMeals, setQuickMeals] = useLocalStorage('mpm_quick_meals', []);
+
+    // Tab state lifted for tutorial control
+    const [recipeActiveTab, setRecipeActiveTab] = useLocalStorage('mpm_recipe_active_tab', 'generate');
+    const [calendarActiveTab, setCalendarActiveTab] = useLocalStorage('mpm_calendar_active_tab', 'upcoming');
 
     // Chat AI Assistant state
     const [chatOpen, setChatOpen] = useLocalStorage('mpm_chat_open', false);
@@ -7643,6 +8232,8 @@ function MealPrepMate() {
     const [showScheduleModal, setShowScheduleModal] = useLocalStorage('mpm_ui_schedule_modal', false);
     const [scheduleMealType, setScheduleMealType] = useLocalStorage('mpm_ui_schedule_meal_type', 'Dinner');
     const [selectedRecipeId, setSelectedRecipeId] = useLocalStorage('mpm_ui_selected_recipe_id', null);
+    const [expandedInventoryItemId, setExpandedInventoryItemId] = useLocalStorage('mpm_inv_expanded_item', null);
+    const [selectedLeftoverId, setSelectedLeftoverId] = useLocalStorage('mpm_calendar_selected_leftover', null);
 
     // Meal Scheduler Wizard state
     const [showMealWizard, setShowMealWizard] = useLocalStorage('mpm_wizard_show', false);
@@ -7658,7 +8249,9 @@ function MealPrepMate() {
     const [wizardLoading, setWizardLoading] = useState(false);
 
     // Transient state (not persisted - runtime only)
-    const [deductionData, setDeductionData] = useState(null);
+    // Unified ingredient matching modal state (for both allocate and deduct)
+    const [ingredientMatchData, setIngredientMatchData] = useState(null); // { recipe, matches: [], mode: 'allocate'|'deduct' }
+    const [ingredientLoading, setIngredientLoading] = useState(false);
     const [addItemModal, setAddItemModal] = useState(null);
     const [installPrompt, setInstallPrompt] = useState(null);
     const [isStandalone, setIsStandalone] = useState(false);
@@ -7682,8 +8275,13 @@ function MealPrepMate() {
         setLeftovers(prev => [...TUTORIAL_DUMMY_DATA.leftovers, ...prev.filter(l => !l._isDemo)]);
         setShoppingList(prev => [...TUTORIAL_DUMMY_DATA.shoppingList, ...prev.filter(s => !s._isDemo)]);
         setFavorites(prev => [...TUTORIAL_DUMMY_DATA.favorites, ...prev.filter(f => !f._isDemo)]);
+        setCustomRecipes(prev => [...TUTORIAL_DUMMY_DATA.customRecipes, ...prev.filter(r => !r._isDemo)]);
+        setHistory(prev => [...TUTORIAL_DUMMY_DATA.history, ...prev.filter(h => !h._isDemo)]);
+        // Inject scheduled meals with dynamically generated date keys
+        const scheduledMeals = TUTORIAL_DUMMY_DATA.getScheduledMeals();
+        setMealPlan(prev => ({ ...scheduledMeals, ...Object.fromEntries(Object.entries(prev).filter(([k, v]) => !v?._isDemo)) }));
         setTutorialDataInjected(true);
-    }, [tutorialDataInjected, setInventory, setFamily, setQuickMeals, setLeftovers, setShoppingList, setFavorites]);
+    }, [tutorialDataInjected, setInventory, setFamily, setQuickMeals, setLeftovers, setShoppingList, setFavorites, setCustomRecipes, setHistory, setMealPlan]);
 
     // Clean up dummy data when tutorial ends
     const cleanupTutorialData = useCallback(() => {
@@ -7693,71 +8291,238 @@ function MealPrepMate() {
         setLeftovers(prev => prev.filter(l => !l._isDemo));
         setShoppingList(prev => prev.filter(s => !s._isDemo));
         setFavorites(prev => prev.filter(f => !f._isDemo));
+        setCustomRecipes(prev => prev.filter(r => !r._isDemo));
+        setHistory(prev => prev.filter(h => !h._isDemo));
+        setMealPlan(prev => Object.fromEntries(Object.entries(prev).filter(([k, v]) => !v?._isDemo)));
         setTutorialDataInjected(false);
         // Remove any leftover spotlight classes
         document.querySelectorAll('.tutorial-spotlight').forEach(e => e.classList.remove('tutorial-spotlight'));
-    }, [setInventory, setFamily, setQuickMeals, setLeftovers, setShoppingList, setFavorites]);
+    }, [setInventory, setFamily, setQuickMeals, setLeftovers, setShoppingList, setFavorites, setCustomRecipes, setHistory, setMealPlan]);
 
-    // Tutorial steps definition - expanded with more detail
+    // Tutorial steps definition - comprehensive walkthrough
     const tutorialSteps = [
+        // Step 0: Welcome
         {
             title: "👋 Welcome to MealPrepMate!",
             text: "Stop wondering 'what's for dinner?' or worrying about food going bad in the back of the fridge. This app is your kitchen brain—it tells you exactly what you have, suggests meals based on those ingredients, and handles the math so you can cook confidently. Let's take a quick tour!",
             target: null
         },
+        // Step 1: Pantry Overview
         {
-            title: "📦 The Foundation: Your Inventory",
-            text: "This is your digital pantry. See those demo items? You can add items manually, or use Smart Scan to upload a photo of your receipt or open fridge—the AI will identify items automatically! Notice the expiration dates and 'Staple' badges.",
+            title: "📦 Your Digital Pantry",
+            text: "This is where all your food lives digitally. You can add items manually, or use Smart Scan to upload a photo of your receipt or open fridge—the AI will identify items automatically!",
             target: "nav-pantry",
             action: () => setView('inventory')
         },
+        // Step 2: Item Details - Expiration & Staples (opens first inventory item)
         {
-            title: "🍳 Recipe Ideas & Generation",
-            text: "The AI looks at your specific inventory and suggests recipes you can cook right now. You can also describe a recipe in plain English, paste a website URL, or even upload a photo of a recipe book!",
-            target: "nav-plan",
-            action: () => setView('recipes')
+            title: "📋 Expiration Dates & Staples",
+            text: "Notice the expiration date shown here? The app sends notifications when food is about to expire (if installed with notifications). Items marked as 'Staple' are essentials you always keep stocked—the app alerts you when running low! Scroll up to see the highlighted item.",
+            target: "inventory-item-demo-inv-1",
+            bottomPosition: true,
+            action: () => {
+                setView('inventory');
+                // Open the first demo inventory item to show details
+                setExpandedInventoryItemId('demo-inv-1');
+                // Scroll to top after a brief delay
+                setTimeout(() => {
+                    const el = document.getElementById('inventory-item-demo-inv-1');
+                    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 150);
+            }
         },
+        // Step 3: Recipe Home
+        {
+            title: "🍳 Your Recipe Hub",
+            text: "This is where all your recipes live! You can generate new ideas from AI, add your own recipes, save favorites, and see what you've cooked. Let's explore each section.",
+            target: "nav-plan",
+            action: () => {
+                setView('recipes');
+                setRecipeActiveTab('generate');
+                setExpandedInventoryItemId(null); // Close inventory item
+            }
+        },
+        // Step 4: Ideas Tab
+        {
+            title: "💡 The Ideas Tab",
+            text: "The AI looks at your specific inventory and suggests recipes you can cook right now. Type what you're craving, select who's eating, and hit Generate. You can also set meal prep options for extra servings or leftover planning!",
+            target: "recipe-tab-ideas",
+            bottomPosition: true,
+            action: () => {
+                setView('recipes');
+                setRecipeActiveTab('generate');
+            }
+        },
+        // Step 5: +My Tab Overview
+        {
+            title: "📝 The +My Tab",
+            text: "Want to add your own recipes? This is the place! Tap 'Describe or Import' to paste text from a website, describe a recipe in plain English, or upload photos of a cookbook page. The AI formats it perfectly!",
+            target: "recipe-tab-custom",
+            bottomPosition: true,
+            action: () => {
+                setView('recipes');
+                setRecipeActiveTab('custom');
+            }
+        },
+        // Step 6: Add Recipe Options
+        {
+            title: "✨ Multiple Ways to Add Recipes",
+            text: "You can describe a dish ('my grandma's chicken soup with carrots'), paste a recipe URL, upload cookbook photos, or write from scratch with 'Add Recipe'. The AI handles messy input and creates a clean, organized recipe!",
+            target: "recipe-tab-custom",
+            bottomPosition: true,
+            action: () => {
+                setView('recipes');
+                setRecipeActiveTab('custom');
+            }
+        },
+        // Step 7: Quick Meals Section (Switch back to Ideas tab, underscores 'out of order' flow requested)
         {
             title: "⚡ Quick Meals",
-            text: "See those colorful pills below? Those are Quick Meals—one-tap buttons for simple foods like an apple or yogurt. Tap them to instantly log the snack and deduct from your inventory without opening a full recipe.",
-            target: "nav-plan",
-            action: () => setView('recipes')
+            text: "Back on the Ideas tab, see those colorful pills? Those are Quick Meals—one-tap buttons for simple foods like an apple, yogurt, or cereal. Tap them to instantly log a snack and deduct from your inventory without opening a full recipe. Tap 'Auto-Discover' to have AI scan your inventory for more!",
+            target: "quick-meals-section",
+            bottomPosition: true,
+            action: () => {
+                setView('recipes');
+                setRecipeActiveTab('custom');
+            }
         },
+        // Step 8: Saved Recipes Tab
         {
-            title: "📅 Plan Your Week",
-            text: "Use the Calendar to structure your week. Tap 'Plan Your Week' to open the Wizard—select cooking days vs leftover days, and AI generates a plan that uses up your expiring ingredients first!",
-            target: "nav-calendar",
-            action: () => setView('calendar')
+            title: "❤️ Saved Recipes",
+            text: "Recipes you love? Save them here! Tap the heart icon on any recipe to add it to your favorites. They'll always be just a tap away when you need dinner inspiration.",
+            target: "recipe-tab-favorites",
+            bottomPosition: true,
+            action: () => {
+                setView('recipes');
+                setRecipeActiveTab('favorites');
+            }
         },
+        // Step 9: Cooked History (Moved before Recipe Card)
         {
-            title: "🛒 Shopping Made Easy",
-            text: "Missing ingredients? They automatically appear here! Check items off as you shop. When you're done, they can be auto-added to your inventory.",
-            target: "nav-shop",
-            action: () => setView('shopping')
+            title: "👨‍🍳 Cooked History",
+            text: "Every meal you mark as 'Cooked' is saved here. It's a record of what you've made, great for remembering that recipe you made last month or tracking your cooking habits!",
+            target: "recipe-tab-history",
+            bottomPosition: true,
+            action: () => {
+                setSelectedRecipe(null);
+                setView('recipes');
+                setRecipeActiveTab('history');
+            }
         },
+        // Step 10: Recipe Card Details (Opens a demo recipe)
         {
-            title: "🍲 Leftover Tracker",
-            text: "Stop guessing if that container is still safe! When you cook a large meal, log leftovers here. The app tracks when it was cooked, counts down to expiration, and provides storage/reheating tips.",
+            title: "🃏 Recipe Card Details",
+            text: "Here's a full recipe! You can see ingredients, instructions, nutrition info, and action buttons. Tap Edit to modify, Schedule to add to your calendar, the heart to save, or Cook to mark as made and deduct ingredients from your inventory!",
             target: null,
-            action: () => setView('leftovers')
+            bottomPosition: true,
+            action: () => {
+                setView('recipes');
+                setRecipeActiveTab('favorites'); // Switch to favorites to show card
+                // Open the demo favorite recipe
+                const demoRecipe = favorites.find(f => f._isDemo) || favorites[0];
+                if (demoRecipe) {
+                    setSelectedRecipe(demoRecipe);
+                }
+            }
         },
+        // Step 11: Calendar Overview
+        {
+            title: "📅 Your Meal Calendar",
+            text: "Plan your week here! You can schedule meals on specific days, and drag to reschedule if plans change. Let's look at the powerful 'Plan Your Week' wizard next!",
+            target: "nav-calendar",
+            action: () => {
+                setSelectedRecipe(null); // Close recipe modal
+                setSelectedLeftoverId(null); // Ensure no leftover is open
+                setView('calendar');
+                setCalendarActiveTab('upcoming');
+            }
+        },
+        // Step 12: Meal Wizard - Config Screen
+        {
+            title: "🗓️ Plan Your Week Wizard",
+            text: "This wizard helps you plan multiple meals at once! First, select which days you want to COOK (blue) vs EAT LEFTOVERS (orange). Leftover days use the previous day's food, so you don't need new recipes. ",
+            target: null,
+            bottomPosition: true,
+            action: () => {
+                setShowMealWizard(true);
+                setWizardPhase('config');
+            }
+        },
+        // Step 13: Meal Wizard - Details explanation
+        {
+            title: "📝 Meal Details",
+            text: "After selecting cooking days, you'll see this screen where you can add specific details for each meal. Type what you're craving, select family members eating, and choose to Generate an AI recipe or pick from your Saved recipes!",
+            target: null,
+            bottomPosition: true,
+            action: () => {
+                setShowMealWizard(true);
+                setWizardPhase('review');
+            }
+        },
+        // Step 14: Close wizard, go to Leftovers Tab
+        {
+            title: "🍲 Leftovers in Calendar",
+            text: "Switch to the Leftovers tab to see your fridge contents! This tracks cooked food that's waiting to be eaten. You'll see how many days until each leftover expires.",
+            target: "calendar-tab-leftovers",
+            bottomPosition: true,
+            action: () => {
+                setShowMealWizard(false);
+                setSelectedLeftoverId(null); // Close any lingering modal
+                setView('calendar');
+                setCalendarActiveTab('leftovers');
+            }
+        },
+        // Step 15: Open a leftover card to show details
+        {
+            title: "📦 Managing Leftovers",
+            text: "Here's a leftover with full details! You can see storage instructions, reheating tips, and how many portions remain. Tap 'Ate Some' to decrease portions, or 'Finished' when it's gone. The app alerts you before it expires!",
+            target: null,
+            bottomPosition: true,
+            action: () => {
+                setView('calendar');
+                setCalendarActiveTab('leftovers');
+                // Open the first demo leftover using the setter
+                setSelectedLeftoverId('demo-left-1');
+            }
+        },
+        // Step 16: Shopping
+        {
+            title: "🛒 Smart Shopping List",
+            text: "Missing ingredients automatically appear here when you view recipes. Check items off as you shop. Pro tip: Use the AI Sort button to organize your list by store aisle for faster shopping!",
+            target: "nav-shop",
+            action: () => {
+                setSelectedLeftoverId(null); // Close leftover modal
+                setView('shopping');
+            }
+        },
+        // Step 17: Family Button (point only, don't open)
         {
             title: "👨‍👩‍👧‍👦 Family Profiles",
-            text: "Teach the AI who you're feeding! Add ages and dietary needs. The app calculates serving multipliers (e.g., a toddler = 0.4 servings) and adapts every recipe for allergies and preferences.",
+            text: "See that person icon? That's where you set up family profiles. The app calculates servings based on who's eating (kids eat less than adults!) and remembers dietary restrictions like allergies.",
+            target: "header-family-btn"
+        },
+        // Step 18: Family Screen (open it)
+        {
+            title: "➕ Adding Family Members",
+            text: "Add each person who eats with you! Enter their age, dietary restrictions, and preferences. The app automatically adjusts portion sizes—a toddler counts as 0.4 servings while an adult male might be 1.5 servings.",
             target: "header-family-btn",
             action: () => setView('family')
         },
+        // Step 19: AI Assistant
         {
             title: "🤖 Your Kitchen Concierge",
-            text: "Tap this purple card to open the AI Assistant! Use natural language like: 'I had a turkey sandwich for lunch' (logs meal), 'Add milk to shopping' (updates list), or 'What's expiring soon?' (checks fridge).",
+            text: "Tap this purple card to open the AI Assistant! It can do almost anything in the app for you. Use natural language like: 'I had a turkey sandwich for lunch' (logs meal), 'Add milk to shopping' (updates list), or 'What's expiring soon?' (checks fridge).",
             target: "ai-assistant-card",
+            bottomPosition: true,
             action: () => setView('dashboard')
         },
+        // Step 20: Settings
         {
             title: "⚙️ Settings & Customization",
-            text: "Here you can configure notifications for expiring food, export/import your data, choose your AI model, and restart this tutorial anytime!",
+            text: "Configure notifications for expiring food, export/import your data, choose your AI model, and restart this tutorial anytime. You can also enable/disable specific notification reminders.",
             target: "header-settings-btn"
         },
+        // Step 21: Final Setup
         {
             title: "🚀 Final Setup",
             text: "You're almost ready! Let's set up your AI-powered features.",
@@ -7858,13 +8623,14 @@ function MealPrepMate() {
 
     // Auto-start tutorial on first visit (regardless of API key)
     useEffect(() => {
-        if (!hasSeenTutorial && tutorialStep === -1) {
+        // Don't start tutorial if setup modal is showing or if we've already seen it
+        if (!hasSeenTutorial && tutorialStep === -1 && !showTutorialSetup) {
             setTimeout(() => {
                 injectTutorialData();
                 setTutorialStep(0);
             }, 500);
         }
-    }, [hasSeenTutorial, tutorialStep, injectTutorialData]);
+    }, [hasSeenTutorial, tutorialStep, injectTutorialData, showTutorialSetup]);
 
     const handleInstall = async () => {
         if (!installPrompt) return;
@@ -7945,6 +8711,27 @@ function MealPrepMate() {
     };
 
     const handleCook = async (recipe) => {
+        // Show loading immediately
+        setIngredientLoading(true);
+
+        // Check if we have cached allocations from scheduling (use those instead of AI)
+        if (recipe.lastAllocation && recipe.lastAllocationHash === getRecipeHash(recipe)) {
+            console.log('Using cached allocations for deduction');
+            // Convert allocations to match format for deduction
+            const matches = recipe.lastAllocation.map(a => ({
+                inventoryItemId: a.inventoryItemId,
+                inventoryItemName: a.inventoryItemName,
+                currentQuantity: inventory.find(i => i.id === a.inventoryItemId)?.quantity || a.currentQuantity,
+                currentUnit: a.currentUnit,
+                amount: a.amount,
+                recipeIngredient: a.recipeIngredient,
+                confidence: a.confidence || 'high'
+            }));
+            setIngredientLoading(false);
+            setIngredientMatchData({ recipe, matches, mode: 'deduct' });
+            return;
+        }
+
         // Version control: Check if we've already confirmed deductions for this ingredient list
         const currentHash = getRecipeHash(recipe);
         if (recipe.lastDeductionHash === currentHash && recipe.lastDeductions) {
@@ -7957,7 +8744,7 @@ function MealPrepMate() {
                 updatedInventory = updatedInventory.map(item => {
                     if (item.id === d.inventoryItemId || item.name.toLowerCase() === d.inventoryItemName?.toLowerCase()) {
                         itemIds.add(item.id);
-                        return { ...item, quantity: Math.max(0, item.quantity - d.deductAmount) };
+                        return { ...item, quantity: Math.max(0, item.quantity - d.amount) };
                     }
                     return item;
                 });
@@ -7973,37 +8760,43 @@ function MealPrepMate() {
                 handleAddToLeftovers(recipe, portions > 0 ? portions : recipe.servings);
             }
             setSelectedRecipe(null);
+            setIngredientLoading(false);
             return;
         }
 
-        // Include inventory item IDs for accurate deduction
-        const invStr = inventory.map(i => `ID:${i.id} ${i.name}: ${i.quantity} ${i.unit} `).join('\n');
-        const ingStr = recipe.ingredients?.map(i => `${i.item}: ${i.qty} `).join('\n') || '';
+        // Condensed inventory format for AI: id|name|qty|unit
+        const invStr = inventory.map(i => `${i.id}|${i.name}|${i.quantity}|${i.unit}`).join('\n');
+        const ingStr = recipe.ingredients?.map(i => `${i.item}: ${i.qty}`).join('\n') || '';
 
-        const prompt = `Match recipe ingredients to pantry for deduction.Use fuzzy matching.
+        const prompt = `Match recipe ingredients to pantry for deduction. Use fuzzy matching.
 
 Recipe Ingredients:
 ${ingStr}
 
-Current Inventory(with IDs):
+Inventory (format: id|name|quantity|unit):
 ${invStr}
 
 Return JSON: {
-    "deductions": [{
+    "matches": [{
         "inventoryItemId": "actual_id_from_list",
         "inventoryItemName": "Flour",
         "currentQuantity": 2,
         "currentUnit": "cups",
-        "deductAmount": 1,
-        "newQuantity": 1,
+        "amount": 1,
         "recipeIngredient": "1 cup flour",
         "confidence": "high"
     }]
-} `;
+}
+
+Rules:
+- confidence: "high" = exact name match, "medium" = similar/related item, "low" = uncertain/guess
+- Only match items that exist in inventory
+- amount = quantity needed from recipe`;
 
         const res = await callGemini(apiKey, prompt, null, selectedModel);
-        if (!res.error && res.deductions) {
-            setDeductionData({ recipe, deductions: res.deductions });
+        setIngredientLoading(false);
+        if (!res.error && res.matches) {
+            setIngredientMatchData({ recipe, matches: res.matches, mode: 'deduct' });
         } else {
             // Fallback: just mark as cooked
             setHistory([{ ...recipe, id: generateId(), cookedAt: new Date().toISOString() }, ...history]);
@@ -8011,67 +8804,120 @@ Return JSON: {
         }
     };
 
-    const confirmDeduction = () => {
-        if (!deductionData) return;
+    // Unified confirm handler for both allocation and deduction
+    const confirmIngredientMatch = () => {
+        if (!ingredientMatchData) return;
 
-        let updatedInventory = [...inventory];
-        const deductedItemIds = new Set(); // Track which items were deducted
-
-        deductionData.deductions.forEach(d => {
-            updatedInventory = updatedInventory.map(item => {
-                // Match by ID first, then fall back to name matching
-                if (item.id === d.inventoryItemId ||
-                    item.name.toLowerCase() === d.inventoryItemName?.toLowerCase()) {
-                    deductedItemIds.add(item.id);
-                    return { ...item, quantity: Math.max(0, d.newQuantity) };
-                }
-                return item;
-            });
-        });
-
-        // Only filter out items that were deducted AND now have zero quantity
-        // This prevents accidentally removing items that weren't part of the deduction
-        updatedInventory = updatedInventory.filter(item =>
-            item.quantity > 0 || !deductedItemIds.has(item.id)
-        );
-
-        setInventory(updatedInventory);
-
-        const recipe = deductionData.recipe;
+        const { recipe, matches, mode } = ingredientMatchData;
         const currentHash = getRecipeHash(recipe);
 
-        // Save version info to the recipe
-        const updatedRecipe = {
-            ...recipe,
-            lastDeductionHash: currentHash,
-            lastDeductions: deductionData.deductions.map(d => ({
-                inventoryItemId: d.inventoryItemId,
-                inventoryItemName: d.inventoryItemName,
-                deductAmount: d.deductAmount
-            }))
-        };
+        if (mode === 'deduct') {
+            // DEDUCTION MODE: Subtract amounts from inventory and mark as cooked
+            let updatedInventory = [...inventory];
+            const deductedItemIds = new Set();
 
-        setHistory([{ ...updatedRecipe, id: generateId(), cookedAt: new Date().toISOString() }, ...history]);
+            matches.forEach(m => {
+                updatedInventory = updatedInventory.map(item => {
+                    if (item.id === m.inventoryItemId ||
+                        item.name.toLowerCase() === m.inventoryItemName?.toLowerCase()) {
+                        deductedItemIds.add(item.id);
+                        return { ...item, quantity: Math.max(0, item.quantity - m.amount) };
+                    }
+                    return item;
+                });
+            });
 
-        // Update the recipe in other lists if it was a saved/custom recipe
-        const updateInList = (list, setter) => {
-            if (list.some(r => r.id === recipe.id)) {
-                setter(list.map(r => r.id === recipe.id ? updatedRecipe : r));
+            // Remove zero-quantity items that were deducted
+            updatedInventory = updatedInventory.filter(item =>
+                item.quantity > 0 || !deductedItemIds.has(item.id)
+            );
+            setInventory(updatedInventory);
+
+            // Save deduction choices to recipe for future use
+            const updatedRecipe = {
+                ...recipe,
+                lastDeductionHash: currentHash,
+                lastDeductions: matches.map(m => ({
+                    inventoryItemId: m.inventoryItemId,
+                    inventoryItemName: m.inventoryItemName,
+                    amount: m.amount,
+                    currentUnit: m.currentUnit,
+                    recipeIngredient: m.recipeIngredient,
+                    confidence: m.confidence
+                }))
+            };
+
+            setHistory([{ ...updatedRecipe, id: generateId(), cookedAt: new Date().toISOString() }, ...history]);
+
+            // Update recipe in other lists
+            const updateInList = (list, setter) => {
+                if (list.some(r => r.id === recipe.id)) {
+                    setter(list.map(r => r.id === recipe.id ? updatedRecipe : r));
+                }
+            };
+            updateInList(favorites, setFavorites);
+            updateInList(customRecipes, setCustomRecipes);
+            updateInList(recipes, setRecipes);
+
+            // Add to leftovers if applicable
+            if ((recipe.leftoverDays || 0) > 0) {
+                const leftoverPortions = (recipe.totalServings || recipe.servings || 4) - (recipe.baseServings || 2);
+                handleAddToLeftovers(updatedRecipe, leftoverPortions > 0 ? leftoverPortions : recipe.servings);
             }
-        };
-        updateInList(favorites, setFavorites);
-        updateInList(customRecipes, setCustomRecipes);
-        updateInList(recipes, setRecipes);
 
-        // Automatically add to leftovers if recipe has leftoverDays > 0
-        const leftoverDays = recipe.leftoverDays || 0;
-        if (leftoverDays > 0) {
-            const leftoverPortions = (recipe.totalServings || recipe.servings || 4) - (recipe.baseServings || 2);
-            handleAddToLeftovers(updatedRecipe, leftoverPortions > 0 ? leftoverPortions : recipe.servings);
+            setIngredientMatchData(null);
+            setSelectedRecipe(null);
+
+        } else {
+            // ALLOCATION MODE: Save allocations and proceed to schedule
+            // Store allocations on the recipe for future deduction use
+            const updatedRecipe = {
+                ...recipe,
+                lastAllocationHash: currentHash,
+                lastAllocation: matches.map(m => ({
+                    inventoryItemId: m.inventoryItemId,
+                    inventoryItemName: m.inventoryItemName,
+                    amount: m.amount,
+                    currentUnit: m.currentUnit,
+                    currentQuantity: m.currentQuantity,
+                    recipeIngredient: m.recipeIngredient,
+                    confidence: m.confidence
+                }))
+            };
+
+            // Add to allocated ingredients for tracking/display
+            const newAllocations = matches.map(m => ({
+                recipeId: recipe.id,
+                recipeName: recipe.name,
+                inventoryItemId: m.inventoryItemId,
+                inventoryItemName: m.inventoryItemName,
+                amount: m.amount,
+                unit: m.currentUnit,
+                allocatedAt: new Date().toISOString()
+            }));
+            setAllocatedIngredients(prev => [...prev, ...newAllocations]);
+
+            // Update recipe in lists with allocation data
+            const updateInList = (list, setter) => {
+                if (list.some(r => r.id === recipe.id)) {
+                    setter(list.map(r => r.id === recipe.id ? updatedRecipe : r));
+                }
+            };
+            updateInList(favorites, setFavorites);
+            updateInList(customRecipes, setCustomRecipes);
+            updateInList(recipes, setRecipes);
+
+            setIngredientMatchData(null);
+            setScheduleDate(new Date());
+            setShowScheduleModal(true);
         }
+    };
 
-        setDeductionData(null);
-        setSelectedRecipe(null);
+    // Skip handler for allocation mode
+    const skipIngredientMatch = () => {
+        setIngredientMatchData(null);
+        setScheduleDate(new Date());
+        setShowScheduleModal(true);
     };
 
     const handleAddToLeftovers = (recipe, portions = null) => {
@@ -8237,21 +9083,21 @@ Return JSON: {
             {/* Main Content */}
             <div className="flex-1 overflow-y-auto scrollbar-hide w-full relative bg-white">
                 {view === 'dashboard' && <Dashboard />}
-                {view === 'inventory' && <InventoryView apiKey={apiKey} model={selectedModel} inventory={inventory} setInventory={setInventory} knownLocations={knownLocations} setKnownLocations={setKnownLocations} processedFiles={processedFiles} setProcessedFiles={setProcessedFiles} allocatedIngredients={allocatedIngredients} />}
+                {view === 'inventory' && <InventoryView apiKey={apiKey} model={selectedModel} inventory={inventory} setInventory={setInventory} knownLocations={knownLocations} setKnownLocations={setKnownLocations} processedFiles={processedFiles} setProcessedFiles={setProcessedFiles} allocatedIngredients={allocatedIngredients} expandedItemId={expandedInventoryItemId} setExpandedItemId={setExpandedInventoryItemId} />}
                 {view === 'family' && <FamilyView familyMembers={family} setFamilyMembers={setFamily} />}
-                {view === 'recipes' && <RecipeEngine apiKey={apiKey} model={selectedModel} inventory={inventory} setInventory={setInventory} family={family} setSelectedRecipe={setSelectedRecipe} history={history} setHistory={setHistory} recipes={recipes} setRecipes={setRecipes} favorites={favorites} setFavorites={setFavorites} shoppingList={shoppingList} setShoppingList={setShoppingList} mealPlan={mealPlan} setMealPlan={setMealPlan} leftovers={leftovers} setLeftovers={setLeftovers} onMoveToHistory={handleMoveToHistory} customRecipes={customRecipes} setCustomRecipes={setCustomRecipes} allocatedIngredients={allocatedIngredients} setAllocatedIngredients={setAllocatedIngredients} onOpenWizard={() => setShowMealWizard(true)} quickMeals={quickMeals} setQuickMeals={setQuickMeals} setToastData={setToastData} />}
+                {view === 'recipes' && <RecipeEngine apiKey={apiKey} model={selectedModel} inventory={inventory} setInventory={setInventory} family={family} setSelectedRecipe={setSelectedRecipe} history={history} setHistory={setHistory} recipes={recipes} setRecipes={setRecipes} favorites={favorites} setFavorites={setFavorites} shoppingList={shoppingList} setShoppingList={setShoppingList} mealPlan={mealPlan} setMealPlan={setMealPlan} leftovers={leftovers} setLeftovers={setLeftovers} onMoveToHistory={handleMoveToHistory} customRecipes={customRecipes} setCustomRecipes={setCustomRecipes} allocatedIngredients={allocatedIngredients} setAllocatedIngredients={setAllocatedIngredients} onOpenWizard={() => setShowMealWizard(true)} quickMeals={quickMeals} setQuickMeals={setQuickMeals} setToastData={setToastData} activeTab={recipeActiveTab} setActiveTab={setRecipeActiveTab} />}
                 {view === 'shopping' && <ShoppingView apiKey={apiKey} model={selectedModel} list={shoppingList} setList={setShoppingList} />}
                 {view === 'leftovers' && <LeftoversView apiKey={apiKey} model={selectedModel} leftovers={leftovers} setLeftovers={setLeftovers} onMoveToHistory={handleMoveToHistory} />}
-                {view === 'calendar' && <CalendarView apiKey={apiKey} model={selectedModel} mealPlan={mealPlan} setMealPlan={setMealPlan} inventory={inventory} setInventory={setInventory} family={family} recipes={recipes} history={history} customRecipes={customRecipes} downloadICSFn={downloadICS} onCook={handleCook} onFavorite={(r) => setFavorites([...favorites, { ...r, id: generateId() }])} onAddToLeftovers={handleAddToLeftovers} leftovers={leftovers} setLeftovers={setLeftovers} onMoveToHistory={handleMoveToHistory} allocatedIngredients={allocatedIngredients} setAllocatedIngredients={setAllocatedIngredients} onOpenWizard={() => setShowMealWizard(true)} favorites={favorites} />}
+                {view === 'calendar' && <CalendarView apiKey={apiKey} model={selectedModel} mealPlan={mealPlan} setMealPlan={setMealPlan} inventory={inventory} setInventory={setInventory} family={family} recipes={recipes} history={history} customRecipes={customRecipes} downloadICSFn={downloadICS} onCook={handleCook} onFavorite={(r) => setFavorites([...favorites, { ...r, id: generateId() }])} onAddToLeftovers={handleAddToLeftovers} leftovers={leftovers} setLeftovers={setLeftovers} onMoveToHistory={handleMoveToHistory} allocatedIngredients={allocatedIngredients} setAllocatedIngredients={setAllocatedIngredients} onOpenWizard={() => setShowMealWizard(true)} favorites={favorites} activeTab={calendarActiveTab} setActiveTab={setCalendarActiveTab} selectedLeftoverId={selectedLeftoverId} setSelectedLeftoverId={setSelectedLeftoverId} />}
             </div>
 
             {/* Bottom Nav */}
             <div className="fixed bottom-0 left-0 right-0 w-full bg-white border-t border-slate-100 px-6 pb-safe pt-2 z-40 rounded-t-3xl shadow-[0_-5px_10px_rgba(0,0,0,0.02)]">
                 <div className="flex justify-between items-end pb-2">
                     <div id="nav-pantry"><NavBtn icon={Refrigerator} label="Pantry" active={view === 'inventory'} onClick={() => setView('inventory')} /></div>
-                    <div id="nav-plan"><NavBtn icon={Utensils} label="Plan" active={view === 'recipes'} onClick={() => setView('recipes')} /></div>
+                    <div id="nav-plan"><NavBtn icon={Utensils} label="Cook" active={view === 'recipes'} onClick={() => setView('recipes')} /></div>
                     <div className="relative -top-6 px-2">
-                        <button onClick={() => setView('dashboard')} className="w-16 h-16 bg-gradient-to-tr from-emerald-400 to-emerald-600 rounded-full text-white flex items-center justify-center shadow-xl shadow-emerald-200">
+                        <button onClick={() => setView('dashboard')} className={`w-16 h-16 bg-gradient-to-tr from-emerald-400 to-emerald-600 rounded-full text-white flex items-center justify-center shadow-xl transition-all ${view === 'dashboard' ? 'ring-[5px] ring-emerald-300/80 shadow-[0_0_20px_rgba(52,211,153,0.6)] scale-105' : 'shadow-emerald-200'}`}>
                             <ChefHat className="w-7 h-7" />
                         </button>
                     </div>
@@ -8262,6 +9108,7 @@ Return JSON: {
 
             {/* Recipe Detail Modal - using reusable component */}
             <RecipeDetailModal
+                apiKey={apiKey}
                 recipe={selectedRecipe}
                 isOpen={!!selectedRecipe}
                 onClose={() => setSelectedRecipe(null)}
@@ -8269,69 +9116,96 @@ Return JSON: {
                 startInEditMode={selectedRecipe?._startInEditMode}
                 onFavorite={(recipe) => { setFavorites([...favorites, { ...recipe, id: recipe.id || generateId() }]); alert('Saved!'); }}
                 onCook={(recipe) => handleCook(recipe)}
-                onSchedule={(recipe) => { setScheduleDate(new Date()); setShowScheduleModal(true); }}
+                onSchedule={async (recipe) => {
+                    // Show loading immediately
+                    setIngredientLoading(true);
+
+                    // Condensed inventory format for AI: id|name|qty|unit
+                    const invStr = inventory.map(i => `${i.id}|${i.name}|${i.quantity}|${i.unit}`).join('\n');
+                    const ingStr = recipe.ingredients?.map(i => `${i.item}: ${i.qty}`).join('\n') || '';
+
+                    const prompt = `Match recipe ingredients to pantry for reservation. Use fuzzy matching.
+
+Recipe Ingredients:
+${ingStr}
+
+Inventory (format: id|name|quantity|unit):
+${invStr}
+
+Return JSON: {
+    "matches": [{
+        "inventoryItemId": "actual_id_from_list",
+        "inventoryItemName": "Flour",
+        "currentQuantity": 2,
+        "currentUnit": "cups",
+        "amount": 1,
+        "recipeIngredient": "1 cup flour",
+        "confidence": "high"
+    }]
+}
+
+Rules:
+- confidence: "high" = exact name match, "medium" = similar/related item, "low" = uncertain/guess
+- Only match items that exist in inventory
+- amount = quantity needed from recipe`;
+
+                    try {
+                        const res = await callGemini(apiKey, prompt, null, selectedModel);
+                        setIngredientLoading(false);
+
+                        if (!res.error && res.matches) {
+                            setIngredientMatchData({ recipe, matches: res.matches, mode: 'allocate' });
+                        } else {
+                            // Fallback: skip allocation and go straight to schedule
+                            setScheduleDate(new Date());
+                            setShowScheduleModal(true);
+                        }
+                    } catch (err) {
+                        console.error('Schedule allocation error:', err);
+                        setIngredientLoading(false);
+                        // Fallback to direct schedule
+                        setScheduleDate(new Date());
+                        setShowScheduleModal(true);
+                    }
+                }}
                 onAddToLeftovers={(recipe) => { handleAddToLeftovers(recipe); alert('Added to leftovers!'); }}
                 onAddMissingToInventory={(ing) => handleAddMissingToInventory(ing)}
                 onAddToShoppingList={(recipe) => handleAddToShoppingList(recipe)}
+                onAddToQuickMeals={(recipe) => {
+                    // Generate emoji based on recipe name
+                    const emojiOptions = ['🍽️', '🍳', '🥗', '🍲', '🍝', '🥘', '🍜', '🥙', '🌮', '🍕'];
+                    const emoji = emojiOptions[Math.floor(Math.random() * emojiOptions.length)];
+                    const newQuickMeal = {
+                        id: generateId(),
+                        name: recipe.name,
+                        emoji,
+                        linkedRecipeId: recipe.id,
+                        linkedRecipe: recipe,
+                        createdAt: new Date().toISOString()
+                    };
+                    setQuickMeals(prev => [...prev, newQuickMeal]);
+                    setToastData({ message: `Added "${recipe.name}" to Quick Meals ⚡`, duration: 3000 });
+                }}
                 showScheduleButton={true}
                 showLeftoversButton={true}
                 showCookButton={true}
             />
 
-            {/* Deduction Review Modal */}
-            <Modal isOpen={!!deductionData} onClose={() => setDeductionData(null)}>
-                {deductionData && (
-                    <div className="p-4 space-y-4">
-                        <div>
-                            <h2 className="text-lg font-bold">Review Deductions</h2>
-                            <p className="text-slate-500 text-xs">Adjust remaining amounts if needed</p>
-                        </div>
+            {/* Ingredient Matching Loading Overlay */}
+            {ingredientLoading && <LoadingOverlay message="Matching ingredients to your pantry..." />}
 
-                        <div className="space-y-2 max-h-[60vh] overflow-y-auto">
-                            {deductionData.deductions.map((d, idx) => (
-                                <div key={idx} className={`bg-slate-50 rounded-lg p-3 ${d.confidence === 'low' ? 'border border-amber-300' : ''}`}>
-                                    {/* Row 1: Item name + quick info */}
-                                    <div className="flex items-center justify-between gap-2 mb-1">
-                                        <span className="font-bold text-slate-800 text-sm">{d.inventoryItemName}</span>
-                                        <span className="text-xs text-slate-400">
-                                            {d.currentQuantity} → {d.newQuantity} {d.currentUnit}
-                                        </span>
-                                    </div>
-
-                                    {/* Row 2: Need / Have / Remaining inline */}
-                                    <div className="flex items-center gap-2 text-xs flex-wrap">
-                                        <span className="text-slate-500">Need: <span className="font-medium text-blue-600">{d.deductAmount}</span></span>
-                                        <span className="text-slate-400">•</span>
-                                        <span className="text-slate-500">Have: <span className="font-medium">{d.currentQuantity}</span></span>
-                                        <span className="text-slate-400">→</span>
-                                        <span className="font-bold text-slate-700">Left:</span>
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            step="0.01"
-                                            value={d.newQuantity}
-                                            onChange={(e) => {
-                                                const newDeductions = [...deductionData.deductions];
-                                                newDeductions[idx].newQuantity = e.target.value === '' ? 0 : parseFloat(e.target.value);
-                                                setDeductionData({ ...deductionData, deductions: newDeductions });
-                                            }}
-                                            className="w-14 text-center border border-emerald-500 rounded py-0.5 font-bold text-emerald-600 text-sm"
-                                        />
-                                        <span className="text-slate-500">{d.currentUnit}</span>
-                                        {d.confidence === 'low' && (
-                                            <span className="text-[10px] bg-amber-100 text-amber-700 px-1 rounded">?</span>
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-
-                        <button onClick={confirmDeduction} className="w-full btn-primary text-sm py-2">
-                            Confirm & Mark as Cooked
-                        </button>
-                    </div>
-                )}
-            </Modal>
+            {/* Unified Ingredient Match Modal (for both allocation and deduction) */}
+            <IngredientMatchModal
+                isOpen={!!ingredientMatchData}
+                onClose={() => setIngredientMatchData(null)}
+                mode={ingredientMatchData?.mode || 'allocate'}
+                recipe={ingredientMatchData?.recipe}
+                matches={ingredientMatchData?.matches}
+                setMatches={(newMatches) => setIngredientMatchData(prev => prev ? { ...prev, matches: newMatches } : null)}
+                inventory={inventory}
+                onConfirm={confirmIngredientMatch}
+                onSkip={ingredientMatchData?.mode === 'allocate' ? skipIngredientMatch : null}
+            />
 
             {/* Add Item Modal */}
             <Modal isOpen={!!addItemModal} onClose={() => setAddItemModal(null)}>
@@ -8434,28 +9308,62 @@ Return JSON: {
                                 className="flex-1 input-field"
                             />
                         </div>
-                        <p className="text-xs text-slate-400 mt-2">
-                            Get your API key from <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-emerald-600 underline">Google AI Studio</a>
-                        </p>
+                        <div className="flex justify-between items-center mt-2">
+                            <p className="text-xs text-slate-400">
+                                Get your API key from <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-emerald-600 underline">Google AI Studio</a>
+                            </p>
+                            <a
+                                href="https://aistudio.google.com/app/plan_information"
+                                target="_blank"
+                                className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+                            >
+                                <Zap className="w-3 h-3" /> Check Usage & Billing
+                            </a>
+                        </div>
                     </div>
 
                     {/* AI Model Selector */}
                     <div>
                         <label className="text-sm font-bold text-slate-600 block mb-2">AI Model</label>
-                        <select
-                            value={GEMINI_MODELS.find(m => m.id === selectedModel) ? selectedModel : '__custom__'}
-                            onChange={e => {
-                                if (e.target.value !== '__custom__') {
-                                    setSelectedModel(e.target.value);
-                                }
-                            }}
-                            className="w-full select-field mb-2"
-                        >
-                            {GEMINI_MODELS.map(m => (
-                                <option key={m.id} value={m.id}>{m.name} - {m.desc}</option>
-                            ))}
-                            <option value="__custom__">Custom Model...</option>
-                        </select>
+                        <div className="flex gap-2 mb-2">
+                            <select
+                                value={GEMINI_MODELS.find(m => m.id === selectedModel) ? selectedModel : '__custom__'}
+                                onChange={e => {
+                                    if (e.target.value !== '__custom__') {
+                                        setSelectedModel(e.target.value);
+                                    }
+                                }}
+                                className="w-full select-field"
+                            >
+                                {GEMINI_MODELS.map(m => (
+                                    <option key={m.id} value={m.id}>{m.name} - {m.desc}</option>
+                                ))}
+                                <option value="__custom__">Custom Model...</option>
+                            </select>
+                            <button
+                                onClick={async () => {
+                                    if (!apiKey) {
+                                        alert("Please enter an API key first.");
+                                        return;
+                                    }
+                                    try {
+                                        const models = await fetchAvailableModels(apiKey);
+                                        const modelNames = models
+                                            .filter(m => m.name.includes("gemini"))
+                                            .map(m => m.name.replace("models/", "")) // Extract clean ID
+                                            .join("\n");
+                                        alert(`Available Models:\n\n${modelNames}\n\n(Check console for full details)`);
+                                        console.log("Full Model List:", models);
+                                    } catch (e) {
+                                        alert(`Error fetching models: ${e.message}`);
+                                    }
+                                }}
+                                className="px-3 py-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200"
+                                title="List Available Models"
+                            >
+                                <List className="w-5 h-5" />
+                            </button>
+                        </div>
                         {!GEMINI_MODELS.find(m => m.id === selectedModel) && (
                             <input
                                 type="text"
@@ -8663,8 +9571,8 @@ Return JSON: {
                     <div className="text-center pt-4">
                         <span className="text-xs text-slate-400">MealPrepMate v{APP_VERSION}</span>
                     </div>
-                </div>
-            </Modal>
+                </div >
+            </Modal >
 
             {/* Schedule to Calendar Modal */}
             <Modal isOpen={showScheduleModal && selectedRecipe} onClose={() => setShowScheduleModal(false)}>
@@ -8805,10 +9713,10 @@ Return JSON: {
                         </button>
                     </div>
                 )}
-            </Modal>
+            </Modal >
 
             {/* Meal Scheduler Wizard */}
-            <MealSchedulerWizard
+            < MealSchedulerWizard
                 isOpen={showMealWizard}
                 onClose={() => setShowMealWizard(false)}
                 apiKey={apiKey}
@@ -8845,14 +9753,16 @@ Return JSON: {
             />
 
             {/* Toast Notification */}
-            {toastData && (
-                <Toast
-                    message={toastData.message}
-                    onUndo={toastData.onUndo}
-                    duration={toastData.duration || 15000}
-                    onClose={() => setToastData(null)}
-                />
-            )}
+            {
+                toastData && (
+                    <Toast
+                        message={toastData.message}
+                        onUndo={toastData.onUndo}
+                        duration={toastData.duration || 15000}
+                        onClose={() => setToastData(null)}
+                    />
+                )
+            }
 
             {/* Tutorial Overlay */}
             <TutorialOverlay
@@ -8877,25 +9787,31 @@ Return JSON: {
                     setTutorialStep(-1);
                     setHasSeenTutorial(true);
                     cleanupTutorialData();
+                    // If no API key, show the setup modal instead of going to app
+                    if (!apiKey) {
+                        setShowTutorialSetup(true);
+                    }
                 }}
             />
 
             {/* Tutorial Setup Modal (Final Step) */}
-            {showTutorialSetup && (
-                <TutorialSetupModal
-                    existingApiKey={apiKey}
-                    existingModel={selectedModel}
-                    onComplete={(newApiKey, newModel) => {
-                        if (newApiKey) setApiKey(newApiKey);
-                        if (newModel) setSelectedModel(newModel);
-                        setShowTutorialSetup(false);
-                        setHasSeenTutorial(true);
-                        cleanupTutorialData();
-                        setView('dashboard');
-                    }}
-                />
-            )}
-        </div>
+            {
+                showTutorialSetup && (
+                    <TutorialSetupModal
+                        existingApiKey={apiKey}
+                        existingModel={selectedModel}
+                        onComplete={(newApiKey, newModel) => {
+                            if (newApiKey) setApiKey(newApiKey);
+                            if (newModel) setSelectedModel(newModel);
+                            setShowTutorialSetup(false);
+                            setHasSeenTutorial(true);
+                            cleanupTutorialData();
+                            setView('dashboard');
+                        }}
+                    />
+                )
+            }
+        </div >
     );
 }
 
