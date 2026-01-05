@@ -51,7 +51,7 @@ const SERVING_MULTIPLIERS = {
 };
 
 // App version - update with each deployment
-const APP_VERSION = '2026.01.04.1';
+const APP_VERSION = '2026.01.04.2';
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -8315,6 +8315,11 @@ function MealPrepMate() {
     useBackGesture(showScheduleModal && selectedRecipe, () => setShowScheduleModal(false));
     useBackGesture(!!selectedRecipe && !showScheduleModal, () => setSelectedRecipe(null));
     useBackGesture(showTutorialSetup, () => setShowTutorialSetup(false));
+
+    // Navigate back to dashboard when on any other screen (only if no modals are open)
+    const noModalsOpen = !showSettings && !addItemModal && !showMealWizard && !chatOpen &&
+        !ingredientMatchData && !showScheduleModal && !selectedRecipe && !showTutorialSetup;
+    useBackGesture(view !== 'dashboard' && noModalsOpen, () => setView('dashboard'));
 
     // Inject dummy data when tutorial starts
     const injectTutorialData = useCallback(() => {
