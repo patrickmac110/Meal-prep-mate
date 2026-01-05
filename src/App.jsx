@@ -6315,8 +6315,11 @@ Return JSON: {
 
 Rules:
 - Only match items that exist in inventory
-- reserveAmount should be the amount needed from recipe
-- confidence: "high" if exact match, "medium" if similar name, "low" if uncertain`;
+- CRITICAL: "reserveAmount" must be in the SAME UNIT as the pantry item (currentUnit)
+- If recipe says "2 tsp" but pantry unit is "can" or "container", convert properly:
+  a) Estimate how many tsp are in a can/container, then calculate fraction needed
+  b) If conversion is unknown, use a small fraction (0.01-0.1) and set confidence to "low"
+- confidence: "high" = name AND unit match, "medium" = name match but different units, "low" = uncertain`;
 
         try {
             const res = await callGemini(apiKey, prompt, null, model);
@@ -8844,9 +8847,13 @@ Return JSON: {
 }
 
 Rules:
-- confidence: "high" = exact name match, "medium" = similar/related item, "low" = uncertain/guess
+- confidence: "high" = exact name AND compatible units, "medium" = name match but different units, "low" = uncertain match
 - Only match items that exist in inventory
-- amount = quantity needed from recipe`;
+- CRITICAL: "amount" must be in the SAME UNIT as the pantry item (currentUnit)
+- If recipe says "2 tsp" but pantry unit is "can" or "container", you CANNOT just use "2" - either:
+  a) Convert to pantry units (e.g., 1 can might contain ~48 tsp, so 2 tsp = 0.04 can)
+  b) If conversion is unknown, set amount to a small fraction (0.01-0.1) and confidence to "low"
+- Common conversions: 1 cup = 16 tbsp = 48 tsp, 1 lb = 16 oz, 1 container ≈ varies by product`;
 
         const res = await callGemini(apiKey, prompt, null, selectedModel);
         setIngredientLoading(false);
@@ -9200,9 +9207,13 @@ Return JSON: {
 }
 
 Rules:
-- confidence: "high" = exact name match, "medium" = similar/related item, "low" = uncertain/guess
+- confidence: "high" = exact name AND compatible units, "medium" = name match but different units, "low" = uncertain match
 - Only match items that exist in inventory
-- amount = quantity needed from recipe`;
+- CRITICAL: "amount" must be in the SAME UNIT as the pantry item (currentUnit)
+- If recipe says "2 tsp" but pantry unit is "can" or "container", convert properly:
+  a) Estimate how many tsp are in a can/container, then calculate fraction needed
+  b) If conversion is unknown, use a small fraction (0.01-0.1) and set confidence to "low"
+- Common conversions: 1 cup = 16 tbsp = 48 tsp, 1 lb = 16 oz`;
 
                     try {
                         const res = await callGemini(apiKey, prompt, null, selectedModel);
