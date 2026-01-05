@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useBackGesture } from './useBackGesture';
 import {
     ChefHat, Refrigerator, Users, ShoppingCart, Clock, Heart,
     ScanBarcode, Camera, Utensils, Trash2, Plus, Edit3, Save,
@@ -50,7 +51,7 @@ const SERVING_MULTIPLIERS = {
 };
 
 // App version - update with each deployment
-const APP_VERSION = '2026.01.03.1';
+const APP_VERSION = '2026.01.04.1';
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -1273,6 +1274,9 @@ const RecipeDetailModal = ({
     const [targetServings, setTargetServings] = useState(recipe?.servings || 4);
     const fileInputRef = useRef(null);
 
+    // Intercept back gesture to close modal
+    useBackGesture(isOpen, onClose);
+
     // Scaling helpers
     const getScaleRatio = () => {
         const original = recipe?.servings || 4;
@@ -2055,6 +2059,11 @@ const InventoryView = ({ apiKey, model, inventory, setInventory, knownLocations,
     const cameraInputRef = useRef(null);
     const pendingFileRef = useRef(null);
     const stagingListRef = useRef(null);
+
+    // Intercept back gesture for modals
+    useBackGesture(!!stagingData, () => setStagingData(null));
+    useBackGesture(showNewLocationModal, () => setShowNewLocationModal(false));
+    useBackGesture(showImageViewer, () => setShowImageViewer(false));
 
     // Normalize location names (case-insensitive)
     const normalizeLocation = (loc) => {
@@ -3204,6 +3213,9 @@ const FamilyView = ({ familyMembers, setFamilyMembers }) => {
     const [servings, setServings] = useState('');
     const [editingMember, setEditingMember] = useState(null);
 
+    // Intercept back gesture for edit modal
+    useBackGesture(!!editingMember, () => setEditingMember(null));
+
     // Use global getServingMultiplier for suggested servings
     const getSuggestedServings = (age, genderVal) => getServingMultiplier(age, genderVal);
 
@@ -3489,6 +3501,12 @@ const RecipeEngine = ({ apiKey, model, inventory, setInventory, family, setSelec
     // State for editing custom recipes via RecipeDetailModal
     const [editingCustomRecipe, setEditingCustomRecipe] = useState(null);
     const [isCreatingNewCustom, setIsCreatingNewCustom] = useState(false);
+
+    // Intercept back gesture for modals
+    useBackGesture(showSlotPicker && pendingRecipeForCalendar, () => { setShowSlotPicker(false); setPendingRecipeForCalendar(null); });
+    useBackGesture(!!selectedHistoryLeftover, () => setSelectedHistoryLeftover(null));
+    useBackGesture(showQuickMealsSuggestions, () => setShowQuickMealsSuggestions(false));
+    useBackGesture(!!editingQuickMeal, () => setEditingQuickMeal(null));
 
     const saveCustomRecipe = () => {
         if (!customRecipeName.trim()) return;
@@ -4711,6 +4729,9 @@ const ShoppingView = ({ apiKey, model, list, setList }) => {
     const [sorting, setSorting] = useState(false);
     const [editingItem, setEditingItem] = useState(null);
 
+    // Intercept back gesture for edit modal
+    useBackGesture(!!editingItem, () => setEditingItem(null));
+
     const addItem = (e) => {
         e.preventDefault();
         if (newItem) setList([...list, { id: generateId(), name: newItem, checked: false, category: 'Unsorted', quantity: '', notes: '' }]);
@@ -4827,6 +4848,10 @@ const LeftoversView = ({ apiKey, model, leftovers, setLeftovers, onMoveToHistory
     const [showAddModal, setShowAddModal] = useState(false);
     const [newLeftover, setNewLeftover] = useState({ name: '', portions: 2, tip: '', reheat: '' });
     const [isGenerating, setIsGenerating] = useState(false);
+
+    // Intercept back gesture for modals
+    useBackGesture(!!selected, () => setSelected(null));
+    useBackGesture(showAddModal, () => setShowAddModal(false));
 
     const smartFill = async () => {
         if (!newLeftover.name) return;
@@ -5001,6 +5026,13 @@ const CalendarView = ({ apiKey, model, mealPlan, setMealPlan, inventory, setInve
     const [showReschedule, setShowReschedule] = useState(null); // { meal, originalSlotKey, originalDate }
     const [rescheduleTargetDate, setRescheduleTargetDate] = useState('');
     const [rescheduleTargetMealType, setRescheduleTargetMealType] = useState('Dinner');
+
+    // Intercept back gesture for modals
+    useBackGesture(!!selectedMeal, () => setSelectedMeal(null));
+    useBackGesture(!!showAddCustomMeal, () => setShowAddCustomMeal(null));
+    useBackGesture(!!selectedLeftover, () => setSelectedLeftover(null));
+    useBackGesture(showAddLeftover, () => setShowAddLeftover(false));
+    useBackGesture(!!showReschedule, () => setShowReschedule(null));
 
     // Generate 90 days for the agenda
     const today = new Date();
@@ -5895,6 +5927,11 @@ const MealSchedulerWizard = ({
     const [pendingAllocation, setPendingAllocation] = useState(null);
     const [activeRecipeTab, setActiveRecipeTab] = useState('ai'); // 'ai', 'saved', 'history', 'custom'
 
+    // Intercept back gesture for wizard and its modals
+    useBackGesture(isOpen, onClose);
+    useBackGesture(!!selectedWizardRecipe, () => setSelectedWizardRecipe(null));
+    useBackGesture(!!pendingAllocation, () => setPendingAllocation(null));
+
     // Reset to AI tab when moving to next meal
     useEffect(() => {
         setActiveRecipeTab('ai');
@@ -6736,6 +6773,9 @@ const ChatAssistant = ({
     const [loading, setLoading] = useState(false);
     const messagesEndRef = useRef(null);
     const inputRef = useRef(null);
+
+    // Intercept back gesture to close chat panel
+    useBackGesture(isOpen, onClose);
 
     // Simple markdown renderer for chat
     const renderMarkdown = (text) => {
@@ -8265,6 +8305,16 @@ function MealPrepMate() {
     const [hasSeenTutorial, setHasSeenTutorial] = useLocalStorage('mpm_tutorial_seen', false);
     const [showTutorialSetup, setShowTutorialSetup] = useState(false);
     const [tutorialDataInjected, setTutorialDataInjected] = useState(false);
+
+    // Intercept back gesture for app-level modals
+    useBackGesture(showSettings, () => setShowSettings(false));
+    useBackGesture(!!addItemModal, () => setAddItemModal(null));
+    useBackGesture(showMealWizard, () => setShowMealWizard(false));
+    useBackGesture(chatOpen, () => setChatOpen(false));
+    useBackGesture(!!ingredientMatchData, () => setIngredientMatchData(null));
+    useBackGesture(showScheduleModal && selectedRecipe, () => setShowScheduleModal(false));
+    useBackGesture(!!selectedRecipe && !showScheduleModal, () => setSelectedRecipe(null));
+    useBackGesture(showTutorialSetup, () => setShowTutorialSetup(false));
 
     // Inject dummy data when tutorial starts
     const injectTutorialData = useCallback(() => {

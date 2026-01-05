@@ -546,13 +546,13 @@ input[type="number"] {
 .tutorial-spotlight {
     position: relative;
     z-index: 10001 !important;
-    outline: 3px solid #10b981;
-    outline-offset: 8px;
+    outline: 5px solid #e11d48;
+    outline-offset: 16px;
     border-radius: 16px;
     box-shadow:
-        0 0 0 4px rgba(16, 185, 129, 0.2),
-        0 0 20px 8px rgba(16, 185, 129, 0.3),
-        0 0 40px 16px rgba(16, 185, 129, 0.15);
+        0 0 0 6px rgba(225, 29, 72, 0.25),
+        0 0 25px 10px rgba(225, 29, 72, 0.35),
+        0 0 50px 20px rgba(225, 29, 72, 0.2);
     animation: pulse-glow 2s ease-in-out infinite;
 }
 
@@ -560,19 +560,19 @@ input[type="number"] {
 
     0%,
     100% {
-        outline-color: #10b981;
+        outline-color: #e11d48;
         box-shadow:
-            0 0 0 4px rgba(16, 185, 129, 0.2),
-            0 0 20px 8px rgba(16, 185, 129, 0.3),
-            0 0 40px 16px rgba(16, 185, 129, 0.15);
+            0 0 0 6px rgba(225, 29, 72, 0.25),
+            0 0 25px 10px rgba(225, 29, 72, 0.35),
+            0 0 50px 20px rgba(225, 29, 72, 0.2);
     }
 
     50% {
-        outline-color: #34d399;
+        outline-color: #fb7185;
         box-shadow:
-            0 0 0 6px rgba(16, 185, 129, 0.3),
-            0 0 30px 12px rgba(16, 185, 129, 0.4),
-            0 0 60px 24px rgba(16, 185, 129, 0.2);
+            0 0 0 8px rgba(225, 29, 72, 0.35),
+            0 0 35px 15px rgba(225, 29, 72, 0.45),
+            0 0 70px 30px rgba(225, 29, 72, 0.25);
     }
 }
 
@@ -581,18 +581,24 @@ input[type="number"] {
     position: fixed;
     z-index: 10002;
     background: white;
-    border-radius: 16px;
-    padding: 20px;
-    max-width: min(90vw, 340px);
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    border-radius: 20px;
+    padding: 24px;
+    width: 580px;
+    max-width: 92vw;
+    border: 2px solid #e2e8f0;
+    box-shadow:
+        0 4px 6px -1px rgba(0, 0, 0, 0.1),
+        0 10px 15px -3px rgba(0, 0, 0, 0.15),
+        0 25px 50px -12px rgba(0, 0, 0, 0.25),
+        0 0 0 1px rgba(0, 0, 0, 0.05);
     animation: fadeIn 0.3s ease-out;
 }
 
 /* Dynamic arrow element (positioned via inline styles) */
 .tutorial-arrow {
     position: absolute;
-    width: 12px;
-    height: 12px;
+    width: 16px;
+    height: 16px;
     background: white;
     box-shadow: -2px -2px 4px rgba(0, 0, 0, 0.05);
 }
@@ -614,7 +620,7 @@ input[type="number"] {
     background: white;
     border-radius: 24px;
     padding: 32px;
-    max-width: 420px;
+    max-width: 480px;
     width: 90%;
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
     animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
