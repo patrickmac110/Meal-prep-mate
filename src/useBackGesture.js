@@ -1,8 +1,5 @@
 import { useEffect, useRef } from 'react';
 
-// Global flag to prevent cascading popstate handlers during cleanup
-let isCleaningUp = false;
-
 /**
  * Intercepts the Android Back Gesture/Browser Back Button.
  * 
@@ -14,6 +11,7 @@ let isCleaningUp = false;
  */
 export const useBackGesture = (active, onBack) => {
     const onBackRef = useRef(onBack);
+    const hasAddedHistoryEntry = useRef(false);
 
     // Keep callback ref updated
     useEffect(() => {
@@ -21,41 +19,35 @@ export const useBackGesture = (active, onBack) => {
     }, [onBack]);
 
     useEffect(() => {
-        if (!active) return;
+        if (!active) {
+            hasAddedHistoryEntry.current = false;
+            return;
+        }
 
-        // 1. Push a "fake" state to the history stack with unique identifier
-        const stateId = Date.now() + Math.random();
-        window.history.pushState({ modalOpen: true, id: stateId }, '');
+        // 1. Push a "fake" state to the history stack
+        // Only push if we haven't already (prevents duplicate entries)
+        if (!hasAddedHistoryEntry.current) {
+            window.history.pushState({ modalOpen: true }, '');
+            hasAddedHistoryEntry.current = true;
+        }
 
         // 2. Define what happens when the user hits "Back"
-        const handlePopState = (event) => {
-            // Ignore popstate events triggered by cleanup of other hooks
-            if (isCleaningUp) return;
-
+        const handlePopState = () => {
+            // Call the close handler
             onBackRef.current();
+            hasAddedHistoryEntry.current = false;
         };
 
         // 3. Listen for the back gesture
         window.addEventListener('popstate', handlePopState);
 
         return () => {
-            // Cleanup: Remove listener FIRST to prevent this instance from catching its own back()
+            // Cleanup: Just remove the listener
+            // We intentionally do NOT call history.back() here because:
+            // 1. It causes race conditions with other active hooks
+            // 2. The extra history entry is harmless - user just presses back again
             window.removeEventListener('popstate', handlePopState);
-
-            // Set global flag to prevent other active listeners from firing
-            isCleaningUp = true;
-
-            // IMPORTANT: If the component unmounts naturally (e.g. user clicked "X" button),
-            // we must remove the "fake" history item we added, otherwise the user 
-            // has to hit back twice later.
-            if (window.history.state?.modalOpen) {
-                window.history.back();
-            }
-
-            // Reset flag after a microtask to allow the popstate event to be ignored
-            setTimeout(() => {
-                isCleaningUp = false;
-            }, 0);
         };
-    }, [active]); // Re-run only when 'active' status changes
+    }, [active]);
 };
+
