@@ -51,7 +51,7 @@ const SERVING_MULTIPLIERS = {
 };
 
 // App version - update with each deployment
-const APP_VERSION = '2026.01.04.4';
+const APP_VERSION = '2026.01.05.1';
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -764,7 +764,7 @@ const Modal = ({ isOpen, onClose, children, size = 'default' }) => {
                         <X className="w-5 h-5 text-slate-700" />
                     </button>
                 </div>
-                <div className="overflow-y-auto flex-1 bg-slate-50">{children}</div>
+                <div id="modal-scroll-container" className="overflow-y-auto flex-1 bg-slate-50">{children}</div>
             </div>
         </div>
     );
@@ -1814,7 +1814,7 @@ const RecipeDetailModal = ({
                                     </button>
                                 )}
                                 {showCookButton && onCook && (
-                                    <button onClick={() => onCook(displayRecipe)} className="flex-1 btn-primary flex items-center justify-center gap-2">
+                                    <button id="recipe-cook-button" onClick={() => onCook(displayRecipe)} className="flex-1 btn-primary flex items-center justify-center gap-2">
                                         <Check className="w-5 h-5" /> Cook
                                     </button>
                                 )}
@@ -3465,7 +3465,7 @@ const FamilyView = ({ familyMembers, setFamilyMembers }) => {
 // RECIPE ENGINE (with macros and smart deduction)
 // ============================================================================
 
-const RecipeEngine = ({ apiKey, model, inventory, setInventory, family, setSelectedRecipe, history, setHistory, recipes, setRecipes, favorites, setFavorites, shoppingList, setShoppingList, mealPlan, setMealPlan, leftovers, setLeftovers, onMoveToHistory, customRecipes, setCustomRecipes, allocatedIngredients, setAllocatedIngredients, onOpenWizard, quickMeals, setQuickMeals, setToastData, activeTab, setActiveTab }) => {
+const RecipeEngine = ({ apiKey, model, inventory, setInventory, family, setSelectedRecipe, history, setHistory, recipes, setRecipes, favorites, setFavorites, shoppingList, setShoppingList, mealPlan, setMealPlan, leftovers, setLeftovers, onMoveToHistory, customRecipes, setCustomRecipes, allocatedIngredients, setAllocatedIngredients, onOpenWizard, quickMeals, setQuickMeals, setToastData, activeTab, setActiveTab, showCustomRecipeForm, setShowCustomRecipeForm }) => {
     const [loading, setLoading] = useState(false);
 
     // Persisted form state (survives refresh)
@@ -3476,8 +3476,7 @@ const RecipeEngine = ({ apiKey, model, inventory, setInventory, family, setSelec
     const [mealType, setMealType] = useLocalStorage('mpm_recipe_meal_type', 'Any');
     const [mode, setMode] = useLocalStorage('mpm_recipe_mode', 'Standard');
 
-    // Custom recipe form state (persisted)
-    const [showCustomRecipeForm, setShowCustomRecipeForm] = useLocalStorage('mpm_custom_form_show', false);
+    // Custom recipe form state (persisted) - showCustomRecipeForm now from props
     const [customRecipeName, setCustomRecipeName] = useLocalStorage('mpm_custom_form_name', '');
     const [customRecipeDesc, setCustomRecipeDesc] = useLocalStorage('mpm_custom_form_desc', '');
     const [customRecipeServings, setCustomRecipeServings] = useLocalStorage('mpm_custom_form_servings', 4);
@@ -4003,6 +4002,7 @@ STRICT JSON Output:
                         <div className="flex justify-between items-center">
                             <h2 className="text-xl font-bold text-slate-900 px-1">My Recipes</h2>
                             <button
+                                id="add-recipe-button"
                                 onClick={() => setShowCustomRecipeForm(!showCustomRecipeForm)}
                                 className="btn-primary text-sm py-2 flex items-center gap-1"
                             >
@@ -4122,7 +4122,7 @@ STRICT JSON Output:
 
 
                         {showCustomRecipeForm && (
-                            <div className="bg-slate-50 p-4 rounded-2xl space-y-3">
+                            <div id="add-recipe-form" className="bg-slate-50 p-4 rounded-2xl space-y-3">
                                 {/* AI Format Section */}
                                 <div className="bg-purple-50 border border-purple-200 rounded-xl p-3 space-y-3">
                                     <div className="flex items-center gap-2">
@@ -5918,7 +5918,9 @@ const MealSchedulerWizard = ({
     wizardCurrentIdx, setWizardCurrentIdx, wizardPhase, setWizardPhase,
     allocatedIngredients, setAllocatedIngredients,
     shoppingList, setShoppingList, favorites, setFavorites,
-    history, customRecipes
+
+    history, customRecipes,
+    dayStates, setDayStates // Lifted state passed from parent
 }) => {
     const [recipes, setRecipes] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -5937,12 +5939,11 @@ const MealSchedulerWizard = ({
         setActiveRecipeTab('ai');
     }, [wizardCurrentIdx]);
 
-    // dayStates: { 'YYYY-MM-DD': 'cook' | 'leftover' | null }
-    const [dayStates, setDayStates] = useLocalStorage('mpm_wizard_day_states', {});
+    // dayStates state lifted to parent (MealPrepMate) to allow tutorial access
 
     // Calculate how many days to show - extend 7 days past the last selected date
     const getLastSelectedDayOffset = () => {
-        const selectedDays = Object.entries(dayStates)
+        const selectedDays = Object.entries(dayStates || {})
             .filter(([_, state]) => state === 'cook' || state === 'leftover')
             .map(([dateKey]) => new Date(dateKey));
         if (selectedDays.length === 0) return 0;
@@ -6038,7 +6039,7 @@ const MealSchedulerWizard = ({
 
     // Calculate cooking days and their leftover info
     const getCookingDaysWithInfo = () => {
-        const cookDays = Object.entries(dayStates)
+        const cookDays = Object.entries(dayStates || {})
             .filter(([k, v]) => v === 'cook')
             .map(([k]) => k)
             .sort((a, b) => new Date(a) - new Date(b));
@@ -6397,8 +6398,18 @@ Rules:
 
     if (!isOpen) return null;
 
-    const cookCount = Object.values(dayStates).filter(v => v === 'cook').length;
-    const leftoverCount = Object.values(dayStates).filter(v => v === 'leftover').length;
+    // Defensive check for dayStates
+    const safeDayStates = dayStates || {};
+
+    const cookCount = Object.entries(safeDayStates).filter(([k, v]) => {
+        if (v !== 'cook') return false;
+        // Only count days that are today or likely to be shown
+        const date = new Date(k);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        return date >= today;
+    }).length;
+    const leftoverCount = Object.values(safeDayStates).filter(v => v === 'leftover').length;
 
     return (
         <>
@@ -6428,7 +6439,7 @@ Rules:
                                     </p>
                                     <div className="grid grid-cols-4 gap-2">
                                         {upcomingDays.map(day => {
-                                            const state = dayStates[day.dateKey];
+                                            const state = (dayStates || {})[day.dateKey];
                                             const isCook = state === 'cook';
                                             const isLeftover = state === 'leftover';
 
@@ -7852,6 +7863,7 @@ const TUTORIAL_DUMMY_DATA = {
     family: [
         { id: 'demo-fam-1', name: 'Alex', ageGroup: 'adult_m', dietaryNeeds: [], customMultiplier: null, _isDemo: true },
         { id: 'demo-fam-2', name: 'Sam', ageGroup: 'child_8', dietaryNeeds: ['No Mushrooms'], customMultiplier: null, _isDemo: true },
+        { id: 'demo-fam-3', name: 'Leo', ageGroup: 'toddler', dietaryNeeds: [], customMultiplier: 0.4, _isDemo: true },
     ],
     quickMeals: [
         { id: 'demo-qm-1', name: 'Apple', emoji: '🍎', inventoryItem: 'Apple', calories: 95, _isDemo: true },
@@ -7871,15 +7883,32 @@ const TUTORIAL_DUMMY_DATA = {
             id: 'demo-fav-1',
             name: 'Honey Garlic Chicken',
             servings: 4,
+            total_time: '35 min',
             macros: { calories: 450, protein: 35, carbs: 25, fat: 18 },
             ingredients: [
                 { item: 'Chicken Breast', qty: '2 lb' },
                 { item: 'Honey', qty: '1/4 cup' },
                 { item: 'Garlic', qty: '4 cloves' },
                 { item: 'Soy Sauce', qty: '3 tbsp' },
+                { item: 'Sesame Oil', qty: '1 tsp' },
+                { item: 'Green Onions', qty: '2 stalks' },
             ],
-            steps: ['Season chicken with salt and pepper', 'Mix honey, garlic, and soy sauce', 'Cook chicken until golden', 'Add sauce and simmer'],
-            description: 'A family favorite with sweet and savory flavors',
+            missing_ingredients: [
+                { item: 'Soy Sauce', total_amount_needed: '3 tbsp' },
+                { item: 'Sesame Oil', total_amount_needed: '1 tsp' },
+                { item: 'Green Onions', total_amount_needed: '2 stalks' },
+            ],
+            family_adaptation: "For Sam (picky eater): Reduce honey by half for less sweetness, serve sauce on the side. The garlic can be minced finer for kids who don't like chunks. For anyone avoiding soy: substitute coconut aminos 1:1.",
+            steps: [
+                'Season chicken with salt and pepper',
+                'Mix honey, minced garlic, soy sauce, and sesame oil',
+                'Heat pan over medium-high, cook chicken 6-7 min per side until golden (165°F internal)',
+                'Add sauce and simmer 3-4 minutes until glazed',
+                'Garnish with sliced green onions'
+            ],
+            description: 'A family favorite with sweet and savory flavors. The honey garlic glaze caramelizes beautifully!',
+            storage_instructions: 'Refrigerate in airtight container up to 4 days',
+            reheating_tips: 'Microwave 2 min or pan-fry with a splash of water to restore moisture',
             _isDemo: true
         },
     ],
@@ -8063,17 +8092,23 @@ const TutorialOverlay = ({ step, steps, onNext, onPrev, onSkip }) => {
         arrowLeft: 0,
         isTop: true
     });
+    const [modalAtTop, setModalAtTop] = useState(false); // For auto-scroll: tracks if modal should be at top
     const currentStep = steps[step];
-    const bubbleWidth = 480;
+    const bubbleWidth = currentStep?.wideTooltip ? 680 : 480;
     const margin = 10;
     const gap = 15; // Gap between element and bubble
+
+    // Track last executed step to prevent infinite loops if steps array is recreated
+    const lastExecutedStep = useRef(null);
 
     useEffect(() => {
         if (step < 0 || !currentStep) return;
 
         // Execute step action (like switching views)
-        if (currentStep.action) {
+        // Only execute action if we haven't executed it for this step yet
+        if (currentStep.action && lastExecutedStep.current !== step) {
             currentStep.action();
+            lastExecutedStep.current = step;
         }
 
         // Position tooltip
@@ -8144,6 +8179,77 @@ const TutorialOverlay = ({ step, steps, onNext, onPrev, onSkip }) => {
         };
     }, []);
 
+    // Auto-scroll effect for steps with autoScroll flag
+    useEffect(() => {
+        if (!currentStep?.autoScroll) {
+            setModalAtTop(false);
+            return;
+        }
+
+        let scrollInterval;
+        let autoScrollFinished = false; // Only track user scroll after auto-scroll is done
+        let scrollHandler = null;
+
+        // Wait for modal animation to complete before starting auto-scroll
+        const startTimeout = setTimeout(() => {
+            const scrollContainer = document.getElementById('modal-scroll-container');
+            if (!scrollContainer) return;
+
+            // Auto-scroll slowly, move modal to top when Cook button visible
+            let modalMoved = false;
+            scrollInterval = setInterval(() => {
+                // Check if Cook button is visible in the viewport (only once)
+                if (!modalMoved) {
+                    const cookButton = document.getElementById('recipe-cook-button');
+                    if (cookButton) {
+                        const rect = cookButton.getBoundingClientRect();
+                        const containerRect = scrollContainer.getBoundingClientRect();
+                        // Button is visible if it's within the container viewport
+                        const isButtonVisible = rect.top >= containerRect.top && rect.bottom <= containerRect.bottom;
+
+                        if (isButtonVisible) {
+                            setModalAtTop(true);
+                            modalMoved = true;
+                        }
+                    }
+                }
+
+                const isAtBottom = scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight - 50;
+
+                if (isAtBottom) {
+                    if (!modalMoved) {
+                        setModalAtTop(true);
+                    }
+                    clearInterval(scrollInterval);
+                    autoScrollFinished = true;
+
+                    // Only add scroll listener AFTER auto-scroll is completely done
+                    scrollHandler = () => {
+                        const isAtBottom = scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight - 100;
+                        if (!isAtBottom) {
+                            setModalAtTop(false);
+                        } else {
+                            setModalAtTop(true);
+                        }
+                    };
+                    scrollContainer.addEventListener('scroll', scrollHandler, { passive: true });
+                } else {
+                    scrollContainer.scrollTop += 2;
+                }
+            }, 30);
+        }, 1000); // Wait 1 second for modal animation
+
+        return () => {
+            clearTimeout(startTimeout);
+            if (scrollInterval) clearInterval(scrollInterval);
+            const scrollContainer = document.getElementById('modal-scroll-container');
+            if (scrollContainer && scrollHandler) {
+                scrollContainer.removeEventListener('scroll', scrollHandler);
+            }
+            setModalAtTop(false);
+        };
+    }, [step, currentStep?.autoScroll]);
+
     if (step < 0 || !currentStep) return null;
 
     const isFirst = step === 0;
@@ -8177,6 +8283,16 @@ const TutorialOverlay = ({ step, steps, onNext, onPrev, onSkip }) => {
         }
 
         // No target but bottom position requested (e.g. for modals)
+        // Unless modalAtTop is true for auto-scroll steps
+        if (currentStep?.autoScroll && modalAtTop) {
+            return {
+                top: 60,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                width: bubbleWidth,
+                transition: 'top 0.3s ease-out, bottom 0.3s ease-out'
+            };
+        }
         return {
             bottom: 85, // Just above nav bar
             left: '50%',
@@ -8252,6 +8368,7 @@ function MealPrepMate() {
     const [history, setHistory] = useLocalStorage('mpm_history', []);
     const [recipes, setRecipes] = useLocalStorage('mpm_recipes_cache', []);
     const [mealPlan, setMealPlan] = useLocalStorage('mpm_meal_plan', {});
+    const [dayStates, setDayStates] = useLocalStorage('mpm_wizard_day_states', {}); // Lifted state for wizard tutorial access
     const [lastNotifCheck, setLastNotifCheck] = useLocalStorage('mpm_last_notif_check', '');
     const [notifsEnabled, setNotifsEnabled] = useLocalStorage('mpm_notifs_enabled', true);
     const [expirationReminders, setExpirationReminders] = useLocalStorage('mpm_expiration_reminders', [7, 3, 1]);
@@ -8263,6 +8380,7 @@ function MealPrepMate() {
     // Tab state lifted for tutorial control
     const [recipeActiveTab, setRecipeActiveTab] = useLocalStorage('mpm_recipe_active_tab', 'generate');
     const [calendarActiveTab, setCalendarActiveTab] = useLocalStorage('mpm_calendar_active_tab', 'upcoming');
+    const [showCustomRecipeForm, setShowCustomRecipeForm] = useLocalStorage('mpm_custom_form_show', false);
 
     // Chat AI Assistant state
     const [chatOpen, setChatOpen] = useLocalStorage('mpm_chat_open', false);
@@ -8363,7 +8481,8 @@ function MealPrepMate() {
         {
             title: "👋 Welcome to MealPrepMate!",
             text: "Stop wondering 'what's for dinner?' or worrying about food going bad in the back of the fridge. This app is your kitchen brain—it tells you exactly what you have, suggests meals based on those ingredients, and handles the math so you can cook confidently. Let's take a quick tour!",
-            target: null
+            target: null,
+            wideTooltip: true
         },
         // Step 1: Pantry Overview
         {
@@ -8403,7 +8522,7 @@ function MealPrepMate() {
         // Step 4: Ideas Tab
         {
             title: "💡 The Ideas Tab",
-            text: "The AI looks at your specific inventory and suggests recipes you can cook right now. Type what you're craving, select who's eating, and hit Generate. You can also set meal prep options for extra servings or leftover planning!",
+            text: "The AI looks at your specific inventory and suggests recipes you can cook right now. Type what you're craving, select who's eating, add extra guests if needed, and hit Generate!",
             target: "recipe-tab-ideas",
             bottomPosition: true,
             action: () => {
@@ -8422,26 +8541,37 @@ function MealPrepMate() {
                 setRecipeActiveTab('custom');
             }
         },
-        // Step 6: Add Recipe Options
+        // Step 6: Add Recipe Options - Highlight button and open form
         {
-            title: "✨ Multiple Ways to Add Recipes",
-            text: "You can describe a dish ('my grandma's chicken soup with carrots'), paste a recipe URL, upload cookbook photos, or write from scratch with 'Add Recipe'. The AI handles messy input and creates a clean, organized recipe!",
-            target: "recipe-tab-custom",
+            title: "✨ The Add Recipe Form",
+            text: "Tap 'Add Recipe' to open this form! Describe a dish like 'turkey sandwich with mayo, mustard, and lettuce', paste recipe text from a website, or upload cookbook photos. The AI formats everything into a clean, organized recipe!",
+            target: "add-recipe-form",
             bottomPosition: true,
             action: () => {
                 setView('recipes');
                 setRecipeActiveTab('custom');
+                setShowCustomRecipeForm(true);
+                // Scroll to form after a brief delay
+                setTimeout(() => {
+                    const el = document.getElementById('add-recipe-form');
+                    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 150);
             }
         },
-        // Step 7: Quick Meals Section (Switch back to Ideas tab, underscores 'out of order' flow requested)
+        // Step 7: Quick Meals Section (on +My tab)
         {
             title: "⚡ Quick Meals",
-            text: "Back on the Ideas tab, see those colorful pills? Those are Quick Meals—one-tap buttons for simple foods like an apple, yogurt, or cereal. Tap them to instantly log a snack and deduct from your inventory without opening a full recipe. Tap 'Auto-Discover' to have AI scan your inventory for more!",
+            text: "See those colorful pills? Those are Quick Meals—one-tap buttons for simple foods like an apple, yogurt, or cereal. Tap to instantly log a snack and deduct from inventory! Tap 'Auto-Discover' to scan your inventory, or add any recipe as a Quick Meal from its recipe card.",
             target: "quick-meals-section",
             bottomPosition: true,
             action: () => {
                 setView('recipes');
                 setRecipeActiveTab('custom');
+                // Scroll to Quick Meals section
+                setTimeout(() => {
+                    const el = document.getElementById('quick-meals-section');
+                    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 150);
             }
         },
         // Step 8: Saved Recipes Tab
@@ -8470,9 +8600,10 @@ function MealPrepMate() {
         // Step 10: Recipe Card Details (Opens a demo recipe)
         {
             title: "🃏 Recipe Card Details",
-            text: "Here's a full recipe! You can see ingredients, instructions, nutrition info, and action buttons. Tap Edit to modify, Schedule to add to your calendar, the heart to save, or Cook to mark as made and deduct ingredients from your inventory!",
+            text: "Here's a full recipe! You'll see title, nutrition info, servings adjuster, ingredients (missing items highlighted), instructions, and storage tips. Tap the pencil icon to edit. Use Save to favorite, Cook to deduct ingredients, Schedule to add to calendar, or add to Leftovers and Quick Meals!",
             target: null,
             bottomPosition: true,
+            autoScroll: true, // Enable auto-scroll with dynamic modal positioning
             action: () => {
                 setView('recipes');
                 setRecipeActiveTab('favorites'); // Switch to favorites to show card
@@ -8486,7 +8617,7 @@ function MealPrepMate() {
         // Step 11: Calendar Overview
         {
             title: "📅 Your Meal Calendar",
-            text: "Plan your week here! You can schedule meals on specific days, and drag to reschedule if plans change. Let's look at the powerful 'Plan Your Week' wizard next!",
+            text: "Plan your week here! You can schedule meals on specific days and tap any meal to see details or reschedule. Let's look at the powerful 'Plan Your Week' wizard next!",
             target: "nav-calendar",
             action: () => {
                 setSelectedRecipe(null); // Close recipe modal
@@ -8498,12 +8629,24 @@ function MealPrepMate() {
         // Step 12: Meal Wizard - Config Screen
         {
             title: "🗓️ Plan Your Week Wizard",
-            text: "This wizard helps you plan multiple meals at once! First, select which days you want to COOK (blue) vs EAT LEFTOVERS (orange). Leftover days use the previous day's food, so you don't need new recipes. ",
+            text: "This wizard helps you plan multiple meals at once! Tap a day to mark it as a COOK day, and the next 7 days automatically become leftover days. To un-select a leftover day, simply tap it. You can then tap it again to make it another COOK day if you wish!",
             target: null,
             bottomPosition: true,
             action: () => {
                 setShowMealWizard(true);
                 setWizardPhase('config');
+                // Pre-select 1 cook day (Tomorrow) + 7 leftovers so user sees how it works
+                const today = new Date();
+                const d1 = new Date(today); d1.setDate(today.getDate() + 1);
+                const k1 = getLocalDateKey(d1);
+
+                const newStates = { [k1]: 'cook' };
+                for (let i = 1; i <= 7; i++) {
+                    const nextD = new Date(d1);
+                    nextD.setDate(d1.getDate() + i);
+                    newStates[getLocalDateKey(nextD)] = 'leftover';
+                }
+                setDayStates(newStates);
             }
         },
         // Step 13: Meal Wizard - Details explanation
@@ -8514,7 +8657,30 @@ function MealPrepMate() {
             bottomPosition: true,
             action: () => {
                 setShowMealWizard(true);
-                setWizardPhase('review');
+                // Use setTimeout to ensure state is set after modal renders logic
+                setTimeout(() => {
+                    const today = new Date();
+                    const d1 = new Date(today); d1.setDate(today.getDate() + 1); // Tomorrow
+                    const k1 = getLocalDateKey(d1);
+
+                    const newStates = { [k1]: 'cook' };
+                    for (let i = 1; i <= 7; i++) {
+                        const nextD = new Date(d1);
+                        nextD.setDate(d1.getDate() + i);
+                        newStates[getLocalDateKey(nextD)] = 'leftover';
+                    }
+                    setDayStates(newStates);
+
+                    // Select specific family members to show selection state (One adult + Toddler)
+                    // We access the current family state which should be the dummy data
+                    const patrick = family.find(f => f.name === 'Patrick') || family[0];
+                    const leo = family.find(f => f.name === 'Leo');
+                    if (patrick) {
+                        setWizardEaters(leo ? [patrick.id, leo.id] : [patrick.id]);
+                    }
+
+                    setWizardPhase('review');
+                }, 100);
             }
         },
         // Step 14: Close wizard, go to Leftovers Tab
@@ -8533,7 +8699,7 @@ function MealPrepMate() {
         // Step 15: Open a leftover card to show details
         {
             title: "📦 Managing Leftovers",
-            text: "Here's a leftover with full details! You can see storage instructions, reheating tips, and how many portions remain. Tap 'Ate Some' to decrease portions, or 'Finished' when it's gone. The app alerts you before it expires!",
+            text: "Here's a leftover with full details! You can see storage instructions, reheating tips, and how many portions remain. Tap 'Eat 1 Serving' to decrease portions, or the trash icon to remove it. The app alerts you before it expires!",
             target: null,
             bottomPosition: true,
             action: () => {
@@ -8546,7 +8712,7 @@ function MealPrepMate() {
         // Step 16: Shopping
         {
             title: "🛒 Smart Shopping List",
-            text: "Missing ingredients automatically appear here when you view recipes. Check items off as you shop. Pro tip: Use the AI Sort button to organize your list by store aisle for faster shopping!",
+            text: "Missing ingredients automatically appear here when you view recipes. Check items off as you shop. Pro tip: Use the Sort button to organize your list by store aisle for faster shopping!",
             target: "nav-shop",
             action: () => {
                 setSelectedLeftoverId(null); // Close leftover modal
@@ -8562,7 +8728,7 @@ function MealPrepMate() {
         // Step 18: Family Screen (open it)
         {
             title: "➕ Adding Family Members",
-            text: "Add each person who eats with you! Enter their age, dietary restrictions, and preferences. The app automatically adjusts portion sizes—a toddler counts as 0.4 servings while an adult male might be 1.5 servings.",
+            text: "Add each person who eats with you! Enter their birthdate, gender, dietary restrictions, and preferences. The app automatically adjusts portion sizes based on age—a toddler counts as 0.4 servings while adults get 1 serving.",
             target: "header-family-btn",
             action: () => setView('family')
         },
@@ -9147,7 +9313,7 @@ Rules:
                 {view === 'dashboard' && <Dashboard />}
                 {view === 'inventory' && <InventoryView apiKey={apiKey} model={selectedModel} inventory={inventory} setInventory={setInventory} knownLocations={knownLocations} setKnownLocations={setKnownLocations} processedFiles={processedFiles} setProcessedFiles={setProcessedFiles} allocatedIngredients={allocatedIngredients} expandedItemId={expandedInventoryItemId} setExpandedItemId={setExpandedInventoryItemId} />}
                 {view === 'family' && <FamilyView familyMembers={family} setFamilyMembers={setFamily} />}
-                {view === 'recipes' && <RecipeEngine apiKey={apiKey} model={selectedModel} inventory={inventory} setInventory={setInventory} family={family} setSelectedRecipe={setSelectedRecipe} history={history} setHistory={setHistory} recipes={recipes} setRecipes={setRecipes} favorites={favorites} setFavorites={setFavorites} shoppingList={shoppingList} setShoppingList={setShoppingList} mealPlan={mealPlan} setMealPlan={setMealPlan} leftovers={leftovers} setLeftovers={setLeftovers} onMoveToHistory={handleMoveToHistory} customRecipes={customRecipes} setCustomRecipes={setCustomRecipes} allocatedIngredients={allocatedIngredients} setAllocatedIngredients={setAllocatedIngredients} onOpenWizard={() => setShowMealWizard(true)} quickMeals={quickMeals} setQuickMeals={setQuickMeals} setToastData={setToastData} activeTab={recipeActiveTab} setActiveTab={setRecipeActiveTab} />}
+                {view === 'recipes' && <RecipeEngine apiKey={apiKey} model={selectedModel} inventory={inventory} setInventory={setInventory} family={family} setSelectedRecipe={setSelectedRecipe} history={history} setHistory={setHistory} recipes={recipes} setRecipes={setRecipes} favorites={favorites} setFavorites={setFavorites} shoppingList={shoppingList} setShoppingList={setShoppingList} mealPlan={mealPlan} setMealPlan={setMealPlan} leftovers={leftovers} setLeftovers={setLeftovers} onMoveToHistory={handleMoveToHistory} customRecipes={customRecipes} setCustomRecipes={setCustomRecipes} allocatedIngredients={allocatedIngredients} setAllocatedIngredients={setAllocatedIngredients} onOpenWizard={() => setShowMealWizard(true)} quickMeals={quickMeals} setQuickMeals={setQuickMeals} setToastData={setToastData} activeTab={recipeActiveTab} setActiveTab={setRecipeActiveTab} showCustomRecipeForm={showCustomRecipeForm} setShowCustomRecipeForm={setShowCustomRecipeForm} />}
                 {view === 'shopping' && <ShoppingView apiKey={apiKey} model={selectedModel} list={shoppingList} setList={setShoppingList} />}
                 {view === 'leftovers' && <LeftoversView apiKey={apiKey} model={selectedModel} leftovers={leftovers} setLeftovers={setLeftovers} onMoveToHistory={handleMoveToHistory} />}
                 {view === 'calendar' && <CalendarView apiKey={apiKey} model={selectedModel} mealPlan={mealPlan} setMealPlan={setMealPlan} inventory={inventory} setInventory={setInventory} family={family} recipes={recipes} history={history} customRecipes={customRecipes} downloadICSFn={downloadICS} onCook={handleCook} onFavorite={(r) => setFavorites([...favorites, { ...r, id: generateId() }])} onAddToLeftovers={handleAddToLeftovers} leftovers={leftovers} setLeftovers={setLeftovers} onMoveToHistory={handleMoveToHistory} allocatedIngredients={allocatedIngredients} setAllocatedIngredients={setAllocatedIngredients} onOpenWizard={() => setShowMealWizard(true)} favorites={favorites} activeTab={calendarActiveTab} setActiveTab={setCalendarActiveTab} selectedLeftoverId={selectedLeftoverId} setSelectedLeftoverId={setSelectedLeftoverId} />}
@@ -9294,35 +9460,7 @@ Rules:
                 )}
             </Modal>
 
-            {/* Meal Scheduler Wizard */}
-            <MealSchedulerWizard
-                isOpen={showMealWizard}
-                onClose={() => setShowMealWizard(false)}
-                apiKey={apiKey}
-                model={selectedModel}
-                inventory={inventory}
-                family={family}
-                mealPlan={mealPlan}
-                setMealPlan={setMealPlan}
-                wizardDays={wizardDays}
-                setWizardDays={setWizardDays}
-                wizardEaters={wizardEaters}
-                setWizardEaters={setWizardEaters}
-                wizardExtraGuests={wizardExtraGuests}
-                setWizardExtraGuests={setWizardExtraGuests}
-                wizardMealType={wizardMealType}
-                setWizardMealType={setWizardMealType}
-                wizardLeftoverDays={wizardLeftoverDays}
-                setWizardLeftoverDays={setWizardLeftoverDays}
-                wizardPrompt={wizardPrompt}
-                setWizardPrompt={setWizardPrompt}
-                wizardCurrentIdx={wizardCurrentIdx}
-                setWizardCurrentIdx={setWizardCurrentIdx}
-                wizardPhase={wizardPhase}
-                setWizardPhase={setWizardPhase}
-                allocatedIngredients={allocatedIngredients}
-                setAllocatedIngredients={setAllocatedIngredients}
-            />
+
 
             {/* Chat AI Assistant */}
             <ChatAssistant
@@ -9789,6 +9927,8 @@ Rules:
                 model={selectedModel}
                 inventory={inventory}
                 setInventory={setInventory}
+                dayStates={dayStates}
+                setDayStates={setDayStates}
                 family={family}
                 mealPlan={mealPlan}
                 setMealPlan={setMealPlan}
