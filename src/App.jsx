@@ -51,7 +51,7 @@ const SERVING_MULTIPLIERS = {
 };
 
 // App version - update with each deployment
-const APP_VERSION = '2026.01.06.1';
+const APP_VERSION = '2.2026.01.06';
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -1049,7 +1049,7 @@ const ApiKeyModal = ({ isOpen, onSave }) => {
                 </div>
                 {/* Version info */}
                 <div className="text-center pt-2 border-t border-slate-100">
-                    <span className="text-xs text-slate-400">MealPrepMate v{buildVersion}</span>
+                    <span className="text-xs text-slate-400">MealPrepMate v{APP_VERSION}</span>
                 </div>
             </div>
         </div>
