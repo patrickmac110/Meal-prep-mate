@@ -545,7 +545,6 @@ input[type="number"] {
 /* Tutorial Spotlight - Glowing Outline (no dark overlay) */
 .tutorial-spotlight {
     position: relative;
-    z-index: 10001 !important;
     outline: 5px solid #e11d48;
     outline-offset: 16px;
     border-radius: 16px;
@@ -554,6 +553,8 @@ input[type="number"] {
         0 0 25px 10px rgba(225, 29, 72, 0.35),
         0 0 50px 20px rgba(225, 29, 72, 0.2);
     animation: pulse-glow 2s ease-in-out infinite;
+    scroll-margin-top: 90px;
+    /* Leave room for highlight glow when scrolling */
 }
 
 @keyframes pulse-glow {
@@ -574,6 +575,21 @@ input[type="number"] {
             0 0 35px 15px rgba(225, 29, 72, 0.45),
             0 0 70px 30px rgba(225, 29, 72, 0.25);
     }
+}
+
+/* Nav bar button spotlight - more compact/square highlight */
+#nav-pantry.tutorial-spotlight,
+#nav-plan.tutorial-spotlight,
+#nav-calendar.tutorial-spotlight,
+#nav-shop.tutorial-spotlight {
+    outline-offset: 8px;
+    padding: 4px 12px;
+    margin: -4px -12px;
+}
+
+/* Inventory items get smaller scroll margin to bring to top */
+[id^="inventory-item-"].tutorial-spotlight {
+    scroll-margin-top: 20px;
 }
 
 /* Tutorial Tooltip */

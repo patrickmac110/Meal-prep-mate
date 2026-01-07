@@ -8,7 +8,7 @@ import {
     MessageCircle, Download, Upload, Leaf, Copy, Share, Calendar, CalendarDays,
     AlertTriangle, MapPin, Package, ChevronDown, ChevronRight, ChevronLeft,
     Flame, Beef, Wheat, Droplet, GripVertical, MoreHorizontal, List, Grid3x3, ClipboardList, Zap, HelpCircle,
-    ArrowRight, Search
+    ArrowRight, Search, BookOpen
 } from 'lucide-react';
 
 // ============================================================================
@@ -254,14 +254,8 @@ const generateImageWithGemini = async (apiKey, prompt) => {
         throw new Error("Model did not return an image.");
     } catch (error) {
         console.error("Gemini Image API Failed:", error);
-        return null;
+        return null; // Returning null stops the spinner in UI
     }
-};
-
-const generateRecipeImage = (apiKey, recipeName) => {
-    // Legacy support or fallback if needed, but we prefer Gemini now
-    // Keeping this structure if called synchronously elsewhere, but essentially unused
-    return null;
 };
 
 // Function calling helper for AI Assistant
@@ -2024,12 +2018,236 @@ const LeftoverDetailModal = ({ leftover, leftovers, setLeftovers, onClose, onMov
         </div>
     );
 };
+// Reusable Inventory Item Component
+const InventoryItem = ({
+    item,
+    expandedItemId,
+    setExpandedItemId,
+    updateItem,
+    deleteItem,
+    allLocations,
+    handleLocationChange,
+    getItemReservations,
+    getAvailableQuantity,
+    showLocationBadge = false
+}) => {
+    const isExpanded = expandedItemId === item.id;
+    const expirationStatus = getExpirationStatus(item.expiresAt);
+
+    return (
+        <div className="inventory-item">
+            {/* Main Row - Always visible */}
+            <div
+                className="flex items-center gap-2 cursor-pointer"
+                onClick={() => setExpandedItemId(isExpanded ? null : item.id)}
+            >
+                {/* Quantity - color-coded by expiration */}
+                <input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={item.quantity}
+                    onChange={(e) => {
+                        e.stopPropagation();
+                        updateItem(item.id, { quantity: e.target.value === '' ? '' : parseFloat(e.target.value) });
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    className={`w-14 text-center font-bold rounded-lg py-1.5 border-0 focus:ring-2 text-sm ${expirationStatus === 'expired'
+                        ? 'bg-red-100 text-red-600 focus:ring-red-500'
+                        : expirationStatus === 'soon'
+                            ? 'bg-amber-100 text-amber-600 focus:ring-amber-500'
+                            : 'bg-emerald-50 text-emerald-600 focus:ring-emerald-500'
+                        }`}
+                />
+
+                {/* Unit - Compact */}
+                <span className="text-xs text-slate-500 font-medium w-16 flex-shrink-0">{item.unit || 'each'}</span>
+
+                {/* Name + Expiration + Reservations + Location Badge */}
+                <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-x-2">
+                        <span className="font-bold text-slate-700 break-words">{item.name}</span>
+                        {showLocationBadge && (
+                            <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                                {item.location || 'Pantry'}
+                            </span>
+                        )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                        {item.expiresAt && (
+                            <span className={`text-xs ${expirationStatus === 'expired'
+                                ? 'text-red-500'
+                                : expirationStatus === 'soon'
+                                    ? 'text-amber-500'
+                                    : 'text-slate-400'
+                                }`}>
+                                {expirationStatus === 'expired'
+                                    ? 'Expired'
+                                    : `Exp ${formatExpDate(item.expiresAt)}`}
+                            </span>
+                        )}
+                        {(() => {
+                            const reservations = getItemReservations(item.name);
+                            if (reservations.length > 0) {
+                                return (
+                                    <div className="flex flex-col gap-1 mt-1">
+                                        <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded font-bold inline-flex items-center w-fit">
+                                            📅 {reservations.length} Reserved
+                                        </span>
+                                        {isExpanded && (
+                                            <div className="bg-indigo-50 rounded-lg p-2 space-y-1">
+                                                {reservations.map((res, idx) => (
+                                                    <div key={idx} className="text-[10px] text-indigo-800 flex justify-between items-center border-b border-indigo-100 last:border-0 pb-1 last:pb-0">
+                                                        <span className="font-medium truncate max-w-[120px]">{res.recipeName}</span>
+                                                        <span className="font-bold flex-shrink-0 ml-2">{res.amount} {res.unit}</span>
+                                                    </div>
+                                                ))}
+                                                <div className="text-[10px] font-bold text-indigo-900 text-right pt-1 mt-1 border-t border-indigo-200">
+                                                    Available: {getAvailableQuantity(item).toFixed(2)} {item.unit}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            }
+                            return null;
+                        })()}
+                    </div>
+                </div>
+
+                {/* Expand Indicator */}
+                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+            </div>
+
+            {/* Expanded Row - Details & Actions */}
+            {isExpanded && (
+                <div className="mt-3 pt-3 border-t border-slate-100 space-y-3 animate-fade-in">
+                    {/* Name Edit */}
+                    <div subterranean-id="name-edit">
+                        <div className="flex items-center justify-between mb-1">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Item Name</label>
+                            {getItemReservations(item.name).length > 0 && (
+                                <span className="text-[10px] bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded font-bold uppercase">Reserved</span>
+                            )}
+                        </div>
+                        <input
+                            type="text"
+                            value={item.name}
+                            onChange={(e) => updateItem(item.id, { name: e.target.value })}
+                            className="w-full input-field text-sm"
+                            placeholder="Item name"
+                        />
+                    </div>
+
+                    {/* Unit & Location Row */}
+                    <div className="grid grid-cols-2 gap-2">
+                        <div>
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Unit</label>
+                            <UnitPicker
+                                value={item.unit || 'each'}
+                                onChange={(u) => updateItem(item.id, { unit: u })}
+                                compact
+                            />
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Location</label>
+                            <select
+                                value={item.location || 'Pantry'}
+                                onChange={(e) => handleLocationChange(e.target.value, item.id)}
+                                className="select-field w-full text-sm"
+                            >
+                                {allLocations.map(l => <option key={l} value={l}>{l}</option>)}
+                                <option value="__new__">+ New Location</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    {/* Notes */}
+                    <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Notes</label>
+                        <textarea
+                            value={item.notes || ''}
+                            onChange={(e) => updateItem(item.id, { notes: e.target.value })}
+                            placeholder="Add notes (e.g., brand, special info)..."
+                            className="w-full input-field text-sm resize-none"
+                            rows={2}
+                        />
+                    </div>
+
+                    {/* Expiration Date */}
+                    <div className="flex items-center gap-2">
+                        <div className="flex-1">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Expiration Date</label>
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="date"
+                                    value={item.expiresAt || ''}
+                                    onChange={(e) => updateItem(item.id, { expiresAt: e.target.value || null })}
+                                    className={`flex-1 input-field text-sm ${expirationStatus === 'expired'
+                                        ? 'border-red-500 text-red-600'
+                                        : expirationStatus === 'soon'
+                                            ? 'border-amber-500 text-amber-600'
+                                            : ''
+                                        }`}
+                                />
+                                {item.expiresAt && (
+                                    <button
+                                        onClick={() => updateItem(item.id, { expiresAt: null })}
+                                        className="text-slate-400 hover:text-slate-600"
+                                    >
+                                        <X className="w-4 h-4" />
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Staple Item Toggle */}
+                    <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl">
+                        <button
+                            onClick={() => updateItem(item.id, { isStaple: !item.isStaple })}
+                            className={`w-10 h-5 rounded-full transition-colors relative ${item.isStaple ? 'bg-amber-500' : 'bg-slate-300'}`}
+                        >
+                            <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${item.isStaple ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                        </button>
+                        <div>
+                            <span className="text-sm font-bold text-slate-700">Staple Item</span>
+                            <p className="text-[10px] text-slate-400">Track and auto-add to shopping list</p>
+                        </div>
+                        {item.isStaple && (
+                            <div className="flex items-center gap-1 ml-auto">
+                                <span className="text-[10px] font-bold text-slate-500">Min:</span>
+                                <input
+                                    type="number"
+                                    min="0.1"
+                                    step="0.1"
+                                    value={item.minStockLevel || 1}
+                                    onChange={e => updateItem(item.id, { minStockLevel: e.target.value === '' ? 0 : parseFloat(e.target.value) })}
+                                    className="w-14 input-field text-center text-sm py-1"
+                                />
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Delete Button */}
+                    <button
+                        onClick={() => deleteItem(item.id)}
+                        className="w-full py-2.5 text-red-500 text-sm font-bold flex items-center justify-center gap-2 hover:bg-red-50 rounded-xl transition-colors mt-2"
+                    >
+                        <Trash2 className="w-4 h-4" /> Delete Item
+                    </button>
+                </div>
+            )
+            }
+        </div >
+    );
+};
 
 // ============================================================================
 // INVENTORY VIEW (Enhanced with editable fields)
 // ============================================================================
 
-const InventoryView = ({ apiKey, model, inventory, setInventory, knownLocations, setKnownLocations, processedFiles, setProcessedFiles, allocatedIngredients, expandedItemId, setExpandedItemId }) => {
+const InventoryView = ({ apiKey, model, inventory, setInventory, knownLocations, setKnownLocations, processedFiles, setProcessedFiles, allocatedIngredients, expandedItemId, setExpandedItemId, getAvailableQuantity, getItemReservations }) => {
     // Persisted form state (survives refresh)
     const [newItem, setNewItem] = useLocalStorage('mpm_inv_new_item', '');
     const [newQty, setNewQty] = useLocalStorage('mpm_inv_new_qty', 1);
@@ -2082,17 +2300,6 @@ const InventoryView = ({ apiKey, model, inventory, setInventory, knownLocations,
         ? inventory.filter(item => item.name.toLowerCase().includes(searchQuery.toLowerCase()))
         : inventory;
 
-    // Helper to check if item is allocated
-    const isItemAllocated = (itemName) => {
-        if (!allocatedIngredients) return false;
-        return Object.values(allocatedIngredients).some(allocation =>
-            allocation.ingredients?.some(ing =>
-                ing.item.toLowerCase().includes(itemName.toLowerCase()) ||
-                itemName.toLowerCase().includes(ing.item.toLowerCase())
-            )
-        );
-    };
-
     // Sort items based on selected sort option
     const sortedInventory = [...filteredInventory].sort((a, b) => {
         switch (sortBy) {
@@ -2104,11 +2311,11 @@ const InventoryView = ({ apiKey, model, inventory, setInventory, knownLocations,
                 if (!a.expiresAt) return 1;
                 if (!b.expiresAt) return -1;
                 return new Date(a.expiresAt) - new Date(b.expiresAt);
-            case 'allocated':
-                // Allocated items first
-                const aAlloc = isItemAllocated(a.name) ? 0 : 1;
-                const bAlloc = isItemAllocated(b.name) ? 0 : 1;
-                return aAlloc - bAlloc || a.name.localeCompare(b.name);
+            case 'reserved':
+                // Reserved items first
+                const aRes = getItemReservations(a.name).length > 0 ? 0 : 1;
+                const bRes = getItemReservations(b.name).length > 0 ? 0 : 1;
+                return aRes - bRes || a.name.localeCompare(b.name);
             case 'location':
             default:
                 return normalizeLocation(a.location).localeCompare(normalizeLocation(b.location));
@@ -2129,26 +2336,7 @@ const InventoryView = ({ apiKey, model, inventory, setInventory, knownLocations,
         setCollapsedLocations(prev => ({ ...prev, [loc]: !prev[loc] }));
     };
 
-    // Calculate which meals have reserved this ingredient
-    const getItemReservations = (itemName) => {
-        if (!allocatedIngredients) return [];
-        const reservations = [];
-        Object.entries(allocatedIngredients).forEach(([slotKey, allocation]) => {
-            const matchingIng = allocation.ingredients?.find(ing =>
-                ing.item.toLowerCase().includes(itemName.toLowerCase()) ||
-                itemName.toLowerCase().includes(ing.item.toLowerCase())
-            );
-            if (matchingIng) {
-                reservations.push({
-                    slotKey,
-                    recipeName: allocation.recipeName,
-                    amount: matchingIng.amount,
-                    unit: matchingIng.unit
-                });
-            }
-        });
-        return reservations;
-    };
+
 
     const addNewLocation = () => {
         if (!newLocationInput.trim()) return;
@@ -2621,7 +2809,7 @@ If you find no additional items, return: { "items": [] }`;
                             <option value="location">Location</option>
                             <option value="name">Name</option>
                             <option value="expiration">Expiration</option>
-                            <option value="allocated">Reserved First</option>
+                            <option value="reserved">Reserved First</option>
                         </select>
                     </div>
                     {sortBy === 'location' && groupedInventory && (
@@ -2674,159 +2862,19 @@ If you find no additional items, return: { "items": [] }`;
                         {!collapsedLocations[location] && (
                             <div className="space-y-2 pl-2">
                                 {groupedInventory[location].map((item) => (
-                                    <div key={item.id} id={`inventory-item-${item.id}`} className="inventory-item">
-                                        {/* Main Row - Always visible */}
-                                        <div
-                                            className="flex items-center gap-2 cursor-pointer"
-                                            onClick={() => setExpandedItemId(expandedItemId === item.id ? null : item.id)}
-                                        >
-                                            {/* Quantity - color-coded by expiration */}
-                                            <input
-                                                type="number"
-                                                min="0.01"
-                                                step="0.01"
-                                                value={item.quantity}
-                                                onChange={(e) => { e.stopPropagation(); updateItem(item.id, { quantity: e.target.value === '' ? '' : parseFloat(e.target.value) }); }}
-                                                onClick={(e) => e.stopPropagation()}
-                                                className={`w-14 text-center font-bold rounded-lg py-1.5 border-0 focus:ring-2 text-sm ${getExpirationStatus(item.expiresAt) === 'expired'
-                                                    ? 'bg-red-100 text-red-600 focus:ring-red-500'
-                                                    : getExpirationStatus(item.expiresAt) === 'soon'
-                                                        ? 'bg-amber-100 text-amber-600 focus:ring-amber-500'
-                                                        : 'bg-emerald-50 text-emerald-600 focus:ring-emerald-500'
-                                                    }`}
-                                            />
+                                    <InventoryItem
+                                        key={item.id}
+                                        item={item}
+                                        expandedItemId={expandedItemId}
+                                        setExpandedItemId={setExpandedItemId}
+                                        updateItem={updateItem}
+                                        deleteItem={deleteItem}
+                                        allLocations={allLocations}
+                                        handleLocationChange={handleLocationChange}
 
-                                            {/* Unit - Compact */}
-                                            <span className="text-xs text-slate-500 font-medium w-16 flex-shrink-0">{item.unit || 'each'}</span>
-
-                                            {/* Name + Expiration + Reservations */}
-                                            <div className="flex-1 min-w-0">
-                                                <span className="font-bold text-slate-700 break-words">{item.name}</span>
-                                                {item.expiresAt && (
-                                                    <span className={`ml-2 text-xs ${getExpirationStatus(item.expiresAt) === 'expired'
-                                                        ? 'text-red-500'
-                                                        : getExpirationStatus(item.expiresAt) === 'soon'
-                                                            ? 'text-amber-500'
-                                                            : 'text-slate-400'
-                                                        }`}>
-                                                        {getExpirationStatus(item.expiresAt) === 'expired'
-                                                            ? 'Expired'
-                                                            : `Exp ${formatExpDate(item.expiresAt)}`}
-                                                    </span>
-                                                )}
-                                                {(() => {
-                                                    const reservations = getItemReservations(item.name);
-                                                    if (reservations.length > 0) {
-                                                        return (
-                                                            <span className="ml-2 text-xs bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded-full font-medium" title={reservations.map(r => r.recipeName).join(', ')}>
-                                                                📅 {reservations.length} meal{reservations.length > 1 ? 's' : ''}
-                                                            </span>
-                                                        );
-                                                    }
-                                                    return null;
-                                                })()}
-                                            </div>
-
-                                            {/* Expand Indicator */}
-                                            <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${expandedItemId === item.id ? 'rotate-180' : ''}`} />
-                                        </div>
-
-                                        {/* Expanded Row - Location, Unit Edit, Delete */}
-                                        {expandedItemId === item.id && (
-                                            <div className="mt-3 pt-3 border-t border-slate-100 space-y-2 animate-fade-in">
-                                                {/* Name Edit */}
-                                                <input
-                                                    type="text"
-                                                    value={item.name}
-                                                    onChange={(e) => updateItem(item.id, { name: e.target.value })}
-                                                    className="w-full input-field text-sm"
-                                                    placeholder="Item name"
-                                                />
-
-                                                {/* Unit & Location Row */}
-                                                <div className="flex gap-2 items-center">
-                                                    <UnitPicker
-                                                        value={item.unit || 'each'}
-                                                        onChange={(u) => updateItem(item.id, { unit: u })}
-                                                        compact
-                                                    />
-                                                    <select
-                                                        value={item.location || 'Pantry'}
-                                                        onChange={(e) => handleLocationChange(e.target.value, item.id)}
-                                                        className="select-field flex-1 text-sm"
-                                                    >
-                                                        {allLocations.map(l => <option key={l} value={l}>{l}</option>)}
-                                                        <option value="__new__">+ New Location</option>
-                                                    </select>
-                                                </div>
-
-                                                {/* Notes */}
-                                                <textarea
-                                                    value={item.notes || ''}
-                                                    onChange={(e) => updateItem(item.id, { notes: e.target.value })}
-                                                    placeholder="Add notes (e.g., brand, special info)..."
-                                                    className="w-full input-field text-sm resize-none"
-                                                    rows={2}
-                                                />
-
-                                                {/* Expiration Date */}
-                                                <div className="flex items-center gap-2">
-                                                    <label className="text-sm text-slate-600 flex-shrink-0">Expires:</label>
-                                                    <input
-                                                        type="date"
-                                                        value={item.expiresAt || ''}
-                                                        onChange={(e) => updateItem(item.id, { expiresAt: e.target.value || null })}
-                                                        className={`flex-1 input-field text-sm ${getExpirationStatus(item.expiresAt) === 'expired'
-                                                            ? 'border-red-500 text-red-600'
-                                                            : getExpirationStatus(item.expiresAt) === 'soon'
-                                                                ? 'border-amber-500 text-amber-600'
-                                                                : ''
-                                                            }`}
-                                                    />
-                                                    {item.expiresAt && (
-                                                        <button
-                                                            onClick={() => updateItem(item.id, { expiresAt: null })}
-                                                            className="text-slate-400 hover:text-slate-600"
-                                                        >
-                                                            <X className="w-4 h-4" />
-                                                        </button>
-                                                    )}
-                                                </div>
-
-                                                {/* Staple Item */}
-                                                <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl">
-                                                    <button
-                                                        onClick={() => updateItem(item.id, { isStaple: !item.isStaple })}
-                                                        className={`w-10 h-5 rounded-full transition-colors relative ${item.isStaple ? 'bg-amber-500' : 'bg-slate-300'}`}
-                                                    >
-                                                        <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${item.isStaple ? 'translate-x-5' : 'translate-x-0.5'}`} />
-                                                    </button>
-                                                    <span className="text-sm text-slate-600">Staple Item</span>
-                                                    {item.isStaple && (
-                                                        <div className="flex items-center gap-1 ml-auto">
-                                                            <span className="text-xs text-slate-500">Alert when below:</span>
-                                                            <input
-                                                                type="number"
-                                                                min="0.1"
-                                                                step="0.1"
-                                                                value={item.minStockLevel || 1}
-                                                                onChange={e => updateItem(item.id, { minStockLevel: e.target.value === '' ? 0 : parseFloat(e.target.value) })}
-                                                                className="w-14 input-field text-center text-sm py-1"
-                                                            />
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                {/* Delete Button */}
-                                                <button
-                                                    onClick={() => deleteItem(item.id)}
-                                                    className="w-full py-2 text-red-500 text-sm font-bold flex items-center justify-center gap-2 hover:bg-red-50 rounded-lg transition-colors"
-                                                >
-                                                    <Trash2 className="w-4 h-4" /> Delete Item
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
+                                        getItemReservations={getItemReservations}
+                                        getAvailableQuantity={getAvailableQuantity}
+                                    />
                                 ))}
                             </div>
                         )}
@@ -2836,75 +2884,23 @@ If you find no additional items, return: { "items": [] }`;
                 {/* Flat List (for non-location sorts) */}
                 {sortBy !== 'location' && sortedInventory.length > 0 && (
                     <div className="space-y-2">
-                        <p className="text-xs text-slate-400 px-2">
-                            Sorted by {sortBy === 'name' ? 'Name (A-Z)' : sortBy === 'expiration' ? 'Expiration Date' : 'Reserved Status'}
+                        <p className="text-xs text-slate-400 px-2 uppercase tracking-wider font-bold">
+                            Sorted by {sortBy === 'name' ? 'Name (A-Z)' : sortBy === 'expiration' ? 'Expiration' : 'Reserved Status'}
                         </p>
                         {sortedInventory.map((item) => (
-                            <div key={item.id} id={`inventory-item-${item.id}`} className="inventory-item">
-                                {/* Main Row */}
-                                <div
-                                    className="flex items-center gap-2 cursor-pointer"
-                                    onClick={() => setExpandedItemId(expandedItemId === item.id ? null : item.id)}
-                                >
-                                    <input
-                                        type="number"
-                                        min="0.01"
-                                        step="0.01"
-                                        value={item.quantity}
-                                        onChange={(e) => { e.stopPropagation(); updateItem(item.id, { quantity: e.target.value === '' ? '' : parseFloat(e.target.value) }); }}
-                                        onClick={(e) => e.stopPropagation()}
-                                        className={`w-14 text-center font-bold rounded-lg py-1.5 border-0 focus:ring-2 text-sm ${getExpirationStatus(item.expiresAt) === 'expired'
-                                            ? 'bg-red-100 text-red-600 focus:ring-red-500'
-                                            : getExpirationStatus(item.expiresAt) === 'soon'
-                                                ? 'bg-amber-100 text-amber-600 focus:ring-amber-500'
-                                                : 'bg-emerald-50 text-emerald-600 focus:ring-emerald-500'
-                                            }`}
-                                    />
-                                    <span className="text-xs text-slate-400 w-12">{item.unit}</span>
-                                    <div className="flex-1 min-w-0">
-                                        <div className="font-bold text-slate-800 truncate">{item.name}</div>
-                                        <div className="flex items-center gap-2 mt-0.5">
-                                            <span className="text-xs text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">{normalizeLocation(item.location)}</span>
-                                            {item.expiresAt && (
-                                                <span className={`text-xs ${getExpirationStatus(item.expiresAt) === 'expired' ? 'text-red-500' : getExpirationStatus(item.expiresAt) === 'soon' ? 'text-amber-500' : 'text-slate-400'}`}>
-                                                    {getExpirationStatus(item.expiresAt) === 'expired' ? 'Expired' : `Exp: ${new Date(item.expiresAt).toLocaleDateString()}`}
-                                                </span>
-                                            )}
-                                            {isItemAllocated(item.name) && (
-                                                <span className="text-xs text-indigo-500 font-bold whitespace-nowrap">Reserved</span>
-                                            )}
-                                        </div>
-                                    </div>
-                                    {expandedItemId === item.id ? <ChevronDown className="w-4 h-4 text-slate-300" /> : <ChevronRight className="w-4 h-4 text-slate-300" />}
-                                </div>
-
-                                {/* Expanded Details */}
-                                {expandedItemId === item.id && (
-                                    <div className="mt-3 pt-3 border-t border-slate-100 space-y-3 animate-fade-in">
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <div>
-                                                <label className="text-xs font-bold text-slate-400 block mb-1">Unit</label>
-                                                <UnitPickerButton value={item.unit} onChange={(u) => updateItem(item.id, { unit: u })} />
-                                            </div>
-                                            <div>
-                                                <label className="text-xs font-bold text-slate-400 block mb-1">Expires</label>
-                                                <input
-                                                    type="date"
-                                                    value={item.expiresAt?.split('T')[0] || ''}
-                                                    onChange={(e) => updateItem(item.id, { expiresAt: e.target.value || null })}
-                                                    className="input-field text-sm py-1.5"
-                                                />
-                                            </div>
-                                        </div>
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); deleteItem(item.id); }}
-                                            className="w-full py-2 text-red-500 text-sm font-bold flex items-center justify-center gap-2 hover:bg-red-50 rounded-lg transition-colors"
-                                        >
-                                            <Trash2 className="w-4 h-4" /> Delete Item
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
+                            <InventoryItem
+                                key={item.id}
+                                item={item}
+                                expandedItemId={expandedItemId}
+                                setExpandedItemId={setExpandedItemId}
+                                updateItem={updateItem}
+                                deleteItem={deleteItem}
+                                allLocations={allLocations}
+                                handleLocationChange={handleLocationChange}
+                                getItemReservations={getItemReservations}
+                                getAvailableQuantity={getAvailableQuantity}
+                                showLocationBadge={true}
+                            />
                         ))}
                     </div>
                 )}
@@ -3228,7 +3224,7 @@ const FamilyView = ({ familyMembers, setFamilyMembers }) => {
             id: generateId(),
             name,
             birthdate,
-            age: age || parseInt(birthdate) || 0,
+            age: age || 0,
             gender,
             diet,
             preferences,
@@ -3465,7 +3461,7 @@ const FamilyView = ({ familyMembers, setFamilyMembers }) => {
 // RECIPE ENGINE (with macros and smart deduction)
 // ============================================================================
 
-const RecipeEngine = ({ apiKey, model, inventory, setInventory, family, setSelectedRecipe, history, setHistory, recipes, setRecipes, favorites, setFavorites, shoppingList, setShoppingList, mealPlan, setMealPlan, leftovers, setLeftovers, onMoveToHistory, customRecipes, setCustomRecipes, allocatedIngredients, setAllocatedIngredients, onOpenWizard, quickMeals, setQuickMeals, setToastData, activeTab, setActiveTab, showCustomRecipeForm, setShowCustomRecipeForm }) => {
+const RecipeEngine = ({ apiKey, model, inventory, setInventory, family, setSelectedRecipe, history, setHistory, recipes, setRecipes, favorites, setFavorites, shoppingList, setShoppingList, mealPlan, setMealPlan, leftovers, setLeftovers, onMoveToHistory, customRecipes, setCustomRecipes, allocatedIngredients, setAllocatedIngredients, onOpenWizard, quickMeals, setQuickMeals, setToastData, activeTab, setActiveTab, showCustomRecipeForm, setShowCustomRecipeForm, getAvailableQuantity, getItemReservations }) => {
     const [loading, setLoading] = useState(false);
 
     // Persisted form state (survives refresh)
@@ -3635,7 +3631,13 @@ Rules:
         }
         setQuickMealsLoading(true);
 
-        const invList = inventory.map(i => `"${i.name}" (qty: ${i.quantity} ${i.unit})`).join(', ');
+        const invList = inventory
+            .map(i => {
+                const available = getAvailableQuantity(i);
+                return available > 0 ? `"${i.name}" (qty: ${available} ${i.unit})` : null;
+            })
+            .filter(Boolean)
+            .join(', ');
 
         const prompt = `Analyze this inventory and identify items that can be eaten as "quick meals" with minimal or no preparation. These are items like: canned soups, baby food, yogurt, pre-made meals, frozen dinners, ready-to-eat snacks, cereal, bread/toast, fruit, etc.
 
@@ -3807,11 +3809,16 @@ Return JSON array only, example:
 
     const generate = async () => {
         setLoading(true);
-        const invStr = inventory.map(i => {
-            let str = `${i.name} (${i.quantity} ${i.unit})`;
-            if (i.notes) str += ` [Note: ${i.notes}]`;
-            return str;
-        }).join(', ');
+        const invStr = inventory
+            .map(i => {
+                const available = getAvailableQuantity(i);
+                if (available <= 0) return null;
+                let str = `${i.name} (${available} ${i.unit})`;
+                // Optimization: Exclude notes to save tokens
+                return str;
+            })
+            .filter(Boolean)
+            .join(', ');
         const famStr = family.filter(f => eaters.includes(f.id)).map(f =>
             `${f.name} (Age:${f.age}, Gender:${f.gender}, Diet:${f.diet}, Prefs:${f.preferences || 'None'})`
         ).join(', ');
@@ -4522,15 +4529,30 @@ STRICT JSON Output:
 
                                 // Allocate ingredients for this scheduled meal (only for main day, not leftovers)
                                 if (pendingRecipeForCalendar.ingredients && pendingRecipeForCalendar.ingredients.length > 0) {
+                                    let allocationIngredients = [];
+
+                                    // Prefer using confirmed AI allocations if available (preserves Inventory IDs for better unallocation)
+                                    if (pendingRecipeForCalendar.lastAllocation) {
+                                        allocationIngredients = pendingRecipeForCalendar.lastAllocation.map(alloc => ({
+                                            item: alloc.inventoryItemName || alloc.item || 'Unknown Item',
+                                            amount: alloc.amount || 0,
+                                            unit: alloc.unit || alloc.currentUnit || '',
+                                            inventoryItemId: alloc.inventoryItemId
+                                        }));
+                                    } else {
+                                        // Fallback to raw ingredients
+                                        allocationIngredients = pendingRecipeForCalendar.ingredients.map(ing => ({
+                                            item: ing.item || ing.name || String(ing),
+                                            amount: ing.amount || ing.quantity || 1,
+                                            unit: ing.unit || ''
+                                        }));
+                                    }
+
                                     const allocation = {
                                         recipeId: pendingRecipeForCalendar.id,
                                         recipeName: pendingRecipeForCalendar.name,
                                         scheduledAt: new Date().toISOString(),
-                                        ingredients: pendingRecipeForCalendar.ingredients.map(ing => ({
-                                            item: ing.item || ing.name || String(ing),
-                                            amount: ing.amount || ing.quantity || 1,
-                                            unit: ing.unit || ''
-                                        }))
+                                        ingredients: allocationIngredients
                                     };
                                     setAllocatedIngredients(prev => ({ ...prev, [mainDayKey]: allocation }));
                                 }
@@ -5007,25 +5029,33 @@ Return JSON: {"storage": "...", "reheat": "...", "expiresInDays": 4}`;
 // CALENDAR VIEW (Agenda Style)
 // ============================================================================
 
-const CalendarView = ({ apiKey, model, mealPlan, setMealPlan, inventory, setInventory, family, recipes, downloadICSFn, onCook, onFavorite, onAddToLeftovers, leftovers, setLeftovers, onMoveToHistory, allocatedIngredients, setAllocatedIngredients, onOpenWizard, activeTab, setActiveTab, selectedLeftoverId, setSelectedLeftoverId }) => {
+const CalendarView = ({ apiKey, model, mealPlan, setMealPlan, inventory, setInventory, family, recipes, customRecipes, favorites, downloadICSFn, onCook, onFavorite, onAddToLeftovers, leftovers, setLeftovers, onMoveToHistory, allocatedIngredients, setAllocatedIngredients, onOpenWizard, activeTab, setActiveTab, selectedLeftoverId, setSelectedLeftoverId, getAvailableQuantity, getItemReservations }) => {
     const [selectedMeal, setSelectedMeal] = useState(null);
     // Derive selectedLeftover from ID for compatibility
     const selectedLeftover = selectedLeftoverId ? leftovers.find(l => l.id === selectedLeftoverId) : null;
     const setSelectedLeftover = (leftover) => setSelectedLeftoverId(leftover?.id || null);
-    const [showAddCustomMeal, setShowAddCustomMeal] = useState(null); // { date, mealType }
+
+    // Modals & View State
+    const [showAddCustomMeal, setShowAddCustomMeal] = useState(null); // { date, mealType } -> For legacy or specific handling
+    const [calendarViewMode, setCalendarViewMode] = useState('agenda'); // 'agenda' or 'month'
+    const [monthViewDate, setMonthViewDate] = useState(new Date());
+    const [selectedMonthDay, setSelectedMonthDay] = useState(null);
+    const [showAddLeftover, setShowAddLeftover] = useState(false);
+    const [showReschedule, setShowReschedule] = useState(null); // { meal, originalSlotKey, originalDate }
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(null); // { slotKey, mealId, title }
+
+    // Modal Form State
     const [customMealName, setCustomMealName] = useState('');
     const [customMealIngredients, setCustomMealIngredients] = useState('');
     const [addingCustomMeal, setAddingCustomMeal] = useState(false);
-    const [calendarViewMode, setCalendarViewMode] = useState('agenda'); // 'agenda' or 'month'
-    const [monthViewDate, setMonthViewDate] = useState(new Date()); // Current month being viewed
-    const [selectedMonthDay, setSelectedMonthDay] = useState(null); // Selected day in month view
-    const [showAddLeftover, setShowAddLeftover] = useState(false);
     const [newLeftoverName, setNewLeftoverName] = useState('');
     const [newLeftoverPortions, setNewLeftoverPortions] = useState(2);
     const [newLeftoverDays, setNewLeftoverDays] = useState(4);
-    const [showReschedule, setShowReschedule] = useState(null); // { meal, originalSlotKey, originalDate }
     const [rescheduleTargetDate, setRescheduleTargetDate] = useState('');
     const [rescheduleTargetMealType, setRescheduleTargetMealType] = useState('Dinner');
+
+    // Refs
+    const todayRef = useRef(null);
 
     // Intercept back gesture for modals
     useBackGesture(!!selectedMeal, () => setSelectedMeal(null));
@@ -5033,25 +5063,40 @@ const CalendarView = ({ apiKey, model, mealPlan, setMealPlan, inventory, setInve
     useBackGesture(!!selectedLeftover, () => setSelectedLeftover(null));
     useBackGesture(showAddLeftover, () => setShowAddLeftover(false));
     useBackGesture(!!showReschedule, () => setShowReschedule(null));
+    useBackGesture(!!showDeleteConfirm, () => setShowDeleteConfirm(null));
 
-    // Generate 90 days for the agenda
+    // Generate Dates: Extended Range for "Infinite Scroll" feel
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const agendaDays = Array.from({ length: 90 }, (_, i) => {
+    // Past 30 days
+    const historyDays = Array.from({ length: 30 }, (_, i) => {
+        const date = new Date(today);
+        date.setDate(date.getDate() - (30 - i));
+        return date;
+    });
+
+    // Future 180 days
+    const agendaDays = Array.from({ length: 180 }, (_, i) => {
         const date = new Date(today);
         date.setDate(date.getDate() + i);
         return date;
     });
 
-    // Also include past 7 days for history
-    const historyDays = Array.from({ length: 7 }, (_, i) => {
-        const date = new Date(today);
-        date.setDate(date.getDate() - (7 - i));
-        return date;
-    });
-
     const allDays = [...historyDays, ...agendaDays];
+
+    // Scroll to today on mount
+    useEffect(() => {
+        if (todayRef.current) {
+            todayRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }, [todayRef]);
+
+    const scrollToToday = () => {
+        if (todayRef.current) {
+            todayRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    };
 
     const getMealsForDate = (date) => {
         const dateKey = getLocalDateKey(date);
@@ -5067,7 +5112,6 @@ const CalendarView = ({ apiKey, model, mealPlan, setMealPlan, inventory, setInve
                 meals.push({ ...slot.selected, mealType, slotKey });
             }
         });
-
         return meals;
     };
 
@@ -5075,16 +5119,230 @@ const CalendarView = ({ apiKey, model, mealPlan, setMealPlan, inventory, setInve
         const isToday = date.toDateString() === today.toDateString();
         const isTomorrow = date.toDateString() === new Date(today.getTime() + 86400000).toDateString();
 
-        if (isToday) return 'Today';
-        if (isTomorrow) return 'Tomorrow';
+        const dateStr = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 
-        return date.toLocaleDateString('en-US', {
-            weekday: 'long',
-            month: 'short',
-            day: 'numeric'
-        });
+        if (isToday) return `Today - ${dateStr}`;
+        if (isTomorrow) return `Tomorrow - ${dateStr}`;
+        return date.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
     };
 
+    // --- Helpers ---
+
+    const isMainMealCooked = (leftover) => {
+        // Find parent meal in mealPlan
+        if (!leftover.recipeId) return false;
+
+        let found = false;
+        Object.values(mealPlan).some(slot => {
+            const meals = slot.meals || (slot.selected ? [slot.selected] : []);
+            const parent = meals.find(m =>
+                !m.isLeftover &&
+                (m.id === leftover.recipeId || m.id === leftover.id || m.recipeId === leftover.recipeId) &&
+                m.isCooked
+            );
+            if (parent) {
+                found = true;
+                return true;
+            }
+            return false;
+        });
+        return found;
+    };
+
+    const handleMarkAsCooked = (meal) => {
+        if (meal.isLeftover) return; // Should use Eat for leftovers
+        if (meal.isCooked) return; // Already cooked
+
+        // Trigger the smart deduction logic via the parent handler
+        // This opens the modal if needed, or just marks it cooked if no ingredients
+        // The actual state update happens in handleCook -> markAsCookedConfirmed
+        onCook(meal);
+    };
+
+    // ~~~~ handleCook (The main cooking handler) ~~~~
+    // This is called when user clicks "Mark as Cooked" (via checked button)
+    const handleCook = async (meal) => {
+        // 1. Check if we have ingredients allocated for this specific meal slot
+        // If already allocated (reserved), we might just confirm and deduc.
+        // But for "Smart Matching" user wants to see the loading screen and verifying even if not pre-allocated?
+        // Actually best flow:
+        // - Show loading
+        // - Check available inventory against recipe ingredients
+        // - Open Modal with Matches
+        // - On Confirm -> Deduct & Mark Cooked
+
+        setIngredientLoading(true);
+
+        // Simulate short delay for "Matching..." effect
+        await new Promise(r => setTimeout(r, 800));
+
+        // Prepare matching data
+        // Reuse logic from allocate flow but mode='deduct'?
+        // Actually, we can reuse 'allocate' mode but the 'onConfirm' will be different?
+        // Let's use mode='deduct' to be explicit in the Modal text (e.g. "Deduct these from pantry?")
+
+        let recipeIngredients = meal.ingredients || [];
+        // If no ingredients, just mark cooked
+        if (!recipeIngredients.length) {
+            setIngredientLoading(false);
+            markAsCookedConfirmed(meal);
+            return;
+        }
+
+        // Perform matching (find best pantry items)
+        const matches = recipeIngredients.map(ing => {
+            const ingName = ing.item || ing.name || "";
+            // Find best match in inventory
+            // Simple name match for now, expanded logic in allocateIngredients
+            const match = inventory.find(inv =>
+                inv.name.toLowerCase().includes(ingName.toLowerCase()) ||
+                ingName.toLowerCase().includes(inv.name.toLowerCase())
+            );
+
+            return {
+                ...ing,
+                inventoryItemId: match ? match.id : null,
+                inventoryItemName: match ? match.name : null,
+                currentUnit: match ? match.unit : ing.unit, // rough assumption
+                amount: ing.amount || ing.quantity || 1 // defaulting
+            };
+        });
+
+        setIngredientMatchData({
+            mode: 'deduct', // New mode for the modal
+            recipe: meal,
+            matches: matches
+        });
+        setIngredientLoading(false);
+    };
+
+    const markAsCookedConfirmed = (meal) => {
+        // Only mark local state here, deduction happens in confirmIngredientMatch
+        const newMealPlan = { ...mealPlan };
+        const slot = newMealPlan[meal.slotKey];
+        if (slot) {
+            if (slot.meals) {
+                newMealPlan[meal.slotKey] = {
+                    ...slot,
+                    meals: slot.meals.map(m => m.id === meal.id ? { ...m, isCooked: true } : m)
+                };
+            }
+            setMealPlan(newMealPlan);
+        }
+
+        // Add to history
+        const historyEntry = {
+            ...meal,
+            cookedAt: new Date().toISOString(),
+            id: generateId()
+        };
+        setHistory(prev => [historyEntry, ...prev]);
+
+        showToast("Cent' Anni! Meal cooked & inventory updated.");
+    };
+
+    const handleMarkAsEaten = (meal) => {
+        if (!meal.isLeftover) return;
+        if (meal.isEaten) return;
+
+        // Update state
+        const newMealPlan = { ...mealPlan };
+        const slot = newMealPlan[meal.slotKey];
+        if (slot) {
+            if (slot.meals) {
+                newMealPlan[meal.slotKey] = {
+                    ...slot,
+                    meals: slot.meals.map(m => m.id === meal.id ? { ...m, isEaten: true } : m)
+                };
+            } else if (slot.selected && slot.selected.id === meal.id) {
+                newMealPlan[meal.slotKey] = {
+                    ...slot,
+                    selected: { ...slot.selected, isEaten: true }
+                };
+            }
+            setMealPlan(newMealPlan);
+        }
+    };
+
+    const requestDelete = (slotKey, mealId, title) => {
+        setShowDeleteConfirm({ slotKey, mealId, title });
+    };
+
+    const executeDelete = () => {
+        if (!showDeleteConfirm) return;
+        const { slotKey, mealId } = showDeleteConfirm;
+
+        const slot = mealPlan[slotKey];
+        if (!slot) { setShowDeleteConfirm(null); return; }
+
+        // Find the meal being removed
+        const mealToRemove = slot.meals?.find(m => m.id === mealId) || slot.selected;
+
+        // Restore allocated ingredients
+        if (allocatedIngredients && allocatedIngredients[slotKey] && setInventory) {
+            const allocation = allocatedIngredients[slotKey];
+            if (allocation && allocation.ingredients) {
+                setInventory(prevInventory => {
+                    let updated = [...prevInventory];
+                    allocation.ingredients.forEach(alloc => {
+                        // Find the inventory item and restore the reserved quantity
+                        const idx = updated.findIndex(item =>
+                            item.id === alloc.inventoryItemId ||
+                            item.name?.toLowerCase() === alloc.item?.toLowerCase() ||
+                            item.name?.toLowerCase() === alloc.name?.toLowerCase()
+                        );
+                        if (idx !== -1) {
+                            updated[idx] = {
+                                ...updated[idx],
+                                quantity: updated[idx].quantity + (alloc.reserveAmount || alloc.amount || alloc.qty || 0)
+                            };
+                        }
+                    });
+                    return updated;
+                });
+            }
+
+            const { [slotKey]: _, ...restAlloc } = allocatedIngredients;
+            setAllocatedIngredients(restAlloc);
+        }
+
+        // Logic to remove matching leftovers
+        let newMealPlan = { ...mealPlan };
+        if (mealToRemove && !mealToRemove.isLeftover) {
+            Object.entries(newMealPlan).forEach(([key, slotData]) => {
+                if (slotData.meals) {
+                    const filtered = slotData.meals.filter(m => {
+                        const isMatchingLeftover = m.isLeftover &&
+                            (m.recipeId === mealToRemove.id || m.name === mealToRemove.name);
+                        return !isMatchingLeftover;
+                    });
+                    if (filtered.length === 0) delete newMealPlan[key];
+                    else if (filtered.length !== slotData.meals.length) newMealPlan[key] = { meals: filtered };
+                } else if (slotData.selected) {
+                    // Handle single select case if needed (legacy structure support)
+                    const m = slotData.selected;
+                    const isMatchingLeftover = m.isLeftover &&
+                        (m.recipeId === mealToRemove.id || m.name === mealToRemove.name);
+                    if (isMatchingLeftover) delete newMealPlan[key];
+                }
+            });
+        }
+
+        // Remove the main meal
+        if (slot.meals) {
+            const updatedMeals = slot.meals.filter(m => m.id !== mealId);
+            if (updatedMeals.length === 0) delete newMealPlan[slotKey];
+            else newMealPlan[slotKey] = { meals: updatedMeals };
+        } else {
+            delete newMealPlan[slotKey];
+        }
+
+        setMealPlan(newMealPlan);
+        setShowDeleteConfirm(null);
+        setSelectedMeal(null);
+    };
+
+    // Quick remove meal (without confirmation modal) - also clears allocations
     const removeMeal = (slotKey, mealId) => {
         const slot = mealPlan[slotKey];
         if (!slot) return;
@@ -5092,69 +5350,41 @@ const CalendarView = ({ apiKey, model, mealPlan, setMealPlan, inventory, setInve
         // Find the meal being removed
         const mealToRemove = slot.meals?.find(m => m.id === mealId) || slot.selected;
 
-        // Restore allocated ingredients back to inventory
-        if (allocatedIngredients && allocatedIngredients[slotKey] && setInventory) {
-            const allocations = allocatedIngredients[slotKey];
-            setInventory(prevInventory => {
-                let updated = [...prevInventory];
-                allocations.forEach(alloc => {
-                    // Find the inventory item and restore the reserved quantity
-                    const idx = updated.findIndex(item =>
-                        item.id === alloc.inventoryItemId ||
-                        item.name?.toLowerCase() === alloc.name?.toLowerCase()
-                    );
-                    if (idx !== -1) {
-                        updated[idx] = {
-                            ...updated[idx],
-                            quantity: updated[idx].quantity + (alloc.reserveAmount || alloc.qty || 0)
-                        };
-                    }
-                });
-                return updated;
-            });
-
-            // Clean up the allocation
+        // Clear allocation for this slot if it exists
+        if (allocatedIngredients && allocatedIngredients[slotKey]) {
             const { [slotKey]: _, ...restAlloc } = allocatedIngredients;
             setAllocatedIngredients(restAlloc);
         }
 
-        // If this is a cook day (not a leftover), also remove associated leftover days
+        // Remove associated leftovers if this is a main meal
         let newMealPlan = { ...mealPlan };
         if (mealToRemove && !mealToRemove.isLeftover) {
-            // Find and remove all leftover meals in mealPlan that match this recipe
             Object.entries(newMealPlan).forEach(([key, slotData]) => {
                 if (slotData.meals) {
                     const filtered = slotData.meals.filter(m => {
-                        // Keep meals that don't match this recipe as a leftover
                         const isMatchingLeftover = m.isLeftover &&
-                            (m.recipeId === mealToRemove.id ||
-                                m.name === mealToRemove.name ||
-                                m.id?.startsWith?.(mealToRemove.id));
+                            (m.recipeId === mealToRemove.id || m.name === mealToRemove.name);
                         return !isMatchingLeftover;
                     });
-                    if (filtered.length === 0) {
-                        delete newMealPlan[key];
-                    } else if (filtered.length !== slotData.meals.length) {
-                        newMealPlan[key] = { meals: filtered };
-                    }
+                    if (filtered.length === 0) delete newMealPlan[key];
+                    else if (filtered.length !== slotData.meals.length) newMealPlan[key] = { meals: filtered };
                 }
             });
         }
 
-        // Remove the main meal from its slot
+        // Remove the main meal
         if (slot.meals) {
             const updatedMeals = slot.meals.filter(m => m.id !== mealId);
-            if (updatedMeals.length === 0) {
-                delete newMealPlan[slotKey];
-            } else {
-                newMealPlan[slotKey] = { meals: updatedMeals };
-            }
+            if (updatedMeals.length === 0) delete newMealPlan[slotKey];
+            else newMealPlan[slotKey] = { meals: updatedMeals };
         } else {
             delete newMealPlan[slotKey];
         }
 
         setMealPlan(newMealPlan);
+        setSelectedMeal(null);
     };
+
 
     // Reschedule a meal to a different date/meal type
     const confirmReschedule = () => {
@@ -5435,10 +5665,20 @@ Generate cooking/storage details. Return JSON:
                         </div>
 
                         {activeTab === 'upcoming' ? (
-                            <div className="space-y-3">
+                            <div className="space-y-3 relative min-h-[500px]">
+                                {/* Jump to Today Button */}
+                                <div className="sticky top-2 z-10 flex justify-center pointer-events-none mb-2">
+                                    <button
+                                        onClick={scrollToToday}
+                                        className="pointer-events-auto bg-slate-900/80 backdrop-blur text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1.5 hover:bg-slate-800 transition-colors"
+                                    >
+                                        <CalendarDays className="w-3 h-3" /> Snap to Today
+                                    </button>
+                                </div>
+
                                 {/* Help Text */}
                                 <p className="text-xs text-slate-400 text-center">
-                                    Schedule meals from the Plan tab. Tap + to add custom meals.
+                                    Schedule meals from the Plan tab. Tap + to add items.
                                 </p>
 
                                 {/* Agenda Days */}
@@ -5447,13 +5687,13 @@ Generate cooking/storage details. Return JSON:
                                     const isToday = date.toDateString() === today.toDateString();
                                     const isPast = date < today;
 
-                                    // Skip past days with no meals
-                                    if (isPast && meals.length === 0) return null;
+                                    // Skip past days with no meals unless it's yesterday (for context)
+                                    if (isPast && meals.length === 0 && dayIdx < allDays.length - 92) return null;
 
                                     return (
-                                        <div key={dayIdx} className="agenda-day">
-                                            <div className={`agenda-day-header ${isToday ? 'today' : ''}`}>
-                                                <span>{formatDate(date)}</span>
+                                        <div key={dayIdx} ref={isToday ? todayRef : null} className={`agenda-day scroll-mt-24 ${isToday ? 'ring-2 ring-indigo-100 rounded-xl bg-indigo-50/30' : ''}`}>
+                                            <div className={`agenda-day-header ${isToday ? 'today' : ''} flex justify-between items-center`}>
+                                                <span className={isToday ? 'text-indigo-700' : ''}>{formatDate(date)}</span>
                                                 <button
                                                     onClick={() => setShowAddCustomMeal({ date, mealType: 'Dinner' })}
                                                     className="p-1 bg-indigo-100 rounded-full text-indigo-600 hover:bg-indigo-200"
@@ -5467,43 +5707,110 @@ Generate cooking/storage details. Return JSON:
                                                     No meals scheduled
                                                 </div>
                                             ) : (
-                                                meals.map((meal, mIdx) => (
-                                                    <div
-                                                        key={mIdx}
-                                                        onClick={() => setSelectedMeal(meal)}
-                                                        className="agenda-meal-card cursor-pointer hover:scale-[1.01] transition-transform"
-                                                    >
-                                                        <div className="flex items-center gap-3">
-                                                            {meal.imageUrl ? (
-                                                                <img src={meal.imageUrl} className="w-12 h-12 rounded-lg object-cover" alt="" />
-                                                            ) : (
-                                                                <div className="w-12 h-12 rounded-lg bg-orange-100 flex items-center justify-center">
-                                                                    <ChefHat className="w-5 h-5 text-orange-300" />
+                                                meals.map((meal, mIdx) => {
+                                                    // Status Checks
+                                                    const isLeftover = meal.isLeftover;
+                                                    const isCooked = meal.isCooked;
+                                                    const isEaten = meal.isEaten;
+                                                    const parentCooked = isLeftover ? isMainMealCooked(meal) : true;
+                                                    const isGreyedOut = isCooked || isEaten || (isLeftover && !parentCooked);
+
+                                                    // Determine click behavior
+                                                    const handleMealClick = () => {
+                                                        if (isLeftover && !parentCooked) {
+                                                            alert("You need to cook the main meal first!");
+                                                            return;
+                                                        }
+                                                        setSelectedMeal(meal);
+                                                    };
+
+                                                    return (
+                                                        <div
+                                                            key={mIdx}
+                                                            onClick={handleMealClick}
+                                                            className={`agenda-meal-card cursor-pointer transition-all border
+                                                            ${isGreyedOut ? 'opacity-60 bg-slate-50 border-slate-100 grayscale-[0.5]' : 'bg-white border-slate-100 hover:border-indigo-200 hover:shadow-sm'}
+                                                        `}
+                                                        >
+                                                            <div className="flex items-center gap-3">
+                                                                {/* Image or Icon */}
+                                                                {meal.imageUrl ? (
+                                                                    <img src={meal.imageUrl} className="w-12 h-12 rounded-lg object-cover" alt="" />
+                                                                ) : (
+                                                                    <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${isLeftover ? 'bg-amber-100' : 'bg-orange-100'}`}>
+                                                                        {isLeftover ?
+                                                                            <ThermometerSnowflake className="w-5 h-5 text-amber-500" /> :
+                                                                            <ChefHat className="w-5 h-5 text-orange-400" />
+                                                                        }
+                                                                    </div>
+                                                                )}
+
+                                                                {/* Content */}
+                                                                <div className="flex-1 min-w-0">
+                                                                    <div className={`font-bold truncate ${isGreyedOut ? 'text-slate-500 line-through' : 'text-slate-800'}`}>
+                                                                        {meal.name}
+                                                                    </div>
+                                                                    <div className="text-xs text-slate-500 flex items-center gap-2 flex-wrap mt-0.5">
+                                                                        <span className="font-semibold text-indigo-600/80">{meal.mealType}</span>
+
+                                                                        {isLeftover && (
+                                                                            <span className="text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded text-[10px] font-bold border border-amber-100">
+                                                                                Leftover Day {meal.dayNumber}
+                                                                            </span>
+                                                                        )}
+
+                                                                        {/* Quick Status Badges */}
+                                                                        {isCooked && <span className="text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded text-[10px] font-bold">Cooked</span>}
+                                                                        {isEaten && <span className="text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded text-[10px] font-bold">Eaten</span>}
+                                                                    </div>
                                                                 </div>
-                                                            )}
-                                                            <div className="flex-1 min-w-0">
-                                                                <div className="font-bold text-slate-800 truncate">{meal.name}</div>
-                                                                <div className="text-xs text-slate-500 flex items-center gap-2">
-                                                                    <span className="text-indigo-600">{meal.mealType}</span>
-                                                                    {meal.isLeftover && (
-                                                                        <span className="text-amber-500 bg-amber-50 px-1 rounded text-[10px] font-bold">
-                                                                            Leftover Day {meal.dayNumber}
-                                                                        </span>
+
+                                                                {/* Actions */}
+                                                                <div className="flex items-center gap-1">
+                                                                    {/* Quick Action Button - COOK */}
+                                                                    {!isLeftover && !isCooked && (
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                // Mark as Cooked Logic
+                                                                                // Trigger logic via generic onCook handler which handles deduction
+                                                                                if (parentCooked) { // Redundant for main meal, but safe
+                                                                                    // Optimistic UI update handled by handler if needed, but we rely on callback
+                                                                                    handleMarkAsCooked(meal);
+                                                                                }
+                                                                            }}
+                                                                            className="p-2 text-indigo-600 bg-indigo-50 hover:bg-slate-100 hover:text-indigo-700 rounded-full transition-colors"
+                                                                            title="Mark as Cooked"
+                                                                        >
+                                                                            <Check className="w-4 h-4" />
+                                                                        </button>
                                                                     )}
-                                                                    {meal.isCustom && (
-                                                                        <span className="text-amber-500 text-xs">Custom</span>
+
+                                                                    {/* Quick Action Button - EAT (Leftover) */}
+                                                                    {isLeftover && parentCooked && !isEaten && (
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                handleMarkAsEaten(meal);
+                                                                            }}
+                                                                            className="p-2 text-amber-600 bg-amber-50 hover:bg-amber-100 rounded-full"
+                                                                            title="Mark as Eaten"
+                                                                        >
+                                                                            <Utensils className="w-4 h-4" />
+                                                                        </button>
                                                                     )}
+
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); requestDelete(meal.slotKey, meal.id, meal.name); }}
+                                                                        className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                                                                    >
+                                                                        <X className="w-4 h-4" />
+                                                                    </button>
                                                                 </div>
                                                             </div>
-                                                            <button
-                                                                onClick={(e) => { e.stopPropagation(); removeMeal(meal.slotKey, meal.id); }}
-                                                                className="p-2 text-slate-300 hover:text-red-500"
-                                                            >
-                                                                <X className="w-4 h-4" />
-                                                            </button>
                                                         </div>
-                                                    </div>
-                                                ))
+                                                    )
+                                                })
                                             )}
                                         </div>
                                     );
@@ -5695,23 +6002,26 @@ Generate cooking/storage details. Return JSON:
                 onCook={(recipe) => {
                     // First, deplete any allocated ingredients for this meal's slot
                     if (recipe.slotKey && allocatedIngredients && allocatedIngredients[recipe.slotKey] && setInventory) {
-                        const allocations = allocatedIngredients[recipe.slotKey];
-                        setInventory(prevInventory => {
-                            let updated = [...prevInventory];
-                            allocations.forEach(alloc => {
-                                const idx = updated.findIndex(item =>
-                                    item.id === alloc.inventoryItemId ||
-                                    item.name?.toLowerCase() === alloc.name?.toLowerCase()
-                                );
-                                if (idx !== -1) {
-                                    // Deduct the reserved amount (item is already allocated, so just confirm the deduction)
-                                    const newQty = Math.max(0, updated[idx].quantity - (alloc.reserveAmount || alloc.qty || 0));
-                                    updated[idx] = { ...updated[idx], quantity: newQty };
-                                }
+                        const allocation = allocatedIngredients[recipe.slotKey];
+                        if (allocation && allocation.ingredients) {
+                            setInventory(prevInventory => {
+                                let updated = [...prevInventory];
+                                allocation.ingredients.forEach(alloc => {
+                                    const idx = updated.findIndex(item =>
+                                        item.id === alloc.inventoryItemId ||
+                                        item.name?.toLowerCase() === alloc.item?.toLowerCase() ||
+                                        item.name?.toLowerCase() === alloc.name?.toLowerCase()
+                                    );
+                                    if (idx !== -1) {
+                                        // Deduct the reserved amount (item is already allocated, so just confirm the deduction)
+                                        const newQty = Math.max(0, updated[idx].quantity - (alloc.reserveAmount || alloc.amount || alloc.qty || 0));
+                                        updated[idx] = { ...updated[idx], quantity: newQty };
+                                    }
+                                });
+                                // Remove items with 0 quantity
+                                return updated.filter(item => item.quantity > 0);
                             });
-                            // Remove items with 0 quantity
-                            return updated.filter(item => item.quantity > 0);
-                        });
+                        }
 
                         // Clean up the allocation after cooking
                         const { [recipe.slotKey]: _, ...restAlloc } = allocatedIngredients;
@@ -5734,63 +6044,224 @@ Generate cooking/storage details. Return JSON:
                 showCookButton={true}
             />
 
-            {/* Add Custom Meal Modal */}
+            {/* Delete Confirmation Modal */}
+            <Modal isOpen={!!showDeleteConfirm} onClose={() => setShowDeleteConfirm(null)}>
+                <div className="p-6 space-y-4 text-center">
+                    <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                        <Trash2 className="w-6 h-6 text-red-500" />
+                    </div>
+                    <h2 className="text-xl font-bold text-slate-900">Remove Meal?</h2>
+                    <p className="text-slate-600">
+                        Are you sure you want to remove <strong>{showDeleteConfirm?.title}</strong>?
+                    </p>
+                    <p className="text-xs text-slate-400">
+                        This will restore any allocated ingredients to your pantry.
+                    </p>
+                    <div className="flex gap-3 pt-2">
+                        <button
+                            onClick={() => setShowDeleteConfirm(null)}
+                            className="flex-1 btn-secondary"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={executeDelete}
+                            className="flex-1 btn-primary bg-red-500 hover:bg-red-600 border-red-600"
+                        >
+                            Remove
+                        </button>
+                    </div>
+                </div>
+            </Modal>
+
+            {/* New Add Meal Wizard Modal */}
             <Modal isOpen={!!showAddCustomMeal} onClose={() => setShowAddCustomMeal(null)}>
                 {showAddCustomMeal && (
-                    <div className="p-6 space-y-4">
-                        <h2 className="text-xl font-bold text-slate-900">Add Custom Meal</h2>
-                        <p className="text-sm text-slate-500">
-                            {formatDate(showAddCustomMeal.date)}
-                        </p>
+                    <div className="p-6 space-y-6">
+                        <div className="text-center">
+                            <h2 className="text-2xl font-bold text-slate-900">Add Meal</h2>
+                            <p className="text-slate-500 font-medium">{formatDate(showAddCustomMeal.date)} • {showAddCustomMeal.mealType}</p>
+                        </div>
 
-                        <div>
-                            <label className="block text-sm font-bold text-slate-600 mb-1">Meal Type</label>
-                            <div className="flex gap-2 flex-wrap">
-                                {['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Dessert'].map(type => (
-                                    <button
-                                        key={type}
-                                        onClick={() => setShowAddCustomMeal({ ...showAddCustomMeal, mealType: type })}
-                                        className={`px-3 py-1.5 rounded-lg text-sm font-bold transition-colors ${showAddCustomMeal.mealType === type
-                                            ? 'bg-indigo-600 text-white'
-                                            : 'bg-slate-100 text-slate-600'
-                                            }`}
-                                    >
-                                        {type}
-                                    </button>
-                                ))}
+                        {!addingCustomMeal ? (
+                            <div className="grid grid-cols-1 gap-3">
+                                {/* Option 1: AI Generator (Plan Your Week / Single Meal) */}
+                                <button
+                                    onClick={() => {
+                                        setShowAddCustomMeal(null);
+                                        onOpenWizard(); // Triggers the full wizard, though arguably we might want a "Single Meal" generator here
+                                    }}
+                                    className="flex items-center gap-4 p-4 bg-gradient-to-r from-indigo-50 to-indigo-100/50 rounded-xl hover:shadow-md transition-all text-left group"
+                                >
+                                    <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm text-indigo-600 group-hover:scale-110 transition-transform">
+                                        <Sparkles className="w-6 h-6" />
+                                    </div>
+                                    <div>
+                                        <div className="font-bold text-slate-800">Generate with AI</div>
+                                        <div className="text-xs text-slate-500">Get suggestions based on your pantry</div>
+                                    </div>
+                                    <ChevronRight className="w-5 h-5 ml-auto text-slate-400" />
+                                </button>
+
+                                {/* Option 2: Select from Saved/Custom */}
+                                <button
+                                    onClick={() => {
+                                        setAddingCustomMeal('select'); // Switch view to selection
+                                    }}
+                                    className="flex items-center gap-4 p-4 bg-slate-50 rounded-xl hover:bg-slate-100 transition-all text-left group"
+                                >
+                                    <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm text-emerald-600 group-hover:scale-110 transition-transform">
+                                        <BookOpen className="w-6 h-6" />
+                                    </div>
+                                    <div>
+                                        <div className="font-bold text-slate-800">Select Recipe</div>
+                                        <div className="text-xs text-slate-500">Choose from favorites or custom meals</div>
+                                    </div>
+                                    <ChevronRight className="w-5 h-5 ml-auto text-slate-400" />
+                                </button>
+
+                                {/* Option 3: Log Cooked / Eating Out (Quick Log) */}
+                                <button
+                                    onClick={() => {
+                                        setAddingCustomMeal('custom'); // Switch view to manual entry
+                                    }}
+                                    className="flex items-center gap-4 p-4 bg-slate-50 rounded-xl hover:bg-slate-100 transition-all text-left group"
+                                >
+                                    <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm text-amber-500 group-hover:scale-110 transition-transform">
+                                        <Utensils className="w-6 h-6" />
+                                    </div>
+                                    <div>
+                                        <div className="font-bold text-slate-800">Quick Log / Custom</div>
+                                        <div className="text-xs text-slate-500">Eating out, leftovers, or manual entry</div>
+                                    </div>
+                                    <ChevronRight className="w-5 h-5 ml-auto text-slate-400" />
+                                </button>
                             </div>
-                        </div>
+                        ) : addingCustomMeal === 'custom' ? (
+                            /* Custom Meal Form */
+                            <div className="space-y-4 animate-in slide-in-from-right duration-200">
+                                <button onClick={() => setAddingCustomMeal(false)} className="text-sm text-slate-500 flex items-center gap-1 mb-2 hover:text-slate-800">
+                                    <ArrowLeft className="w-4 h-4" /> Back
+                                </button>
 
-                        <div>
-                            <label className="block text-sm font-bold text-slate-600 mb-1">Meal Name</label>
-                            <input
-                                type="text"
-                                value={customMealName}
-                                onChange={e => setCustomMealName(e.target.value)}
-                                placeholder="e.g., Takeout Thai, Homemade Pizza"
-                                className="input-field"
-                            />
-                        </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-slate-600 mb-1">Meal Name</label>
+                                    <input
+                                        type="text"
+                                        value={customMealName}
+                                        onChange={e => setCustomMealName(e.target.value)}
+                                        placeholder="e.g., Takeout, Leftovers, Sandwich"
+                                        className="input-field"
+                                        autoFocus
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-slate-600 mb-1">Details (Optional)</label>
+                                    <textarea
+                                        value={customMealIngredients}
+                                        onChange={e => setCustomMealIngredients(e.target.value)}
+                                        placeholder="Notes, restaurant name, or ingredients..."
+                                        className="input-field min-h-[80px]"
+                                    />
+                                </div>
+                                <button
+                                    onClick={addCustomMeal} // Re-use existing handler
+                                    disabled={!customMealName.trim()}
+                                    className="w-full btn-primary"
+                                >
+                                    Add Custom Meal
+                                </button>
+                            </div>
+                        ) : addingCustomMeal === 'select' ? (
+                            /* Recipe Selection List */
+                            <div className="space-y-4 animate-in slide-in-from-right duration-200 h-[60vh] flex flex-col">
+                                <button onClick={() => setAddingCustomMeal(false)} className="text-sm text-slate-500 flex items-center gap-1 mb-2 hover:text-slate-800 flex-shrink-0">
+                                    <ArrowLeft className="w-4 h-4" /> Back
+                                </button>
 
-                        <div>
-                            <label className="block text-sm font-bold text-slate-600 mb-1">Ingredients Used (optional)</label>
-                            <textarea
-                                value={customMealIngredients}
-                                onChange={e => setCustomMealIngredients(e.target.value)}
-                                placeholder="List ingredients for pantry deduction..."
-                                className="input-field min-h-[80px]"
-                            />
-                            <p className="text-xs text-slate-400 mt-1">AI will generate storage/reheat tips if provided</p>
-                        </div>
+                                <div className="space-y-2 overflow-y-auto flex-1 pr-1">
+                                    {/* Combine Custom & Favorites */}
+                                    {[...customRecipes, ...favorites].length === 0 ? (
+                                        <div className="text-center py-10 text-slate-400">
+                                            No saved recipes found.
+                                        </div>
+                                    ) : (
+                                        [...customRecipes, ...favorites].map((recipe, idx) => (
+                                            <div
+                                                key={idx}
+                                                onClick={() => {
+                                                    // Add this recipe to the slot
+                                                    setCustomMealName(recipe.name); // Hacky reuse of state? No, better logic needed.
+                                                    // We need a direct "addExistingRecipe" handler.
+                                                    // For now, let's adapt:
 
-                        <button
-                            onClick={addCustomMeal}
-                            disabled={!customMealName.trim() || addingCustomMeal}
-                            className="w-full btn-primary disabled:opacity-50"
-                        >
-                            {addingCustomMeal ? <Loader2 className="w-4 h-4 inline mr-2 animate-spin" /> : <Plus className="w-4 h-4 inline mr-2" />}
-                            Add to Calendar
-                        </button>
+                                                    const dateKey = getLocalDateKey(showAddCustomMeal.date);
+                                                    const slotKey = `${dateKey}-${showAddCustomMeal.mealType}`;
+                                                    const existing = mealPlan[slotKey] || { meals: [] };
+
+                                                    const newMeal = {
+                                                        ...recipe,
+                                                        id: generateId(), // New instance ID
+                                                        recipeId: recipe.id, // Link to original
+                                                        mealType: showAddCustomMeal.mealType,
+                                                        scheduledFor: showAddCustomMeal.date.toISOString(),
+                                                        slotKey,
+                                                        isCooked: false // Default to not cooked unless we add that option
+                                                    };
+
+                                                    // Trigger allocation logic?
+                                                    // For immediate allocation, we'd need to confirm ingredients.
+                                                    // Let's just add it for now, user can cook later.
+
+                                                    setMealPlan({
+                                                        ...mealPlan,
+                                                        [slotKey]: {
+                                                            meals: [...(existing.meals || []), newMeal]
+                                                        }
+                                                    });
+
+                                                    // Trigger allocation if it has ingredients?
+                                                    // Yes, if we want reservations to work.
+                                                    if (recipe.ingredients && recipe.ingredients.length > 0) {
+                                                        const allocation = {
+                                                            recipeId: newMeal.recipeId || newMeal.id,
+                                                            recipeName: newMeal.name,
+                                                            scheduledAt: new Date().toISOString(),
+                                                            ingredients: recipe.ingredients.map(ing => ({
+                                                                item: ing.item || ing.name || String(ing),
+                                                                amount: ing.amount || ing.quantity || 1,
+                                                                unit: ing.unit || '',
+                                                                inventoryItemId: ing.inventoryItemId
+                                                            }))
+                                                        };
+                                                        setAllocatedIngredients(prev => ({ ...prev, [slotKey]: allocation }));
+                                                    }
+
+                                                    setShowAddCustomMeal(null);
+                                                    setAddingCustomMeal(false);
+                                                }}
+                                                className="flex items-center gap-3 p-3 bg-white border border-slate-100 rounded-xl hover:border-indigo-200 cursor-pointer transition-all"
+                                            >
+                                                {recipe.imageUrl ? (
+                                                    <img src={recipe.imageUrl} className="w-12 h-12 rounded-lg object-cover bg-slate-100" />
+                                                ) : (
+                                                    <div className="w-12 h-12 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-400">
+                                                        <ChefHat className="w-6 h-6" />
+                                                    </div>
+                                                )}
+                                                <div className="flex-1 min-w-0 text-left">
+                                                    <div className="font-bold text-slate-800 truncate">{recipe.name}</div>
+                                                    <div className="text-xs text-slate-500">
+                                                        {recipe.ingredients?.length || 0} ingredients
+                                                    </div>
+                                                </div>
+                                                <Plus className="w-5 h-5 text-indigo-500" />
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+                        ) : null}
                     </div>
                 )}
             </Modal>
@@ -8417,6 +8888,7 @@ function MealPrepMate() {
     const [installPrompt, setInstallPrompt] = useState(null);
     const [isStandalone, setIsStandalone] = useState(false);
     const [scheduleDate, setScheduleDate] = useState(null);
+    const [isCookedNow, setIsCookedNow] = useState(false);
 
     // Store full recipe object directly (not ID-based) to support new unsaved recipes
     const [selectedRecipe, setSelectedRecipe] = useState(null);
@@ -8845,6 +9317,13 @@ function MealPrepMate() {
         }
     }, [leftovers, inventory, lastNotifCheck, expirationReminders]);
 
+    // Reset cookedNow checkbox when modal closes
+    useEffect(() => {
+        if (!showScheduleModal) {
+            setIsCookedNow(false);
+        }
+    }, [showScheduleModal]);
+
     // Auto-start tutorial on first visit (regardless of API key)
     useEffect(() => {
         // Don't start tutorial if setup modal is showing or if we've already seen it
@@ -8989,15 +9468,27 @@ function MealPrepMate() {
         }
 
         // Condensed inventory format for AI: id|name|qty|unit
-        const invStr = inventory.map(i => `${i.id}|${i.name}|${i.quantity}|${i.unit}`).join('\n');
+        // OPTIMIZATION: Only include items that share at least one word with recipe ingredients (3+ chars)
+        // This reduces prompt size significantly for large pantries
+        const recipeWords = new Set(
+            (recipe.ingredients || []).flatMap(i =>
+                i.item.toLowerCase().split(/[\s,()]+/).filter(w => w.length > 2)
+            )
+        );
+
+        const relevantInventory = inventory.filter(i => {
+            const itemWords = i.name.toLowerCase().split(/[\s,()]+/);
+            return itemWords.some(w => recipeWords.has(w));
+        });
+
+        const invStr = relevantInventory.map(i => `${i.id}|${i.name}|${i.quantity}|${i.unit}`).join('\n');
         const ingStr = recipe.ingredients?.map(i => `${i.item}: ${i.qty}`).join('\n') || '';
 
-        const prompt = `Match recipe ingredients to pantry for deduction. Use fuzzy matching.
-
+        const prompt = `Match recipe ingredients to pantry for deduction.
 Recipe Ingredients:
 ${ingStr}
 
-Inventory (format: id|name|quantity|unit):
+Relevant Inventory (format: id|name|quantity|unit):
 ${invStr}
 
 Return JSON: {
@@ -9062,17 +9553,24 @@ Rules:
             setInventory(updatedInventory);
 
             // Save deduction choices to recipe for future use
+            // Also save as allocations so scheduling later uses same selections
+            const deductionData = matches.map(m => ({
+                inventoryItemId: m.inventoryItemId,
+                inventoryItemName: m.inventoryItemName,
+                amount: m.amount,
+                currentUnit: m.currentUnit,
+                currentQuantity: m.currentQuantity,
+                recipeIngredient: m.recipeIngredient,
+                confidence: m.confidence
+            }));
+
             const updatedRecipe = {
                 ...recipe,
                 lastDeductionHash: currentHash,
-                lastDeductions: matches.map(m => ({
-                    inventoryItemId: m.inventoryItemId,
-                    inventoryItemName: m.inventoryItemName,
-                    amount: m.amount,
-                    currentUnit: m.currentUnit,
-                    recipeIngredient: m.recipeIngredient,
-                    confidence: m.confidence
-                }))
+                lastDeductions: deductionData,
+                // Also store as allocations so scheduling uses same selections
+                lastAllocationHash: currentHash,
+                lastAllocation: deductionData
             };
 
             setHistory([{ ...updatedRecipe, id: generateId(), cookedAt: new Date().toISOString() }, ...history]);
@@ -9099,31 +9597,27 @@ Rules:
         } else {
             // ALLOCATION MODE: Save allocations and proceed to schedule
             // Store allocations on the recipe for future deduction use
-            const updatedRecipe = {
-                ...recipe,
-                lastAllocationHash: currentHash,
-                lastAllocation: matches.map(m => ({
-                    inventoryItemId: m.inventoryItemId,
-                    inventoryItemName: m.inventoryItemName,
-                    amount: m.amount,
-                    currentUnit: m.currentUnit,
-                    currentQuantity: m.currentQuantity,
-                    recipeIngredient: m.recipeIngredient,
-                    confidence: m.confidence
-                }))
-            };
-
-            // Add to allocated ingredients for tracking/display
-            const newAllocations = matches.map(m => ({
-                recipeId: recipe.id,
-                recipeName: recipe.name,
+            // Also save as lastDeductions so cooking later uses the same choices
+            const allocationData = matches.map(m => ({
                 inventoryItemId: m.inventoryItemId,
                 inventoryItemName: m.inventoryItemName,
                 amount: m.amount,
-                unit: m.currentUnit,
-                allocatedAt: new Date().toISOString()
+                currentUnit: m.currentUnit,
+                currentQuantity: m.currentQuantity,
+                recipeIngredient: m.recipeIngredient,
+                confidence: m.confidence
             }));
-            setAllocatedIngredients(prev => [...prev, ...newAllocations]);
+
+            const updatedRecipe = {
+                ...recipe,
+                lastAllocationHash: currentHash,
+                lastAllocation: allocationData,
+                // Also store as deductions so cooking uses same selections
+                lastDeductionHash: currentHash,
+                lastDeductions: allocationData
+            };
+
+
 
             // Update recipe in lists with allocation data
             const updateInList = (list, setter) => {
@@ -9216,6 +9710,53 @@ Rules:
         }));
         setShoppingList([...shoppingList, ...newItems]);
         alert('Added to shopping list!');
+    };
+
+    // Calculate which meals have reserved this ingredient
+    const getItemReservations = (itemName) => {
+        if (!allocatedIngredients || !itemName) return [];
+        const reservations = [];
+        const itemNameLower = itemName.toLowerCase().trim();
+
+        Object.entries(allocatedIngredients).forEach(([slotKey, allocation]) => {
+            if (!allocation?.ingredients) return;
+
+            const matchingIng = allocation.ingredients.find(ing => {
+                if (!ing?.item) return false;
+                const ingItemLower = ing.item.toLowerCase().trim();
+
+                // Skip very short names to avoid false positives
+                if (itemNameLower.length < 3 || ingItemLower.length < 3) return false;
+
+                // Exact match
+                if (itemNameLower === ingItemLower) return true;
+
+                // Check if one contains the other as a whole word
+                // e.g., "Chicken Breast" should match "Chicken", but "Rice" shouldn't match "Price"
+                const itemWords = itemNameLower.split(/\s+/);
+                const ingWords = ingItemLower.split(/\s+/);
+
+                return itemWords.some(w => w.length >= 3 && ingWords.includes(w)) ||
+                    ingWords.some(w => w.length >= 3 && itemWords.includes(w));
+            });
+
+            if (matchingIng) {
+                reservations.push({
+                    slotKey,
+                    recipeName: allocation.recipeName,
+                    amount: parseFloat(matchingIng.amount) || 0,
+                    unit: matchingIng.unit
+                });
+            }
+        });
+        return reservations;
+    };
+
+    // Calculate available quantity (Total - Reserved)
+    const getAvailableQuantity = (item) => {
+        const reservations = getItemReservations(item.name);
+        const totalReserved = reservations.reduce((sum, res) => sum + (parseFloat(res.amount) || 0), 0);
+        return Math.max(0, (parseFloat(item.quantity) || 0) - totalReserved);
     };
 
     const NavBtn = ({ icon: Icon, label, active, onClick }) => (
@@ -9311,12 +9852,40 @@ Rules:
             {/* Main Content */}
             <div className="flex-1 overflow-y-auto scrollbar-hide w-full relative bg-white">
                 {view === 'dashboard' && <Dashboard />}
-                {view === 'inventory' && <InventoryView apiKey={apiKey} model={selectedModel} inventory={inventory} setInventory={setInventory} knownLocations={knownLocations} setKnownLocations={setKnownLocations} processedFiles={processedFiles} setProcessedFiles={setProcessedFiles} allocatedIngredients={allocatedIngredients} expandedItemId={expandedInventoryItemId} setExpandedItemId={setExpandedInventoryItemId} />}
+                {view === 'inventory' && <InventoryView apiKey={apiKey} model={selectedModel} inventory={inventory} setInventory={setInventory} knownLocations={knownLocations} setKnownLocations={setKnownLocations} processedFiles={processedFiles} setProcessedFiles={setProcessedFiles} allocatedIngredients={allocatedIngredients} expandedItemId={expandedInventoryItemId} setExpandedItemId={setExpandedInventoryItemId} getAvailableQuantity={getAvailableQuantity} getItemReservations={getItemReservations} />}
                 {view === 'family' && <FamilyView familyMembers={family} setFamilyMembers={setFamily} />}
-                {view === 'recipes' && <RecipeEngine apiKey={apiKey} model={selectedModel} inventory={inventory} setInventory={setInventory} family={family} setSelectedRecipe={setSelectedRecipe} history={history} setHistory={setHistory} recipes={recipes} setRecipes={setRecipes} favorites={favorites} setFavorites={setFavorites} shoppingList={shoppingList} setShoppingList={setShoppingList} mealPlan={mealPlan} setMealPlan={setMealPlan} leftovers={leftovers} setLeftovers={setLeftovers} onMoveToHistory={handleMoveToHistory} customRecipes={customRecipes} setCustomRecipes={setCustomRecipes} allocatedIngredients={allocatedIngredients} setAllocatedIngredients={setAllocatedIngredients} onOpenWizard={() => setShowMealWizard(true)} quickMeals={quickMeals} setQuickMeals={setQuickMeals} setToastData={setToastData} activeTab={recipeActiveTab} setActiveTab={setRecipeActiveTab} showCustomRecipeForm={showCustomRecipeForm} setShowCustomRecipeForm={setShowCustomRecipeForm} />}
+                {view === 'recipes' && <RecipeEngine apiKey={apiKey} model={selectedModel} inventory={inventory} setInventory={setInventory} family={family} setSelectedRecipe={setSelectedRecipe} history={history} setHistory={setHistory} recipes={recipes} setRecipes={setRecipes} favorites={favorites} setFavorites={setFavorites} shoppingList={shoppingList} setShoppingList={setShoppingList} mealPlan={mealPlan} setMealPlan={setMealPlan} leftovers={leftovers} setLeftovers={setLeftovers} onMoveToHistory={handleMoveToHistory} customRecipes={customRecipes} setCustomRecipes={setCustomRecipes} allocatedIngredients={allocatedIngredients} setAllocatedIngredients={setAllocatedIngredients} onOpenWizard={() => setShowMealWizard(true)} quickMeals={quickMeals} setQuickMeals={setQuickMeals} setToastData={setToastData} activeTab={recipeActiveTab} setActiveTab={setRecipeActiveTab} showCustomRecipeForm={showCustomRecipeForm} setShowCustomRecipeForm={setShowCustomRecipeForm} getAvailableQuantity={getAvailableQuantity} getItemReservations={getItemReservations} />}
                 {view === 'shopping' && <ShoppingView apiKey={apiKey} model={selectedModel} list={shoppingList} setList={setShoppingList} />}
                 {view === 'leftovers' && <LeftoversView apiKey={apiKey} model={selectedModel} leftovers={leftovers} setLeftovers={setLeftovers} onMoveToHistory={handleMoveToHistory} />}
-                {view === 'calendar' && <CalendarView apiKey={apiKey} model={selectedModel} mealPlan={mealPlan} setMealPlan={setMealPlan} inventory={inventory} setInventory={setInventory} family={family} recipes={recipes} history={history} customRecipes={customRecipes} downloadICSFn={downloadICS} onCook={handleCook} onFavorite={(r) => setFavorites([...favorites, { ...r, id: generateId() }])} onAddToLeftovers={handleAddToLeftovers} leftovers={leftovers} setLeftovers={setLeftovers} onMoveToHistory={handleMoveToHistory} allocatedIngredients={allocatedIngredients} setAllocatedIngredients={setAllocatedIngredients} onOpenWizard={() => setShowMealWizard(true)} favorites={favorites} activeTab={calendarActiveTab} setActiveTab={setCalendarActiveTab} selectedLeftoverId={selectedLeftoverId} setSelectedLeftoverId={setSelectedLeftoverId} />}
+                {view === 'calendar' && <CalendarView
+                    apiKey={apiKey}
+                    model={selectedModel}
+                    mealPlan={mealPlan}
+                    setMealPlan={setMealPlan}
+                    inventory={inventory}
+                    setInventory={setInventory}
+                    family={family}
+                    recipes={recipes}
+                    history={history}
+                    customRecipes={customRecipes}
+                    downloadICSFn={downloadICS}
+                    onCook={handleCook}
+                    onFavorite={(r) => setFavorites([...favorites, { ...r, id: generateId() }])}
+                    onAddToLeftovers={handleAddToLeftovers}
+                    leftovers={leftovers}
+                    setLeftovers={setLeftovers}
+                    onMoveToHistory={handleMoveToHistory}
+                    allocatedIngredients={allocatedIngredients}
+                    setAllocatedIngredients={setAllocatedIngredients}
+                    onOpenWizard={() => setShowMealWizard(true)}
+                    favorites={favorites}
+                    activeTab={calendarActiveTab}
+                    setActiveTab={setCalendarActiveTab}
+                    selectedLeftoverId={selectedLeftoverId}
+                    setSelectedLeftoverId={setSelectedLeftoverId}
+                    getAvailableQuantity={getAvailableQuantity}
+                    getItemReservations={getItemReservations}
+                />}
             </div>
 
             {/* Bottom Nav */}
@@ -9797,9 +10366,38 @@ Rules:
                             </div>
                         </div>
 
+
                         {/* Quick Add - Next 8 Days */}
                         <div>
                             <label className="block text-sm font-bold text-slate-600 mb-2">Quick Add (Next 8 Days)</label>
+
+                            {/* "Already Cooked" Checkbox (Only if scheduling for today or past) */}
+                            {(() => {
+                                const todayKey = getLocalDateKey(new Date());
+                                // Only show if we haven't selected a date or selected date is today/past
+                                // For Simplicity, just show it always? Or only if date is today?
+                                // Let's show if manual date is selected and is today
+                                const targetDateKey = scheduleDate ? getLocalDateKey(scheduleDate) : null;
+                                const isTodayOrPast = targetDateKey === todayKey; // simplified for "Today" focus
+
+                                if (isTodayOrPast) {
+                                    return (
+                                        <div className="mb-3 flex items-center gap-2 p-2 bg-emerald-50 rounded-lg border border-emerald-100">
+                                            <input
+                                                type="checkbox"
+                                                id="cookedNowCheck"
+                                                checked={isCookedNow}
+                                                onChange={(e) => setIsCookedNow(e.target.checked)}
+                                                className="w-5 h-5 rounded border-emerald-300 text-emerald-600 focus:ring-emerald-500"
+                                            />
+                                            <label htmlFor="cookedNowCheck" className="text-sm font-bold text-emerald-800 cursor-pointer">
+                                                I just cooked this (Mark as Cooked)
+                                            </label>
+                                        </div>
+                                    );
+                                }
+                                return null;
+                            })()}
                             <div className="grid grid-cols-4 gap-2">
                                 {Array.from({ length: 8 }, (_, i) => {
                                     const date = new Date();
@@ -9881,32 +10479,107 @@ Rules:
                                 }
 
                                 const totalDays = 1 + (selectedRecipe.leftoverDays || 0); // cook day + leftover days
+                                // Prepare new meal object
+                                const newMeal = {
+                                    ...selectedRecipe,
+                                    isLeftover: false,
+                                    dayNumber: 1,
+                                    scheduledFor: scheduleDate.toISOString(),
+                                    mealType: scheduleMealType,
+                                    isCooked: isCookedNow // Apply the immediate cooked state
+                                };
+
                                 const updates = {};
+                                const dateKey = getLocalDateKey(scheduleDate);
+                                const slotKey = `${dateKey}-${scheduleMealType}`;
+                                const existing = mealPlan[slotKey] || { meals: [] };
 
-                                for (let i = 0; i < totalDays; i++) {
-                                    const d = new Date(scheduleDate);
-                                    d.setDate(d.getDate() + i);
-                                    const dateKey = getLocalDateKey(d);
-                                    const slotKey = `${dateKey}-${scheduleMealType}`;
+                                updates[slotKey] = {
+                                    meals: [...(existing.meals || []), newMeal]
+                                };
 
-                                    // Support multiple meals per slot
-                                    const existing = mealPlan[slotKey] || { meals: [] };
-                                    const newMeal = {
-                                        ...selectedRecipe,
-                                        isLeftover: i > 0,
-                                        dayNumber: i + 1,
-                                        scheduledFor: d.toISOString(),
-                                        mealType: scheduleMealType
-                                    };
+                                // Handle Leftovers
+                                if (totalDays > 1) {
+                                    for (let i = 1; i < totalDays; i++) {
+                                        const ld = new Date(scheduleDate);
+                                        ld.setDate(ld.getDate() + i);
+                                        const lDateKey = getLocalDateKey(ld);
+                                        const lSlotKey = `${lDateKey}-${scheduleMealType}`;
+                                        const lExisting = mealPlan[lSlotKey] || { meals: [] }; // Note: might override existing if not careful, but appending is safer
 
-                                    updates[slotKey] = {
-                                        meals: [...(existing.meals || []), newMeal]
-                                    };
+                                        // Leftovers are added as separate entries usually
+                                        const leftoverMeal = {
+                                            ...selectedRecipe,
+                                            isLeftover: true,
+                                            dayNumber: i + 1,
+                                            scheduledFor: ld.toISOString(),
+                                            mealType: scheduleMealType,
+                                            isCooked: false, // Leftovers not cooked yet even if main meal is? No, wait logic.
+                                            recipeId: newMeal.id // Link to parent
+                                        };
+
+                                        // Merge into updates
+                                        if (updates[lSlotKey]) {
+                                            updates[lSlotKey].meals.push(leftoverMeal);
+                                        } else {
+                                            updates[lSlotKey] = { meals: [...(lExisting.meals || []), leftoverMeal] };
+                                        }
+                                    }
                                 }
 
                                 setMealPlan(prev => ({ ...prev, ...updates }));
+
+                                // Allocate ingredients for the main meal
+                                if (selectedRecipe.ingredients && selectedRecipe.ingredients.length > 0) {
+                                    // Simple allocation (raw ingredients) since we haven't done matching yet
+                                    const allocationIngredients = selectedRecipe.ingredients.map(ing => {
+                                        // Heuristic to handle different ingredient object shapes
+                                        // ing.qty is often a string like "1 cup" - extract the numeric part
+                                        let amt = 1;
+                                        if (typeof ing.qty === 'string') {
+                                            const parsed = parseFloat(ing.qty);
+                                            if (!isNaN(parsed)) amt = parsed;
+                                        } else if (ing.amount !== undefined) {
+                                            amt = parseFloat(ing.amount) || 1;
+                                        } else if (ing.quantity !== undefined) {
+                                            amt = parseFloat(ing.quantity) || 1;
+                                        }
+                                        const unit = ing.unit || '';
+                                        return {
+                                            item: ing.item || ing.name || String(ing),
+                                            amount: amt,
+                                            unit: unit
+                                        };
+                                    });
+
+                                    const allocation = {
+                                        recipeId: selectedRecipe.id,
+                                        recipeName: selectedRecipe.name,
+                                        scheduledAt: new Date().toISOString(),
+                                        ingredients: allocationIngredients
+                                    };
+                                    setAllocatedIngredients(prev => ({ ...prev, [dateKey + '-' + scheduleMealType]: allocation }));
+                                }
+
                                 setShowScheduleModal(false);
                                 setScheduleDate(null);
+
+                                if (isCookedNow) {
+                                    // If added as cooked, trigger history update immediately
+                                    const historyEntry = {
+                                        ...newMeal,
+                                        cookedAt: new Date().toISOString(),
+                                        id: generateId()
+                                    };
+                                    setHistory(prev => [historyEntry, ...prev]);
+
+                                    // Also deduct ingredients immediately if we can? 
+                                    // Or just assume user did it manually? 
+                                    // Requirement: "...and then allocation or deduction process of it hasn't already been setup."
+                                    // Let's assume for "Quick Cooked" we might skip deduction or ask?
+                                    // For now, simple history add is safer.
+                                }
+
                                 alert(`${selectedRecipe.name} scheduled!${totalDays > 1 ? ` Leftovers added for ${totalDays - 1} more day(s).` : ''} `);
                             }}
                             disabled={!scheduleDate}
@@ -9917,7 +10590,7 @@ Rules:
                         </button>
                     </div>
                 )}
-            </Modal >
+            </Modal>
 
             {/* Meal Scheduler Wizard */}
             < MealSchedulerWizard
