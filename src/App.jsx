@@ -51,7 +51,7 @@ const SERVING_MULTIPLIERS = {
 };
 
 // App version - update with each deployment
-const APP_VERSION = '2.2026.01.06';
+const APP_VERSION = '3.2026.01.06';
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -86,6 +86,40 @@ const getExpirationStatus = (dateStr) => {
     if (expDate < today) return 'expired';
     if (expDate < weekFromNow) return 'soon';
     return 'ok';
+};
+
+// Compress and resize base64 images to save LocalStorage quota
+const compressImage = (base64Str, maxWidth = 800, quality = 0.8) => {
+    return new Promise((resolve) => {
+        if (!base64Str || !base64Str.startsWith('data:image')) {
+            resolve(base64Str);
+            return;
+        }
+
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.src = base64Str;
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+
+            if (width > maxWidth) {
+                height = (maxWidth / width) * height;
+                width = maxWidth;
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+
+            // Using jpeg with lower quality saves massive space vs png
+            resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.onerror = () => resolve(base64Str);
+    });
 };
 
 // ============================================================================
@@ -247,7 +281,9 @@ const generateImageWithGemini = async (apiKey, prompt) => {
         const imagePart = parts.find(p => p.inlineData);
 
         if (imagePart) {
-            return `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
+            const base64 = `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
+            // Compress down to 800px wide JPEG for better balance of clarity and storage
+            return await compressImage(base64, 800, 0.82);
         }
 
         // Fallback or error if no image
@@ -1260,7 +1296,8 @@ const RecipeDetailModal = ({
     showScheduleButton = true,
     showRescheduleButton = false,
     showLeftoversButton = true,
-    showCookButton = true
+    showCookButton = true,
+    isFavorite = false // Add this
 }) => {
     const [editMode, setEditMode] = useState(startInEditMode);
     const [editedRecipe, setEditedRecipe] = useState(null);
@@ -1397,8 +1434,9 @@ const RecipeDetailModal = ({
         const file = e.target.files?.[0];
         if (!file) return;
         const reader = new FileReader();
-        reader.onloadend = () => {
-            updateField('imageUrl', reader.result);
+        reader.onloadend = async () => {
+            const compressed = await compressImage(reader.result, 1024, 0.85);
+            updateField('imageUrl', compressed);
         };
         reader.readAsDataURL(file);
     };
@@ -1798,8 +1836,15 @@ const RecipeDetailModal = ({
                         <div className="pt-4 space-y-3">
                             <div className="flex gap-3">
                                 {onFavorite && (
-                                    <button onClick={() => onFavorite(displayRecipe)} className="flex-1 btn-secondary flex items-center justify-center gap-2">
-                                        <Heart className="w-5 h-5" /> Save
+                                    <button
+                                        onClick={() => onFavorite(displayRecipe)}
+                                        className={`flex-1 flex items-center justify-center gap-2 transition-all h-12 rounded-xl font-bold ${isFavorite
+                                            ? 'bg-pink-50 text-pink-600 border border-pink-100'
+                                            : 'btn-secondary'
+                                            }`}
+                                    >
+                                        <Heart className={`w-5 h-5 ${isFavorite ? 'fill-current' : ''}`} />
+                                        {isFavorite ? 'Saved' : 'Save'}
                                     </button>
                                 )}
                                 {onUseRecipe && (
@@ -2035,7 +2080,7 @@ const InventoryItem = ({
     const expirationStatus = getExpirationStatus(item.expiresAt);
 
     return (
-        <div className="inventory-item">
+        <div id={`inventory-item-${item.id}`} className="inventory-item">
             {/* Main Row - Always visible */}
             <div
                 className="flex items-center gap-2 cursor-pointer"
@@ -4011,125 +4056,25 @@ STRICT JSON Output:
                             <button
                                 id="add-recipe-button"
                                 onClick={() => setShowCustomRecipeForm(!showCustomRecipeForm)}
-                                className="btn-primary text-sm py-2 flex items-center gap-1"
+                                className={`text-sm py-2 px-4 rounded-xl font-bold flex items-center gap-1.5 transition-all ${showCustomRecipeForm
+                                    ? 'bg-slate-200 text-slate-700 shadow-inner'
+                                    : 'btn-primary'
+                                    }`}
                             >
-                                <Plus className="w-4 h-4" /> Add Recipe
+                                {showCustomRecipeForm ? (
+                                    <>
+                                        <X className="w-4 h-4" /> Close
+                                    </>
+                                ) : (
+                                    <>
+                                        <Plus className="w-4 h-4" /> Add Recipe
+                                    </>
+                                )}
                             </button>
                         </div>
 
-                        {/* Quick Meals Section */}
-                        <div id="quick-meals-section" className="bg-gradient-to-r from-amber-50/50 to-orange-50/50 rounded-2xl p-3 border border-amber-100">
-                            <div className="flex items-center justify-between mb-1">
-                                <div>
-                                    <h3 className="text-sm font-bold text-amber-800 flex items-center gap-1.5">
-                                        <Zap className="w-4 h-4" /> Quick Meals
-                                    </h3>
-                                    <p className="text-xs text-amber-600/60">Long-press to view recipe</p>
-                                </div>
-                                <div className="flex gap-1">
-                                    {quickMeals?.length > 0 && (
-                                        <button
-                                            onClick={() => setQuickMealsEditMode(!quickMealsEditMode)}
-                                            className={`text-xs px-2 py-1 rounded-lg transition-colors ${quickMealsEditMode ? 'bg-red-100 text-red-600' : 'text-amber-600 hover:bg-amber-100'}`}
-                                        >
-                                            {quickMealsEditMode ? 'Done' : 'Edit'}
-                                        </button>
-                                    )}
-                                    <button
-                                        onClick={scanForQuickMeals}
-                                        disabled={quickMealsLoading}
-                                        className="text-xs px-2 py-1 rounded-lg bg-amber-100 text-amber-700 hover:bg-amber-200 flex items-center gap-1"
-                                    >
-                                        {quickMealsLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                                        Auto-Discover
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Quick Meal Pills - Aesthetic balanced packing */}
-                            {quickMeals?.length > 0 ? (
-                                <div className="flex flex-wrap gap-2 max-h-[150px] overflow-y-auto scrollbar-hide mt-2">
-                                    {(() => {
-                                        // Aesthetic balanced packing: mix large and small pills on each row
-                                        const containerWidth = 320; // Reasonable mobile width target
-                                        const charWidth = 6.5;
-                                        const pillPadding = 38;
-                                        const gap = 8;
-
-                                        const withWidth = quickMeals.map(qm => ({
-                                            ...qm,
-                                            estimatedWidth: (qm.name?.length || 10) * charWidth + pillPadding
-                                        }));
-
-                                        // Shuffle for visual variety then pack intelligently
-                                        const shuffled = [...withWidth].sort(() => Math.random() - 0.5);
-                                        const result = [];
-                                        const used = new Set();
-
-                                        // Pack rows: for each row, try to fill with a mix
-                                        while (used.size < shuffled.length) {
-                                            const row = [];
-                                            let rowWidth = 0;
-
-                                            // First pass: add items that fit
-                                            for (let i = 0; i < shuffled.length; i++) {
-                                                if (used.has(i)) continue;
-                                                const item = shuffled[i];
-                                                const neededWidth = item.estimatedWidth + (row.length > 0 ? gap : 0);
-
-                                                if (rowWidth + neededWidth <= containerWidth) {
-                                                    row.push(item);
-                                                    rowWidth += neededWidth;
-                                                    used.add(i);
-                                                }
-                                            }
-
-                                            // If no items fit and we still have items, force add smallest unused
-                                            if (row.length === 0 && used.size < shuffled.length) {
-                                                for (let i = 0; i < shuffled.length; i++) {
-                                                    if (!used.has(i)) {
-                                                        row.push(shuffled[i]);
-                                                        used.add(i);
-                                                        break;
-                                                    }
-                                                }
-                                            }
-
-                                            result.push(...row);
-                                        }
-
-                                        return result.map(qm => (
-                                            <QuickMealPill
-                                                key={qm.id}
-                                                quickMeal={qm}
-                                                onTap={logQuickMeal}
-                                                editMode={quickMealsEditMode}
-                                                onDelete={deleteQuickMeal}
-                                                onEdit={setEditingQuickMeal}
-                                                onLongPress={(qm) => {
-                                                    // If quick meal has linked recipe, open it
-                                                    if (qm.linkedRecipe) {
-                                                        setSelectedRecipe(qm.linkedRecipe);
-                                                    } else if (qm.linkedRecipeId) {
-                                                        // Find recipe in customRecipes or favorites
-                                                        const recipe = [...customRecipes, ...favorites].find(r => r.id === qm.linkedRecipeId);
-                                                        if (recipe) setSelectedRecipe(recipe);
-                                                    }
-                                                }}
-                                            />
-                                        ));
-                                    })()}
-                                </div>
-                            ) : (
-                                <p className="text-xs text-amber-600/70 italic mt-2">
-                                    Tap "Auto-Discover" to scan your inventory, or add recipes as Quick Meals from any recipe card.
-                                </p>
-                            )}
-                        </div>
-
-
                         {showCustomRecipeForm && (
-                            <div id="add-recipe-form" className="bg-slate-50 p-4 rounded-2xl space-y-3">
+                            <div id="add-recipe-form" className="bg-slate-50 p-4 rounded-2xl space-y-3 mb-4 border border-slate-200 shadow-sm animate-slide-up">
                                 {/* AI Format Section */}
                                 <div className="bg-purple-50 border border-purple-200 rounded-xl p-3 space-y-3">
                                     <div className="flex items-center gap-2">
@@ -4318,6 +4263,118 @@ STRICT JSON Output:
                             </div>
                         )}
 
+                        {/* Quick Meals Section */}
+                        <div id="quick-meals-section" className="bg-gradient-to-r from-amber-50/50 to-orange-50/50 rounded-2xl p-3 border border-amber-100">
+                            <div className="flex items-center justify-between mb-1">
+                                <div>
+                                    <h3 className="text-sm font-bold text-amber-800 flex items-center gap-1.5">
+                                        <Zap className="w-4 h-4" /> Quick Meals
+                                    </h3>
+                                    <p className="text-xs text-amber-600/60">Long-press to view recipe</p>
+                                </div>
+                                <div className="flex gap-1">
+                                    {quickMeals?.length > 0 && (
+                                        <button
+                                            onClick={() => setQuickMealsEditMode(!quickMealsEditMode)}
+                                            className={`text-xs px-2 py-1 rounded-lg transition-colors ${quickMealsEditMode ? 'bg-red-100 text-red-600' : 'text-amber-600 hover:bg-amber-100'}`}
+                                        >
+                                            {quickMealsEditMode ? 'Done' : 'Edit'}
+                                        </button>
+                                    )}
+                                    <button
+                                        onClick={scanForQuickMeals}
+                                        disabled={quickMealsLoading}
+                                        className="text-xs px-2 py-1 rounded-lg bg-amber-100 text-amber-700 hover:bg-amber-200 flex items-center gap-1"
+                                    >
+                                        {quickMealsLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                                        Auto-Discover
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Quick Meal Pills - Aesthetic balanced packing */}
+                            {quickMeals?.length > 0 ? (
+                                <div className="flex flex-wrap gap-2 max-h-[150px] overflow-y-auto scrollbar-hide mt-2">
+                                    {(() => {
+                                        // Aesthetic balanced packing: mix large and small pills on each row
+                                        const containerWidth = 320; // Reasonable mobile width target
+                                        const charWidth = 6.5;
+                                        const pillPadding = 38;
+                                        const gap = 8;
+
+                                        const withWidth = quickMeals.map(qm => ({
+                                            ...qm,
+                                            estimatedWidth: (qm.name?.length || 10) * charWidth + pillPadding
+                                        }));
+
+                                        // Shuffle for visual variety then pack intelligently
+                                        const shuffled = [...withWidth].sort(() => Math.random() - 0.5);
+                                        const result = [];
+                                        const used = new Set();
+
+                                        // Pack rows: for each row, try to fill with a mix
+                                        while (used.size < shuffled.length) {
+                                            const row = [];
+                                            let rowWidth = 0;
+
+                                            // First pass: add items that fit
+                                            for (let i = 0; i < shuffled.length; i++) {
+                                                if (used.has(i)) continue;
+                                                const item = shuffled[i];
+                                                const neededWidth = item.estimatedWidth + (row.length > 0 ? gap : 0);
+
+                                                if (rowWidth + neededWidth <= containerWidth) {
+                                                    row.push(item);
+                                                    rowWidth += neededWidth;
+                                                    used.add(i);
+                                                }
+                                            }
+
+                                            // If no items fit and we still have items, force add smallest unused
+                                            if (row.length === 0 && used.size < shuffled.length) {
+                                                for (let i = 0; i < shuffled.length; i++) {
+                                                    if (!used.has(i)) {
+                                                        row.push(shuffled[i]);
+                                                        used.add(i);
+                                                        break;
+                                                    }
+                                                }
+                                            }
+
+                                            result.push(...row);
+                                        }
+
+                                        return result.map(qm => (
+                                            <QuickMealPill
+                                                key={qm.id}
+                                                quickMeal={qm}
+                                                onTap={logQuickMeal}
+                                                editMode={quickMealsEditMode}
+                                                onDelete={deleteQuickMeal}
+                                                onEdit={setEditingQuickMeal}
+                                                onLongPress={(qm) => {
+                                                    // If quick meal has linked recipe, open it
+                                                    if (qm.linkedRecipe) {
+                                                        setSelectedRecipe(qm.linkedRecipe);
+                                                    } else if (qm.linkedRecipeId) {
+                                                        // Find recipe in customRecipes or favorites
+                                                        const recipe = [...customRecipes, ...favorites].find(r => r.id === qm.linkedRecipeId);
+                                                        if (recipe) setSelectedRecipe(recipe);
+                                                    }
+                                                }}
+                                            />
+                                        ));
+                                    })()}
+                                </div>
+                            ) : (
+                                <p className="text-xs text-amber-600/70 italic mt-2">
+                                    Tap "Auto-Discover" to scan your inventory, or add recipes as Quick Meals from any recipe card.
+                                </p>
+                            )}
+                        </div>
+
+
+
                         {customRecipes.length === 0 && !showCustomRecipeForm && (
                             <p className="text-center text-slate-400 py-10">No custom recipes yet. Add your own recipes above!</p>
                         )}
@@ -4359,12 +4416,11 @@ STRICT JSON Output:
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                setFavorites([...favorites, { ...r, id: generateId() }]);
-                                                alert('Saved to favorites!');
+                                                toggleFavorite(r);
                                             }}
-                                            className="text-slate-400 hover:text-pink-500"
+                                            className={`${favorites.some(f => f.id === r.id || f.name === r.name) ? 'text-pink-500' : 'text-slate-400'} hover:text-pink-500`}
                                         >
-                                            <Heart className="w-4 h-4" />
+                                            <Heart className={`w-4 h-4 ${favorites.some(f => f.id === r.id || f.name === r.name) ? 'fill-current' : ''}`} />
                                         </button>
                                     </div>
                                 </div>
@@ -4738,7 +4794,7 @@ STRICT JSON Output:
                     </div>
                 )}
             </Modal>
-        </div>
+        </div >
     );
 };
 
@@ -5997,8 +6053,9 @@ Generate cooking/storage details. Return JSON:
             <RecipeDetailModal
                 recipe={selectedMeal}
                 isOpen={!!selectedMeal}
+                isFavorite={selectedMeal && favorites.some(f => f.id === selectedMeal.id || f.name === selectedMeal.name)}
                 onClose={() => setSelectedMeal(null)}
-                onFavorite={(recipe) => { onFavorite?.(recipe); alert('Saved!'); }}
+                onFavorite={(recipe) => { toggleFavorite(recipe); onFavorite?.(recipe); }}
                 onCook={(recipe) => {
                     // First, deplete any allocated ingredients for this meal's slot
                     if (recipe.slotKey && allocatedIngredients && allocatedIngredients[recipe.slotKey] && setInventory) {
@@ -6391,7 +6448,8 @@ const MealSchedulerWizard = ({
     shoppingList, setShoppingList, favorites, setFavorites,
 
     history, customRecipes,
-    dayStates, setDayStates // Lifted state passed from parent
+    dayStates, setDayStates, // Lifted state passed from parent
+    toggleFavorite
 }) => {
     const [recipes, setRecipes] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -6733,10 +6791,6 @@ JSON Output:
         alert(`Added ${newItems.length} items to shopping list!`);
     };
 
-    const handleAddToFavorites = (recipe) => {
-        setFavorites([...favorites, { ...recipe, id: generateId() }]);
-        alert('Recipe saved to favorites!');
-    };
 
     const handleAddMissingToPantry = (ingredient) => {
         const newItem = {
@@ -7137,7 +7191,9 @@ Rules:
             <RecipeDetailModal
                 recipe={selectedWizardRecipe}
                 isOpen={!!selectedWizardRecipe}
+                isFavorite={selectedWizardRecipe && favorites.some(f => f.id === selectedWizardRecipe.id || f.name === selectedWizardRecipe.name)}
                 onClose={() => setSelectedWizardRecipe(null)}
+                onFavorite={toggleFavorite}
                 onSave={(editedRecipe) => {
                     // Update in wizard's recipe list
                     setRecipes(prev => prev.map(r => r.id === editedRecipe.id ? { ...r, ...editedRecipe } : r));
@@ -7145,7 +7201,6 @@ Rules:
                     setFavorites(prev => prev.map(r => r.id === editedRecipe.id ? { ...r, ...editedRecipe } : r));
                     setSelectedWizardRecipe(editedRecipe);
                 }}
-                onFavorite={(recipe) => { handleAddToFavorites(recipe); }}
                 onAddMissingToInventory={(ing) => handleAddMissingToPantry(ing)}
                 onAddToShoppingList={(recipe) => handleAddToShoppingList(recipe)}
                 onUseRecipe={(recipe) => { initiateSelectRecipe(recipe); setSelectedWizardRecipe(null); }}
@@ -8848,6 +8903,30 @@ function MealPrepMate() {
     const [allocatedIngredients, setAllocatedIngredients] = useLocalStorage('mpm_allocated_ingredients', {});
     const [quickMeals, setQuickMeals] = useLocalStorage('mpm_quick_meals', []);
 
+    const toggleFavorite = async (recipe) => {
+        if (!recipe) return;
+        const isFav = favorites.some(f => f.id === recipe.id || f.name === recipe.name);
+        try {
+            if (isFav) {
+                setFavorites(favorites.filter(f => f.id !== recipe.id && f.name !== recipe.name));
+            } else {
+                // Ensure image is compressed before saving to favorites
+                const compressedRecipe = { ...recipe };
+                if (recipe.imageUrl) {
+                    compressedRecipe.imageUrl = await compressImage(recipe.imageUrl);
+                }
+                setFavorites([...favorites, { ...compressedRecipe, id: recipe.id || generateId() }]);
+            }
+        } catch (e) {
+            console.error('Failed to update favorites:', e);
+            if (e.name === 'QuotaExceededError' || e.code === 22) {
+                alert('Your browser storage is full. Please remove some favorite recipes or items to save more.');
+            } else {
+                alert('An error occurred while saving your favorite. Please try again.');
+            }
+        }
+    };
+
     // Tab state lifted for tutorial control
     const [recipeActiveTab, setRecipeActiveTab] = useLocalStorage('mpm_recipe_active_tab', 'generate');
     const [calendarActiveTab, setCalendarActiveTab] = useLocalStorage('mpm_calendar_active_tab', 'upcoming');
@@ -9039,6 +9118,7 @@ function MealPrepMate() {
             action: () => {
                 setView('recipes');
                 setRecipeActiveTab('custom');
+                setShowCustomRecipeForm(false);
                 // Scroll to Quick Meals section
                 setTimeout(() => {
                     const el = document.getElementById('quick-meals-section');
@@ -9857,7 +9937,7 @@ Rules:
                     customRecipes={customRecipes}
                     downloadICSFn={downloadICS}
                     onCook={handleCook}
-                    onFavorite={(r) => setFavorites([...favorites, { ...r, id: generateId() }])}
+                    onFavorite={toggleFavorite}
                     onAddToLeftovers={handleAddToLeftovers}
                     leftovers={leftovers}
                     setLeftovers={setLeftovers}
@@ -9895,10 +9975,11 @@ Rules:
                 apiKey={apiKey}
                 recipe={selectedRecipe}
                 isOpen={!!selectedRecipe}
+                isFavorite={selectedRecipe && favorites.some(f => f.id === selectedRecipe.id || f.name === selectedRecipe.name)}
                 onClose={() => setSelectedRecipe(null)}
                 onSave={handleSaveRecipe}
                 startInEditMode={selectedRecipe?._startInEditMode}
-                onFavorite={(recipe) => { setFavorites([...favorites, { ...recipe, id: recipe.id || generateId() }]); alert('Saved!'); }}
+                onFavorite={toggleFavorite}
                 onCook={(recipe) => handleCook(recipe)}
                 onSchedule={async (recipe) => {
                     // Check if we have cached allocations (from previous cooking or scheduling)
@@ -10630,6 +10711,7 @@ Rules:
                 setFavorites={setFavorites}
                 history={history}
                 customRecipes={customRecipes}
+                toggleFavorite={toggleFavorite}
             />
 
             {/* Toast Notification */}
