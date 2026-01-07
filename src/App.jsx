@@ -51,7 +51,7 @@ const SERVING_MULTIPLIERS = {
 };
 
 // App version - update with each deployment
-const APP_VERSION = '2026.01.05.1';
+const APP_VERSION = '2026.01.06.1';
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -9438,32 +9438,19 @@ function MealPrepMate() {
         // Version control: Check if we've already confirmed deductions for this ingredient list
         const currentHash = getRecipeHash(recipe);
         if (recipe.lastDeductionHash === currentHash && recipe.lastDeductions) {
-            console.log('Skipping deduction modal - recipe version matches cached deductions');
-            // Auto-apply cached deductions immediately
-            const itemIds = new Set();
-            let updatedInventory = [...inventory];
-
-            recipe.lastDeductions.forEach(d => {
-                updatedInventory = updatedInventory.map(item => {
-                    if (item.id === d.inventoryItemId || item.name.toLowerCase() === d.inventoryItemName?.toLowerCase()) {
-                        itemIds.add(item.id);
-                        return { ...item, quantity: Math.max(0, item.quantity - d.amount) };
-                    }
-                    return item;
-                });
-            });
-
-            updatedInventory = updatedInventory.filter(item => item.quantity > 0 || !itemIds.has(item.id));
-            setInventory(updatedInventory);
-
-            setHistory([{ ...recipe, id: generateId(), cookedAt: new Date().toISOString() }, ...history]);
-
-            if ((recipe.leftoverDays || 0) > 0) {
-                const portions = (recipe.totalServings || recipe.servings || 4) - (recipe.baseServings || 2);
-                handleAddToLeftovers(recipe, portions > 0 ? portions : recipe.servings);
-            }
-            setSelectedRecipe(null);
+            console.log('Using cached deductions - showing modal with pre-filled data');
+            // Show modal with cached data for user confirmation (no AI call)
+            const matches = recipe.lastDeductions.map(d => ({
+                inventoryItemId: d.inventoryItemId,
+                inventoryItemName: d.inventoryItemName,
+                currentQuantity: inventory.find(i => i.id === d.inventoryItemId)?.quantity || d.currentQuantity,
+                currentUnit: d.currentUnit,
+                amount: d.amount,
+                recipeIngredient: d.recipeIngredient,
+                confidence: d.confidence || 'high'
+            }));
             setIngredientLoading(false);
+            setIngredientMatchData({ recipe, matches, mode: 'deduct' });
             return;
         }
 
@@ -9914,6 +9901,20 @@ Rules:
                 onFavorite={(recipe) => { setFavorites([...favorites, { ...recipe, id: recipe.id || generateId() }]); alert('Saved!'); }}
                 onCook={(recipe) => handleCook(recipe)}
                 onSchedule={async (recipe) => {
+                    // Check if we have cached allocations (from previous cooking or scheduling)
+                    const currentHash = recipe.ingredients
+                        ?.map(i => `${(i.item || '').toLowerCase()}:${(i.qty || '').toLowerCase()}`)
+                        .sort()
+                        .join('|') || '';
+
+                    if (recipe.lastAllocation && recipe.lastAllocationHash === currentHash) {
+                        console.log('Using cached allocations for scheduling - skipping AI');
+                        // Use cached data directly, just open schedule modal
+                        setScheduleDate(new Date());
+                        setShowScheduleModal(true);
+                        return;
+                    }
+
                     // Show loading immediately
                     setIngredientLoading(true);
 
