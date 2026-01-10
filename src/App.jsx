@@ -51,7 +51,7 @@ const SERVING_MULTIPLIERS = {
 };
 
 // App version - update with each deployment
-const APP_VERSION = '3.2026.01.10';
+const APP_VERSION = '2026.01.10.1';
 
 // ============================================================================
 // HELPER FUNCTIONS

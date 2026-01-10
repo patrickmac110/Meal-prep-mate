@@ -1,7 +1,7 @@
 {
     "name": "meal-prep-mate",
     "private": true,
-    "version": "3.2026.01.10",
+    "version": "2026.01.10.1",
     "type": "module",
     "scripts": {
         "dev": "vite",
