@@ -8,7 +8,7 @@ import {
     MessageCircle, Download, Upload, Leaf, Copy, Share, Calendar, CalendarDays,
     AlertTriangle, MapPin, Package, ChevronDown, ChevronRight, ChevronLeft,
     Flame, Beef, Wheat, Droplet, GripVertical, MoreHorizontal, List, Grid3x3, ClipboardList, Zap, HelpCircle,
-    ArrowRight, Search, BookOpen
+    ArrowRight, Search, BookOpen, Snowflake
 } from 'lucide-react';
 
 // ============================================================================
@@ -51,7 +51,7 @@ const SERVING_MULTIPLIERS = {
 };
 
 // App version - update with each deployment
-const APP_VERSION = '3.2026.01.06';
+const APP_VERSION = '3.2026.01.10';
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -6468,6 +6468,21 @@ const MealSchedulerWizard = ({
         setActiveRecipeTab('ai');
     }, [wizardCurrentIdx]);
 
+    const resetWizard = () => {
+        setWizardPhase('config');
+        setWizardCurrentIdx(0);
+        setScheduledMeals([]);
+        setRecipes([]);
+        setDayStates({});
+    };
+
+    // Reset wizard to config phase and clear selection when closed
+    useEffect(() => {
+        if (!isOpen) {
+            resetWizard();
+        }
+    }, [isOpen]);
+
     // dayStates state lifted to parent (MealPrepMate) to allow tutorial access
 
     // Calculate how many days to show - extend 7 days past the last selected date
@@ -6500,61 +6515,26 @@ const MealSchedulerWizard = ({
 
 
 
-    // When a cook day is selected, auto-fill subsequent 7 days as leftovers
+    // Cycle through states: None -> Cook -> Leftover -> None
     const handleDayClick = (dateKey) => {
         setDayStates(prev => {
             const current = prev[dateKey];
             const newStates = { ...prev };
 
-            if (current === 'cook') {
-                // Remove cook day and clear its leftovers (next 7 days)
-                delete newStates[dateKey];
-                const clickedDate = parseLocalDate(dateKey);
-                for (let i = 1; i <= 7; i++) {
-                    const nextD = new Date(clickedDate);
-                    nextD.setDate(nextD.getDate() + i);
-                    const nextDateKey = getLocalDateKey(nextD);
-                    if (newStates[nextDateKey] === 'cook') break;
-                    if (newStates[nextDateKey] === 'leftover') {
-                        delete newStates[nextDateKey];
-                    }
-                }
-            } else if (current === 'leftover') {
-                // Remove leftover
-                delete newStates[dateKey];
-            } else {
-                // Add as cook day and auto-fill 7 leftover days
+            if (!current) {
+                // None -> Cook
                 newStates[dateKey] = 'cook';
-                const clickedDate = parseLocalDate(dateKey);
-                for (let i = 1; i <= 7; i++) {
-                    const nextD = new Date(clickedDate);
-                    nextD.setDate(nextD.getDate() + i);
-                    const nextDateKey = getLocalDateKey(nextD);
-                    if (newStates[nextDateKey] === 'cook') break;
-                    newStates[nextDateKey] = 'leftover';
-                }
+            } else if (current === 'cook') {
+                // Cook -> Leftover
+                newStates[dateKey] = 'leftover';
+            } else {
+                // Leftover -> None
+                delete newStates[dateKey];
             }
             return newStates;
         });
     };
 
-    // Convert a leftover day to a cook day
-    const convertToCook = (dateKey) => {
-        setDayStates(prev => {
-            const newStates = { ...prev };
-            newStates[dateKey] = 'cook';
-            // Fill subsequent 7 days as leftovers
-            const clickedDate = parseLocalDate(dateKey);
-            for (let i = 1; i <= 7; i++) {
-                const nextD = new Date(clickedDate);
-                nextD.setDate(nextD.getDate() + i);
-                const nextDateKey = getLocalDateKey(nextD);
-                if (newStates[nextDateKey] === 'cook') break;
-                newStates[nextDateKey] = 'leftover';
-            }
-            return newStates;
-        });
-    };
 
     const clearAllLeftovers = () => {
         setDayStates(prev => {
@@ -6579,20 +6559,20 @@ const MealSchedulerWizard = ({
             const nextCookIdx = nextCookDay ? upcomingDays.findIndex(d => d.dateKey === nextCookDay) : upcomingDays.length;
 
             let leftoverDays = 0;
-            let totalDaySpan = 0;
+            let lastLeftoverOffset = 0;
 
             for (let i = cookIdx + 1; i < nextCookIdx && i < upcomingDays.length; i++) {
-                totalDaySpan++;
                 if (dayStates[upcomingDays[i].dateKey] === 'leftover') {
                     leftoverDays++;
+                    lastLeftoverOffset = i - cookIdx;
                 }
             }
 
             return {
                 dateKey: cookDay,
                 leftoverDays,
-                totalDaySpan,
-                needsFreezing: totalDaySpan >= 4
+                totalDaySpan: lastLeftoverOffset,
+                needsFreezing: lastLeftoverOffset >= 4
             };
         });
     };
@@ -6730,7 +6710,7 @@ JSON Output:
         if (wizardCurrentIdx < cookingDays.length - 1) {
             setWizardCurrentIdx(wizardCurrentIdx + 1);
             setRecipes([]);
-            setTimeout(generateRecipes, 100);
+            // Don't auto-generate - let user adjust settings/prompt
         } else {
             alert(`All ${cookingDays.length} meals scheduled!`);
             resetWizard();
@@ -6742,7 +6722,7 @@ JSON Output:
         if (wizardCurrentIdx < cookingDays.length - 1) {
             setWizardCurrentIdx(wizardCurrentIdx + 1);
             setRecipes([]);
-            setTimeout(generateRecipes, 100);
+            // Don't auto-generate
         } else {
             alert('Wizard complete!');
             resetWizard();
@@ -6750,13 +6730,6 @@ JSON Output:
         }
     };
 
-    const resetWizard = () => {
-        setWizardPhase('config');
-        setWizardCurrentIdx(0);
-        setScheduledMeals([]);
-        setRecipes([]);
-        setDayStates({});
-    };
 
     const startWizard = () => {
         if (cookingDays.length === 0) {
@@ -6958,32 +6931,60 @@ Rules:
                         {wizardPhase === 'config' ? (
                             <>
                                 <div>
-                                    <label className="block text-sm font-bold text-slate-600 mb-2">Select Days to Cook</label>
+                                    <div className="flex justify-between items-end mb-2">
+                                        <label className="block text-sm font-bold text-slate-600">Select Days to Cook</label>
+                                        <button
+                                            onClick={() => setDayStates({})}
+                                            className="text-xs text-rose-500 font-bold hover:text-rose-600 transition-colors"
+                                        >
+                                            Clear All
+                                        </button>
+                                    </div>
                                     <p className="text-xs text-slate-400 mb-3">
-                                        Click to add cook days (blue) • Remaining days auto-fill as leftovers (orange) • Click a leftover to remove it, double-click to make it a cook day
+                                        Tap a day to cycle: <b>None</b> → <span className="text-indigo-600 font-bold">Cook</span> → <span className="text-orange-500 font-bold">Leftover</span>
                                     </p>
                                     <div className="grid grid-cols-4 gap-2">
-                                        {upcomingDays.map(day => {
+                                        {upcomingDays.map((day, dayIdx) => {
                                             const state = (dayStates || {})[day.dateKey];
                                             const isCook = state === 'cook';
                                             const isLeftover = state === 'leftover';
 
+                                            // Determine visual grouping: is this leftover linked to a cook day?
+                                            let hasPreviousCook = false;
+                                            if (isLeftover) {
+                                                for (let j = dayIdx - 1; j >= 0; j--) {
+                                                    const prevKey = upcomingDays[j].dateKey;
+                                                    if (dayStates[prevKey] === 'cook') {
+                                                        hasPreviousCook = true;
+                                                        break;
+                                                    }
+                                                    if (dayStates[prevKey] === 'leftover') continue;
+                                                    // If we hit a 'none' day, we still consider it linked?
+                                                    // User asked for: cook -> left -> skip -> left to work.
+                                                    // So yes, we continue searching until we hit another 'cook'.
+                                                    // But if we hit the beginning without a cook, it's a "floating" leftover.
+                                                }
+                                            }
+
                                             return (
-                                                <button
-                                                    key={day.dateKey}
-                                                    onClick={() => handleDayClick(day.dateKey)}
-                                                    onDoubleClick={() => isLeftover && convertToCook(day.dateKey)}
-                                                    className={`p-3 rounded-xl text-center transition-all min-h-[72px] flex flex-col justify-center ${isCook ? 'bg-indigo-600 text-white'
-                                                        : isLeftover ? 'bg-orange-50 text-orange-700 border-2 border-orange-400'
-                                                            : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                                                        }`}
-                                                >
-                                                    <div className="font-bold text-sm">{day.dayOfWeek}</div>
-                                                    <div className="text-xs">{day.dateLabel}</div>
-                                                    <div className={`text-[10px] mt-1 font-bold h-3 ${isCook ? 'opacity-75' : isLeftover ? 'text-orange-600' : 'opacity-0'}`}>
-                                                        {isCook ? 'Cook' : isLeftover ? 'Leftover' : '·'}
-                                                    </div>
-                                                </button>
+                                                <div key={day.dateKey} className="relative">
+                                                    <button
+                                                        onClick={() => handleDayClick(day.dateKey)}
+                                                        className={`w-full p-3 rounded-xl text-center transition-all min-h-[72px] flex flex-col justify-center relative z-10 ${isCook ? 'bg-indigo-600 text-white shadow-md scale-[1.02]'
+                                                            : isLeftover ? 'bg-white text-orange-700 border-2 border-orange-400 shadow-sm'
+                                                                : 'bg-slate-50 text-slate-400 hover:bg-slate-100 border border-slate-200 border-dashed'
+                                                            }`}
+                                                    >
+                                                        <div className="font-bold text-sm">{day.dayOfWeek}</div>
+                                                        <div className="text-xs opacity-70">{day.dateLabel}</div>
+                                                        <div className={`text-[10px] mt-1 font-bold h-3 ${isCook ? 'text-indigo-200' : isLeftover ? 'text-orange-500' : 'opacity-0'}`}>
+                                                            {isCook ? 'COOK' : isLeftover ? 'LEFTOVER' : '·'}
+                                                        </div>
+                                                    </button>
+                                                    {isLeftover && hasPreviousCook && (
+                                                        <div className="absolute -top-1 -left-1 -right-1 -bottom-1 bg-orange-50 rounded-2xl -z-0 opacity-50 border border-orange-200 border-dashed" />
+                                                    )}
+                                                </div>
                                             );
                                         })}
                                     </div>
@@ -6995,14 +6996,51 @@ Rules:
                                             <div className="space-y-1">
                                                 {cookingDaysInfo.map((cook, idx) => {
                                                     const dayInfo = upcomingDays.find(d => d.dateKey === cook.dateKey);
+
+                                                    // Find all leftover dates for this cook session
+                                                    const cookIdx = upcomingDays.findIndex(d => d.dateKey === cook.dateKey);
+                                                    const nextCookDay = cookingDaysInfo[idx + 1];
+                                                    const nextCookIdx = nextCookDay ? upcomingDays.findIndex(d => d.dateKey === nextCookDay.dateKey) : upcomingDays.length;
+                                                    const leftoverDates = [];
+                                                    for (let i = cookIdx + 1; i < nextCookIdx; i++) {
+                                                        if (dayStates[upcomingDays[i].dateKey] === 'leftover') {
+                                                            leftoverDates.push(upcomingDays[i]);
+                                                        }
+                                                    }
+
                                                     return (
-                                                        <div key={cook.dateKey} className="flex justify-between text-xs">
-                                                            <span className="text-slate-600">
-                                                                <span className="font-bold text-indigo-600">Meal {idx + 1}:</span> {dayInfo?.dayOfWeek} {dayInfo?.dateLabel}
-                                                            </span>
-                                                            <span className="text-orange-500 font-bold">
-                                                                {cook.leftoverDays} leftover{cook.leftoverDays !== 1 ? 's' : ''}
-                                                            </span>
+                                                        <div key={cook.dateKey} className="bg-white p-2 rounded-lg border border-slate-100 flex flex-col gap-1">
+                                                            <div className="flex justify-between items-center">
+                                                                <span className="text-slate-700 font-bold">
+                                                                    <span className="text-indigo-600">Meal {idx + 1}:</span> {dayInfo?.dayOfWeek} {dayInfo?.dateLabel}
+                                                                </span>
+                                                                <button
+                                                                    onClick={() => {
+                                                                        // Find the next available day to make a leftover
+                                                                        for (let i = cookIdx + 1; i < upcomingDays.length; i++) {
+                                                                            const key = upcomingDays[i].dateKey;
+                                                                            if (!dayStates[key]) {
+                                                                                handleDayClick(key); // Cycle to Cook
+                                                                                handleDayClick(key); // Cycle to Leftover
+                                                                                break;
+                                                                            }
+                                                                        }
+                                                                    }}
+                                                                    className="p-1 hover:bg-indigo-50 rounded text-indigo-500 transition-colors"
+                                                                    title="Add leftover day"
+                                                                >
+                                                                    <Plus className="w-4 h-4" />
+                                                                </button>
+                                                            </div>
+                                                            {leftoverDates.length > 0 && (
+                                                                <div className="flex flex-wrap gap-1">
+                                                                    {leftoverDates.map(ld => (
+                                                                        <span key={ld.dateKey} className="text-[10px] bg-orange-50 text-orange-600 px-1.5 py-0.5 rounded border border-orange-100 font-medium">
+                                                                            {ld.dayOfWeek} {ld.dateLabel}
+                                                                        </span>
+                                                                    ))}
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     );
                                                 })}
@@ -9921,7 +9959,43 @@ Rules:
                 {view === 'dashboard' && <Dashboard />}
                 {view === 'inventory' && <InventoryView apiKey={apiKey} model={selectedModel} inventory={inventory} setInventory={setInventory} knownLocations={knownLocations} setKnownLocations={setKnownLocations} processedFiles={processedFiles} setProcessedFiles={setProcessedFiles} allocatedIngredients={allocatedIngredients} expandedItemId={expandedInventoryItemId} setExpandedItemId={setExpandedInventoryItemId} getAvailableQuantity={getAvailableQuantity} getItemReservations={getItemReservations} />}
                 {view === 'family' && <FamilyView familyMembers={family} setFamilyMembers={setFamily} />}
-                {view === 'recipes' && <RecipeEngine apiKey={apiKey} model={selectedModel} inventory={inventory} setInventory={setInventory} family={family} setSelectedRecipe={setSelectedRecipe} history={history} setHistory={setHistory} recipes={recipes} setRecipes={setRecipes} favorites={favorites} setFavorites={setFavorites} shoppingList={shoppingList} setShoppingList={setShoppingList} mealPlan={mealPlan} setMealPlan={setMealPlan} leftovers={leftovers} setLeftovers={setLeftovers} onMoveToHistory={handleMoveToHistory} customRecipes={customRecipes} setCustomRecipes={setCustomRecipes} allocatedIngredients={allocatedIngredients} setAllocatedIngredients={setAllocatedIngredients} onOpenWizard={() => setShowMealWizard(true)} quickMeals={quickMeals} setQuickMeals={setQuickMeals} setToastData={setToastData} activeTab={recipeActiveTab} setActiveTab={setRecipeActiveTab} showCustomRecipeForm={showCustomRecipeForm} setShowCustomRecipeForm={setShowCustomRecipeForm} getAvailableQuantity={getAvailableQuantity} getItemReservations={getItemReservations} />}
+                {view === 'recipes' && (
+                    <RecipeEngine
+                        apiKey={apiKey}
+                        model={selectedModel}
+                        inventory={inventory}
+                        setInventory={setInventory}
+                        family={family}
+                        setSelectedRecipe={setSelectedRecipe}
+                        history={history}
+                        setHistory={setHistory}
+                        recipes={recipes}
+                        setRecipes={setRecipes}
+                        favorites={favorites}
+                        setFavorites={setFavorites}
+                        shoppingList={shoppingList}
+                        setShoppingList={setShoppingList}
+                        mealPlan={mealPlan}
+                        setMealPlan={setMealPlan}
+                        leftovers={leftovers}
+                        setLeftovers={setLeftovers}
+                        onMoveToHistory={handleMoveToHistory}
+                        customRecipes={customRecipes}
+                        setCustomRecipes={setCustomRecipes}
+                        allocatedIngredients={allocatedIngredients}
+                        setAllocatedIngredients={setAllocatedIngredients}
+                        onOpenWizard={() => setShowMealWizard(true)}
+                        quickMeals={quickMeals}
+                        setQuickMeals={setQuickMeals}
+                        setToastData={setToastData}
+                        activeTab={recipeActiveTab}
+                        setActiveTab={setRecipeActiveTab}
+                        showCustomRecipeForm={showCustomRecipeForm}
+                        setShowCustomRecipeForm={setShowCustomRecipeForm}
+                        getAvailableQuantity={getAvailableQuantity}
+                        getItemReservations={getItemReservations}
+                    />
+                )}
                 {view === 'shopping' && <ShoppingView apiKey={apiKey} model={selectedModel} list={shoppingList} setList={setShoppingList} />}
                 {view === 'leftovers' && <LeftoversView apiKey={apiKey} model={selectedModel} leftovers={leftovers} setLeftovers={setLeftovers} onMoveToHistory={handleMoveToHistory} />}
                 {view === 'calendar' && <CalendarView
@@ -10675,7 +10749,7 @@ Rules:
             </Modal>
 
             {/* Meal Scheduler Wizard */}
-            < MealSchedulerWizard
+            <MealSchedulerWizard
                 isOpen={showMealWizard}
                 onClose={() => setShowMealWizard(false)}
                 apiKey={apiKey}
@@ -10773,7 +10847,7 @@ Rules:
                     />
                 )
             }
-        </div >
+        </div>
     );
 }
 
