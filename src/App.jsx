@@ -51,7 +51,7 @@ const SERVING_MULTIPLIERS = {
 };
 
 // App version - update with each deployment
-const APP_VERSION = '2026.01.10.1';
+const APP_VERSION = '2026.01.10.2';
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -731,6 +731,31 @@ const calculateFamilyServings = (familyMembers) => {
     }, 0);
 };
 
+// Check which recipe ingredients are NOT in current inventory at scheduling time
+// Returns array of missing ingredients that should be tracked for later deduction
+const getMissingAtScheduleTime = (recipe, inventory) => {
+    if (!recipe.ingredients || !inventory) return [];
+
+    // Get set of inventory item names (lowercase for matching)
+    const inventoryNames = inventory.map(i => i.name.toLowerCase());
+
+    // Find recipe ingredients not in inventory
+    return recipe.ingredients
+        .filter(ing => {
+            const ingName = (ing.item || ing.name || String(ing)).toLowerCase();
+            // Check if any inventory item contains this ingredient name or vice versa
+            const foundInInventory = inventoryNames.some(invName =>
+                invName.includes(ingName) || ingName.includes(invName)
+            );
+            return !foundInInventory;
+        })
+        .map(ing => ({
+            item: ing.item || ing.name || String(ing),
+            qty: ing.qty || '',
+            unit: ing.unit || ''
+        }));
+};
+
 const generateICS = (events) => {
     const formatDate = (date) => {
         const d = new Date(date);
@@ -900,7 +925,8 @@ const IngredientMatchModal = ({
     setMatches,
     inventory, // Full inventory for swapping
     onConfirm,
-    onSkip
+    onSkip,
+    stillMissing = [] // Items still not in pantry (for pending deductions)
 }) => {
     // State for the picker modal
     const [pickingForIndex, setPickingForIndex] = useState(null); // Index of match being edited
@@ -1026,6 +1052,29 @@ const IngredientMatchModal = ({
                                 </div>
                             );
                         })}
+
+                        {/* Still Missing Items Indicator */}
+                        {stillMissing && stillMissing.length > 0 && (
+                            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <AlertCircle className="w-5 h-5 text-amber-600" />
+                                    <span className="font-bold text-amber-800">Still Missing from Pantry</span>
+                                </div>
+                                <p className="text-sm text-amber-700 mb-3">
+                                    These ingredients weren't found in your inventory. They won't be deducted.
+                                </p>
+                                <div className="flex flex-wrap gap-2">
+                                    {stillMissing.map((item, idx) => (
+                                        <span
+                                            key={idx}
+                                            className="px-3 py-1.5 rounded-full bg-amber-100 text-amber-800 text-sm font-medium border border-amber-200"
+                                        >
+                                            {item}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Footer - Fixed */}
@@ -9535,6 +9584,141 @@ function MealPrepMate() {
         // Show loading immediately
         setIngredientLoading(true);
 
+        // NEW: Check if this meal has pending deductions from scheduling
+        // (ingredients that were NOT in pantry when scheduled, but may be now)
+        if (recipe.pendingDeductions && recipe.pendingDeductions.length > 0) {
+            console.log('🔍 [Pending Deductions] Checking for items added since scheduling...');
+            console.log('   Pending items:', recipe.pendingDeductions.map(p => p.item).join(', '));
+            console.log('   Current inventory count:', inventory.length);
+
+            // Use AI to match pending ingredients against current inventory
+            const pendingIngStr = recipe.pendingDeductions.map(p => `${p.item}: ${p.qty || 'some'}`).join('\n');
+            const invStr = inventory.map(i => `${i.id}|${i.name}|${i.quantity}|${i.unit}`).join('\n');
+
+            const prompt = `Match these previously-missing recipe ingredients to current pantry items.
+
+Missing Ingredients (user didn't have these when scheduling):
+${pendingIngStr}
+
+Current Inventory (format: id|name|quantity|unit):
+${invStr}
+
+Return JSON: {
+    "matches": [{
+        "inventoryItemId": "actual_id_from_inventory",
+        "inventoryItemName": "Pantry Item Name",
+        "currentQuantity": 2,
+        "currentUnit": "cups",
+        "amount": 1,
+        "recipeIngredient": "original ingredient text",
+        "confidence": "high"
+    }],
+    "stillMissing": ["ingredient1", "ingredient2"]
+}
+
+Rules:
+- Only include items that exist in inventory in "matches"
+- List any ingredients that are NOT in inventory in "stillMissing"
+- confidence: "high" = exact match, "medium" = similar item, "low" = uncertain
+- CRITICAL: "amount" must be in same unit as pantry item`;
+
+            try {
+                const res = await callGemini(apiKey, prompt, null, selectedModel);
+                setIngredientLoading(false);
+
+                if (!res.error && res.matches) {
+                    // Log detailed matching results
+                    console.log('✅ [Pending Deductions] AI matching results:');
+                    console.log('   Matched items:', res.matches.length);
+                    res.matches.forEach(m => {
+                        console.log(`   ✓ "${m.recipeIngredient}" → "${m.inventoryItemName}" (${m.confidence})`);
+                    });
+
+                    if (res.stillMissing && res.stillMissing.length > 0) {
+                        console.log('   Still missing:', res.stillMissing.join(', '));
+                    }
+
+                    if (res.matches.length > 0) {
+                        setIngredientMatchData({
+                            recipe,
+                            matches: res.matches,
+                            mode: 'deduct',
+                            isPendingDeduction: true,
+                            stillMissing: res.stillMissing || [] // Track items still not in pantry
+                        });
+                        return;
+                    } else if (res.stillMissing && res.stillMissing.length > 0) {
+                        // All items are still missing - show informative message
+                        console.log('⚠️ [Pending Deductions] All items still missing from pantry');
+                        setIngredientMatchData({
+                            recipe,
+                            matches: [],
+                            mode: 'deduct',
+                            isPendingDeduction: true,
+                            stillMissing: res.stillMissing
+                        });
+                        return;
+                    }
+                } else {
+                    console.log('❌ [Pending Deductions] AI matching failed, falling back to simple matching');
+                }
+            } catch (err) {
+                console.error('❌ [Pending Deductions] Error during AI matching:', err);
+                setIngredientLoading(false);
+            }
+
+            // Fallback to simple substring matching if AI fails
+            console.log('🔄 [Pending Deductions] Using fallback substring matching...');
+            const pendingMatches = [];
+            const stillMissing = [];
+            const inventoryLower = inventory.map(i => ({ ...i, nameLower: i.name.toLowerCase() }));
+
+            for (const pending of recipe.pendingDeductions) {
+                const pendingName = (pending.item || '').toLowerCase();
+
+                // Find matching inventory item
+                const matchedItem = inventoryLower.find(inv =>
+                    inv.nameLower.includes(pendingName) || pendingName.includes(inv.nameLower)
+                );
+
+                if (matchedItem) {
+                    let amt = 1;
+                    if (pending.qty) {
+                        const parsed = parseFloat(pending.qty);
+                        if (!isNaN(parsed)) amt = parsed;
+                    }
+
+                    pendingMatches.push({
+                        inventoryItemId: matchedItem.id,
+                        inventoryItemName: matchedItem.name,
+                        currentQuantity: matchedItem.quantity,
+                        currentUnit: matchedItem.unit,
+                        amount: amt,
+                        recipeIngredient: `${pending.qty || ''} ${pending.item}`.trim(),
+                        confidence: 'medium'
+                    });
+                    console.log(`   ✓ Matched: "${pending.item}" → "${matchedItem.name}"`);
+                } else {
+                    stillMissing.push(pending.item);
+                    console.log(`   ✗ Still missing: "${pending.item}"`);
+                }
+            }
+
+            if (pendingMatches.length > 0 || stillMissing.length > 0) {
+                console.log(`📊 [Pending Deductions] Final: ${pendingMatches.length} matched, ${stillMissing.length} still missing`);
+                setIngredientMatchData({
+                    recipe,
+                    matches: pendingMatches,
+                    mode: 'deduct',
+                    isPendingDeduction: true,
+                    stillMissing: stillMissing
+                });
+                return;
+            }
+
+            console.log('🔄 [Pending Deductions] No matches or missing items - proceeding with normal flow');
+        }
+
         // Check if we have cached allocations from scheduling (use those instead of AI)
         if (recipe.lastAllocation && recipe.lastAllocationHash === getRecipeHash(recipe)) {
             console.log('Using cached allocations for deduction');
@@ -9632,7 +9816,7 @@ Rules:
     const confirmIngredientMatch = () => {
         if (!ingredientMatchData) return;
 
-        const { recipe, matches, mode } = ingredientMatchData;
+        const { recipe, matches, mode, isPendingDeduction } = ingredientMatchData;
         const currentHash = getRecipeHash(recipe);
 
         if (mode === 'deduct') {
@@ -9694,6 +9878,26 @@ Rules:
             if ((recipe.leftoverDays || 0) > 0) {
                 const leftoverPortions = (recipe.totalServings || recipe.servings || 4) - (recipe.baseServings || 2);
                 handleAddToLeftovers(updatedRecipe, leftoverPortions > 0 ? leftoverPortions : recipe.servings);
+            }
+
+            // Clear pendingDeductions from the scheduled meal in mealPlan if this was a pending deduction
+            if (isPendingDeduction && recipe.slotKey) {
+                setMealPlan(prev => {
+                    const slot = prev[recipe.slotKey];
+                    if (!slot || !slot.meals) return prev;
+
+                    return {
+                        ...prev,
+                        [recipe.slotKey]: {
+                            ...slot,
+                            meals: slot.meals.map(m =>
+                                m.id === recipe.id
+                                    ? { ...m, pendingDeductions: null, isCooked: true }
+                                    : m
+                            )
+                        }
+                    };
+                });
             }
 
             setIngredientMatchData(null);
@@ -10162,6 +10366,7 @@ Rules:
                 inventory={inventory}
                 onConfirm={confirmIngredientMatch}
                 onSkip={ingredientMatchData?.mode === 'allocate' ? skipIngredientMatch : null}
+                stillMissing={ingredientMatchData?.stillMissing || []}
             />
 
             {/* Add Item Modal */}
@@ -10635,6 +10840,11 @@ Rules:
                                 }
 
                                 const totalDays = 1 + (selectedRecipe.leftoverDays || 0); // cook day + leftover days
+
+                                // Track ingredients that are NOT in pantry at scheduling time
+                                // These will need deduction when cooking (after user obtains them)
+                                const missingAtSchedule = getMissingAtScheduleTime(selectedRecipe, inventory);
+
                                 // Prepare new meal object
                                 const newMeal = {
                                     ...selectedRecipe,
@@ -10642,7 +10852,9 @@ Rules:
                                     dayNumber: 1,
                                     scheduledFor: scheduleDate.toISOString(),
                                     mealType: scheduleMealType,
-                                    isCooked: isCookedNow // Apply the immediate cooked state
+                                    isCooked: isCookedNow, // Apply the immediate cooked state
+                                    // Track missing ingredients for later deduction at cook time
+                                    pendingDeductions: missingAtSchedule.length > 0 ? missingAtSchedule : null
                                 };
 
                                 const updates = {};
