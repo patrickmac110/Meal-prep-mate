@@ -52,7 +52,7 @@ const SERVING_MULTIPLIERS = {
 };
 
 // App version - update with each deployment
-const APP_VERSION = '2026.01.11.1';
+const APP_VERSION = '2026.01.11.2';
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -250,7 +250,15 @@ const callGemini = async (apiKey, prompt, imageBase64 = null, model = 'gemini-2.
 
         if (!text) throw new Error("No data returned from AI.");
 
-        return JSON.parse(text.replace(/```json/g, '').replace(/```/g, '').trim());
+        // Log raw response for debugging
+        console.log('[Gemini API] Raw response length:', text.length);
+
+        const cleaned = text.replace(/```json/g, '').replace(/```/g, '').trim();
+        const parsed = JSON.parse(cleaned);
+
+        console.log('[Gemini API] Parsed items count:', parsed.items?.length ?? 'no items key');
+
+        return parsed;
     } catch (error) {
         console.error("Gemini API Failed:", error);
         return { error: true, message: error.message };
@@ -2483,10 +2491,10 @@ const InventoryView = ({ apiKey, model, inventory, setInventory, knownLocations,
     const stagingListRef = useRef(null);
 
     // Intercept back gesture for modals
-    // Only close stagingData when image viewer is NOT open (prevents both from firing)
+    // IMPORTANT: showImageViewer must be first so it closes before stagingData checks
+    useBackGesture(showImageViewer, () => setShowImageViewer(false));
     useBackGesture(!!stagingData && !showImageViewer, () => setStagingData(null));
     useBackGesture(showNewLocationModal, () => setShowNewLocationModal(false));
-    // Note: ImageViewer component handles its own back gesture internally
 
     // Normalize location names (case-insensitive)
     const normalizeLocation = (loc) => {
@@ -2778,12 +2786,25 @@ Return JSON: {
                 return;
             }
 
+            // Robust extraction: handle various response structures from Gemini
+            let parsedItems = result.items || result.data?.items || result.response?.items || [];
+
+            // If result is an array directly, use it
+            if (Array.isArray(result)) {
+                parsedItems = result;
+            }
+
+            // Log for debugging if items are empty
+            if (!parsedItems || parsedItems.length === 0) {
+                console.warn('[Image Analysis] No items found in response. Full result:', JSON.stringify(result));
+            }
+
             setStagingData({
                 imageUrl,
                 filename: file.name,
-                isReceipt: result.isReceipt || false,
-                suggestedLocation: result.suggestedLocation || 'Pantry',
-                items: (result.items || []).map(item => {
+                isReceipt: result.isReceipt || result.data?.isReceipt || false,
+                suggestedLocation: result.suggestedLocation || result.data?.suggestedLocation || 'Pantry',
+                items: (parsedItems || []).map(item => {
                     // Robust duplicate finding logic
                     const normalizedItemName = item.name.toLowerCase().trim();
                     const existingMatch = inventory.find(i =>
@@ -2831,7 +2852,18 @@ Return JSON: {
                 })
             });
 
+            // If no items found initially, store image info for potential auto-rescan
+            if (parsedItems.length === 0) {
+                console.log('[Image Analysis] Initial scan found 0 items - staging modal will show with Scan More option');
+            }
+
             setIsAnalyzing(false);
+        };
+
+        reader.onerror = (error) => {
+            console.error('[Image Analysis] FileReader error:', error);
+            setIsAnalyzing(false);
+            alert('Failed to read the image file. Please try again.');
         };
 
         reader.readAsDataURL(file);
@@ -9518,7 +9550,8 @@ function MealPrepMate() {
 
     // Navigate back to dashboard when on any other screen (only if no modals are open)
     const noModalsOpen = !showSettings && !addItemModal && !showMealWizard && !chatOpen &&
-        !ingredientMatchData && !showScheduleModal && !selectedRecipe && !showTutorialSetup;
+        !ingredientMatchData && !showScheduleModal && !selectedRecipe && !showTutorialSetup &&
+        !stagingData && !showImageViewer;
     useBackGesture(view !== 'dashboard' && noModalsOpen, () => setView('dashboard'));
 
     // Inject dummy data when tutorial starts
@@ -11541,8 +11574,7 @@ Rules:
 /* -------------------------------------------------------------------------- */
 
 function ImageViewer({ src, onClose }) {
-    // Always active when rendered - uses correct 2-arg syntax
-    useBackGesture(true, onClose);
+    // Back gesture is handled at App level via showImageViewer state
 
     if (!src) return null;
 

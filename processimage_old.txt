@@ -1,0 +1,83 @@
+
+>     const processImage = async (file) => {
+          setIsAnalyzing(true);
+  
+          const reader = new FileReader();
+          reader.onloadend = async () => {
+              if (!reader.result) {
+                  setIsAnalyzing(false);
+                  return;
+              }
+  
+              const base64 = reader.result.replace("data:", "").replace(/^.+,/, "");
+              const imageUrl = reader.result;
+  
+              const inventoryList = inventory.map(i => i.name).join(', ');
+  
+              const prompt = `Analyze this image of groceries/food/receipt. Include ALL visible food items, even if uncertain.
+  
+  IMPORTANT RULES:
+  - IGNORE non-food items (coupons, receipts in background, packaging materials, baby items, fire blankets, kitchen tools, etc.)
+  - For containers/bottles, estimate fill level as decimal (e.g., 0.5 for half-full, 0.25 for quarter-full, 0.75 for three-quarters)
+  - Only list actual food/grocery items
+  
+  Determine:
+  1. Is this a receipt? (isReceipt: boolean)
+  2. Likely storage location (e.g., "Fridge", "Pantry")
+  3. List ALL visible FOOD items - even uncertain ones
+  
+  Current inventory for duplicate checking: [${inventoryList}]
+  
+  Return JSON: {
+    "isReceipt": boolean,
+    "suggestedLocation": string,
+    "items": [{
+      "name": string,
+      "quantity": number (use decimals for partial containers like 0.5, 0.25),
+      "unit": string,
+      "confidence": "high" | "medium" | "low",
+      "suggestedLocation": string,
+      "isDuplicate": boolean,
+      "duplicateMatch": string | null
+    }]
+  }`;
+  
+              const result = await callGemini(apiKey, prompt, base64, model);
+  
+              if (result.error) {
+                  alert(`AI Error: ${result.message}`);
+                  setIsAnalyzing(false);
+                  return;
+              }
+  
+              setStagingData({
+                  imageUrl,
+                  filename: file.name,
+                  isReceipt: result.isReceipt || false,
+                  suggestedLocation: result.suggestedLocation || 'Pantry',
+                  items: (result.items || []).map(item => ({
+                      ...item,
+                      id: generateId(),
+                      excluded: false,
+                      location: item.suggestedLocation || result.suggestedLocation || 'Pantry'
+                  }))
+              });
+  
+              setIsAnalyzing(false);
+          };
+  
+          reader.readAsDataURL(file);
+          if (fileInputRef.current) fileInputRef.current.value = '';
+      };
+  
+      const handleDuplicateOverride = async () => {
+          if (pendingFileRef.current) {
+              await processImage(pendingFileRef.current);
+              pendingFileRef.current = null;
+          }
+          setDuplicateWarning(null);
+      };
+  
+      const confirmStaging = async () => {
+          if (!stagingData) return;
+
