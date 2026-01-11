@@ -1,0 +1,83 @@
+
+>             {/* Staging Modal */}
+              <Modal isOpen={!!stagingData} onClose={() => setStagingData(null)} size="large">
+                  {stagingData && (
+                      <div className="p-0">
+                          {/* Image Preview - Clickable to expand */}
+                          {stagingData.imageUrl && (
+                              <div className="relative">
+                                  <img
+                                      src={stagingData.imageUrl}
+                                      alt="Scanned"
+                                      className="staging-image cursor-pointer"
+                                      onClick={() => setShowImageViewer(true)}
+                                  />
+                                  <div className="absolute bottom-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded-lg">
+                                      Tap to zoom
+                                  </div>
+                              </div>
+                          )}
+  
+                          <div className="p-6 space-y-6">
+                              <div className="flex items-center justify-between">
+                                  <div>
+                                      <h2 className="text-2xl font-bold text-slate-900">Review Scanned Items</h2>
+                                      <p className="text-slate-500 text-sm mt-1">
+                                          {stagingData.isReceipt ? 'Receipt detected - set individual locations' : 'Edit items before adding to inventory'}
+                                      </p>
+                                  </div>
+                                  {stagingData.isReceipt && (
+                                      <span className="bg-amber-100 text-amber-700 text-xs font-bold px-3 py-1 rounded-full">Receipt</span>
+                                  )}
+                              </div>
+  
+                              {/* Batch Location (non-receipt only) */}
+                              {!stagingData.isReceipt && (
+                                  <div className="bg-slate-50 p-4 rounded-xl">
+                                      <label className="text-sm font-bold text-slate-600 mb-2 block">Storage Location (applies to all)</label>
+                                      <select
+                                          value={stagingData.suggestedLocation}
+                                          onChange={(e) => updateBatchLocation(e.target.value)}
+                                          className="select-field w-full"
+                                      >
+                                          {allLocations.map(l => <option key={l} value={l}>{l}</option>)}
+                                          <option value="__new__">+ New Location...</option>
+                                      </select>
+                                  </div>
+                              )}
+  
+                              {/* Error Message */}
+                              {stagingError && (
+                                  <div className="bg-red-50 border border-red-200 text-red-600 text-sm p-3 rounded-xl flex items-center gap-2">
+                                      <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                                      {stagingError}
+                                  </div>
+                              )}
+  
+                              {/* Items List */}
+                              <div ref={stagingListRef} className="space-y-3 max-h-[40vh] overflow-y-auto">
+                                  {stagingData.items.map((item) => (
+                                      <div key={item.id} className={`bg-white border rounded-xl p-3 ${item.excluded ? 'opacity-50' : ''} ${item.confidence === 'low' ? 'confidence-low' :
+                                          item.confidence === 'medium' ? 'confidence-medium' : 'confidence-high'
+                                          }`}>
+                                          {/* Row 1: Checkbox + Name (full width, wrapping) */}
+                                          <div className="flex items-start gap-2 mb-2">
+                                              <input
+                                                  type="checkbox"
+                                                  checked={!item.excluded}
+                                                  onChange={(e) => updateStagingItem(item.id, { excluded: !e.target.checked })}
+                                                  className="w-5 h-5 mt-1 flex-shrink-0 rounded border-slate-300 text-emerald-500 focus:ring-emerald-500"
+                                              />
+                                              <input
+                                                  type="text"
+                                                  value={item.name}
+                                                  onChange={(e) => { updateStagingItem(item.id, { name: e.target.value }); setStagingError(null); }}
+                                                  className={`flex-1 min-w-0 inventory-item-field font-medium text-sm ${!item.name && stagingError ? 'border-red-500 border rounded' : ''}`}
+                                                  disabled={item.excluded}
+                                                  placeholder="New item..."
+                                              />
+                                          </div>
+  
+                                          {/* Row 2: Qty, Unit, Location - fixed widths */}
+                                          <div className="flex gap-2 ml-7">
+

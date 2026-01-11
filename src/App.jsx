@@ -52,7 +52,7 @@ const SERVING_MULTIPLIERS = {
 };
 
 // App version - update with each deployment
-const APP_VERSION = '2026.01.10.2';
+const APP_VERSION = '2026.01.11.1';
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -2483,9 +2483,10 @@ const InventoryView = ({ apiKey, model, inventory, setInventory, knownLocations,
     const stagingListRef = useRef(null);
 
     // Intercept back gesture for modals
-    useBackGesture(!!stagingData, () => setStagingData(null));
+    // Only close stagingData when image viewer is NOT open (prevents both from firing)
+    useBackGesture(!!stagingData && !showImageViewer, () => setStagingData(null));
     useBackGesture(showNewLocationModal, () => setShowNewLocationModal(false));
-    useBackGesture(showImageViewer, () => setShowImageViewer(false));
+    // Note: ImageViewer component handles its own back gesture internally
 
     // Normalize location names (case-insensitive)
     const normalizeLocation = (loc) => {
@@ -3300,42 +3301,41 @@ If you find no additional items, return: { "items": [] }`;
             {/* Staging Modal */}
             <Modal isOpen={!!stagingData} onClose={() => setStagingData(null)} size="large">
                 {stagingData && (
-                    <div className="flex flex-col h-[80vh] -m-6">
-                        {/* Scrollable Content */}
-                        <div className="flex-1 overflow-y-auto p-6 space-y-6">
-
-                            {/* Header */}
-                            <div className="flex items-start justify-between">
-                                <div>
-                                    <h2 className="text-xl font-bold text-slate-900">Review Items</h2>
-                                    <p className="text-slate-500 text-xs">
-                                        {stagingData.isReceipt ? 'Receipt mode' : 'Confirm details below'}
-                                    </p>
+                    <div className="p-0 flex flex-col h-full">
+                        {/* Image Preview at very top - edge to edge */}
+                        {stagingData.imageUrl && (
+                            <div className="relative flex-shrink-0">
+                                <img
+                                    src={stagingData.imageUrl}
+                                    alt="Scanned"
+                                    className="staging-image cursor-pointer"
+                                    onClick={() => setShowImageViewer(true)}
+                                />
+                                <div className="absolute bottom-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded-lg">
+                                    Tap to zoom
                                 </div>
                                 {stagingData.isReceipt && (
-                                    <span className="bg-amber-100 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">Receipt</span>
+                                    <span className="absolute top-2 left-2 bg-amber-100 text-amber-700 text-xs font-bold px-2 py-1 rounded-full">Receipt</span>
                                 )}
                             </div>
+                        )}
 
-                            {/* Image Preview - Clickable to expand */}
-                            {stagingData.imageUrl && (
-                                <div className="relative rounded-xl overflow-hidden shadow-sm border border-slate-100 group">
-                                    <img
-                                        src={stagingData.imageUrl}
-                                        alt="Scanned"
-                                        className="w-full h-32 object-cover cursor-pointer transition-transform group-hover:scale-105"
-                                        onClick={() => setShowImageViewer(true)}
-                                    />
-                                    <div className="absolute bottom-2 right-2 bg-black/60 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-lg pointer-events-none">
-                                        Tap to zoom
-                                    </div>
+                        {/* Scrollable Content Area */}
+                        <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4">
+                            {/* Header - Compact */}
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h2 className="text-lg font-bold text-slate-900">Review Items</h2>
+                                    <p className="text-slate-500 text-xs">
+                                        {stagingData.isReceipt ? 'Set locations per item' : 'Confirm details below'}
+                                    </p>
                                 </div>
-                            )}
+                            </div>
 
-                            {/* Batch Location (non-receipt only) */}
+                            {/* Batch Location (non-receipt only) - Compact */}
                             {!stagingData.isReceipt && (
-                                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Storage Location (All)</label>
+                                <div className="bg-slate-50 p-2.5 rounded-xl">
+                                    <label className="text-xs font-bold text-slate-500 mb-1 block">Storage Location (All)</label>
                                     <select
                                         value={stagingData.suggestedLocation}
                                         onChange={(e) => updateBatchLocation(e.target.value)}
@@ -3349,24 +3349,24 @@ If you find no additional items, return: { "items": [] }`;
 
                             {/* Error Message */}
                             {stagingError && (
-                                <div className="bg-red-50 border border-red-200 text-red-600 text-sm p-3 rounded-xl flex items-center gap-2 animate-pulse">
+                                <div className="bg-red-50 border border-red-200 text-red-600 text-sm p-2.5 rounded-xl flex items-center gap-2">
                                     <AlertCircle className="w-4 h-4 flex-shrink-0" />
                                     {stagingError}
                                 </div>
                             )}
 
-                            {/* Items List Header */}
-                            <div className="flex items-center justify-between sticky top-0 bg-white z-10 py-2 border-b border-slate-100">
+                            {/* Items List Header - Compact */}
+                            <div className="flex items-center justify-between py-1.5 border-b border-slate-100">
                                 <span className="text-sm font-bold text-slate-700">Items ({stagingData.items.filter(i => !i.excluded).length})</span>
                                 <div className="flex gap-2">
-                                    <button onClick={addManualStagingItem} className="text-xs font-bold text-slate-600 bg-slate-100 px-2 py-1.5 rounded-lg hover:bg-slate-200 flex items-center gap-1 transition-colors">
+                                    <button onClick={addManualStagingItem} className="text-xs font-bold text-slate-600 bg-slate-100 px-2 py-1 rounded-lg hover:bg-slate-200 flex items-center gap-1">
                                         <Plus className="w-3 h-3" /> Add
                                     </button>
                                     {stagingData.imageUrl && (
                                         <button
                                             onClick={rescanWithContext}
                                             disabled={isAnalyzing}
-                                            className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1.5 rounded-lg hover:bg-indigo-100 flex items-center gap-1 disabled:opacity-50 transition-colors"
+                                            className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg hover:bg-indigo-100 flex items-center gap-1 disabled:opacity-50"
                                         >
                                             {isAnalyzing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
                                             {isAnalyzing ? 'Scanning...' : 'Scan More'}
@@ -3376,40 +3376,40 @@ If you find no additional items, return: { "items": [] }`;
                             </div>
 
                             {/* Items List */}
-                            <div ref={stagingListRef} className="space-y-3 pb-4">
+                            <div ref={stagingListRef} className="space-y-2.5">
                                 {stagingData.items.map((item) => (
-                                    <div key={item.id} className={`bg-white border rounded-xl p-3 transition-all ${item.excluded ? 'opacity-50 grayscale bg-slate-50' : 'shadow-sm hover:shadow-md'} ${item.confidence === 'low' ? 'border-red-100 ring-1 ring-red-50' : 'border-slate-200'}`}>
+                                    <div key={item.id} className={`bg-white border rounded-xl p-2.5 transition-all ${item.excluded ? 'opacity-50 grayscale bg-slate-50' : 'shadow-sm'} ${item.confidence === 'low' ? 'border-red-100 ring-1 ring-red-50' : 'border-slate-200'}`}>
 
                                         {/* Row 1: Checkbox + Name */}
-                                        <div className="flex items-start gap-3 mb-2">
+                                        <div className="flex items-start gap-2.5 mb-1.5">
                                             <input
                                                 type="checkbox"
                                                 checked={!item.excluded}
                                                 onChange={(e) => updateStagingItem(item.id, { excluded: !e.target.checked })}
-                                                className="w-5 h-5 mt-1 rounded border-slate-300 text-emerald-500 focus:ring-emerald-500 cursor-pointer"
+                                                className="w-5 h-5 mt-0.5 rounded border-slate-300 text-emerald-500 focus:ring-emerald-500 cursor-pointer flex-shrink-0"
                                             />
                                             <div className="flex-1 min-w-0">
                                                 <input
                                                     type="text"
                                                     value={item.name}
                                                     onChange={(e) => { updateStagingItem(item.id, { name: e.target.value }); setStagingError(null); }}
-                                                    className={`w-full font-bold text-slate-800 bg-transparent border-none p-0 focus:ring-0 placeholder:text-slate-400 ${!item.name && stagingError ? 'border-b border-red-500' : ''}`}
+                                                    className={`w-full font-bold text-slate-800 bg-transparent border-none p-0 focus:ring-0 placeholder:text-slate-400 text-sm ${!item.name && stagingError ? 'border-b border-red-500' : ''}`}
                                                     disabled={item.excluded}
                                                     placeholder="Item Name"
                                                 />
-                                                {item.confidence === 'low' && <span className="text-[10px] text-red-500 font-medium block">Low confidence check name</span>}
+                                                {item.confidence === 'low' && <span className="text-[10px] text-red-500 font-medium block">Low confidence - check name</span>}
                                             </div>
                                         </div>
 
-                                        {/* Row 2: Qty, Unit, Location */}
-                                        <div className="grid grid-cols-[auto_auto_1fr] gap-2 ml-8 mb-2">
+                                        {/* Row 2: Qty, Unit, Location - Compact */}
+                                        <div className="flex gap-2 ml-7 mb-1.5 flex-wrap">
                                             <input
                                                 type="number"
                                                 min="0.01"
                                                 step="0.01"
                                                 value={item.quantity}
                                                 onChange={(e) => updateStagingItem(item.id, { quantity: e.target.value === '' ? '' : parseFloat(e.target.value) })}
-                                                className="w-16 text-center bg-slate-50 font-bold rounded-lg py-1.5 border border-slate-200 focus:border-emerald-500 text-sm"
+                                                className="w-14 text-center bg-slate-50 font-bold rounded-lg py-1 border border-slate-200 focus:border-emerald-500 text-sm"
                                                 disabled={item.excluded}
                                             />
                                             <UnitPickerButton
@@ -3427,7 +3427,7 @@ If you find no additional items, return: { "items": [] }`;
                                                             updateStagingItem(item.id, { location: e.target.value });
                                                         }
                                                     }}
-                                                    className="select-field text-xs py-1.5"
+                                                    className="select-field text-xs py-1"
                                                     disabled={item.excluded}
                                                 >
                                                     {allLocations.map(l => <option key={l} value={l}>{l}</option>)}
@@ -3436,18 +3436,16 @@ If you find no additional items, return: { "items": [] }`;
                                             )}
                                         </div>
 
-                                        {/* Row 3: Expiration + Staple (Compact Grid) */}
-                                        <div className="ml-8 grid grid-cols-2 gap-2 items-center">
+                                        {/* Row 3: Expiration + Staple - Compact */}
+                                        <div className="ml-7 flex items-center gap-2 flex-wrap">
                                             <input
                                                 type="date"
                                                 value={item.expiresAt || ''}
                                                 onChange={(e) => updateStagingItem(item.id, { expiresAt: e.target.value || null })}
-                                                className="input-field text-xs py-1.5 w-full"
+                                                className="input-field text-xs py-1 w-32"
                                                 disabled={item.excluded}
                                             />
-
-                                            {/* Staple Toggle Compact */}
-                                            <div className="flex items-center justify-end gap-2">
+                                            <div className="flex items-center gap-1.5 ml-auto">
                                                 <span className="text-[10px] uppercase font-bold text-slate-400">Staple</span>
                                                 <button
                                                     type="button"
@@ -3455,15 +3453,15 @@ If you find no additional items, return: { "items": [] }`;
                                                     disabled={item.excluded}
                                                     className={`w-8 h-4 rounded-full transition-colors relative ${item.isStaple ? 'bg-emerald-500' : 'bg-slate-300'}`}
                                                 >
-                                                    <div className={`w-3 h-3 bg-white rounded-full shadow absolute top-0.5 transition-all ${item.isStaple ? 'left-4.5' : 'left-0.5'}`} style={{ left: item.isStaple ? '18px' : '2px' }} />
+                                                    <div className={`w-3 h-3 bg-white rounded-full shadow absolute top-0.5 transition-all`} style={{ left: item.isStaple ? '18px' : '2px' }} />
                                                 </button>
                                             </div>
                                         </div>
 
                                         {/* Min Stock Level (if Staple) */}
                                         {item.isStaple && !item.excluded && (
-                                            <div className="ml-8 mt-2 pt-2 border-t border-slate-100 flex items-center justify-between animate-fade-in">
-                                                <span className="text-xs font-semibold text-slate-600">Restock at qty:</span>
+                                            <div className="ml-7 mt-1.5 pt-1.5 border-t border-slate-100 flex items-center justify-between animate-fade-in">
+                                                <span className="text-xs text-slate-600">Restock at:</span>
                                                 <div className="flex items-center gap-1">
                                                     <input
                                                         type="number"
@@ -3471,7 +3469,7 @@ If you find no additional items, return: { "items": [] }`;
                                                         step="0.1"
                                                         value={item.alertBelow || item.minStockLevel || 1}
                                                         onChange={(e) => updateStagingItem(item.id, { minStockLevel: parseFloat(e.target.value) || 0, alertBelow: parseFloat(e.target.value) || 0 })}
-                                                        className="w-14 text-center input-field text-xs py-1"
+                                                        className="w-12 text-center input-field text-xs py-0.5"
                                                         disabled={item.excluded}
                                                     />
                                                     <span className="text-[10px] text-slate-400">{item.unit || 'each'}</span>
@@ -3479,24 +3477,24 @@ If you find no additional items, return: { "items": [] }`;
                                             </div>
                                         )}
 
-                                        {/* Duplicate & Merge Logic */}
+                                        {/* Similar Item & Merge Logic */}
                                         {item.isDuplicate && (
-                                            <div className="mt-3 ml-8 bg-amber-50 rounded-lg p-2.5 border border-amber-100">
-                                                <div className="flex items-center justify-between mb-2">
+                                            <div className="mt-2 ml-7 bg-amber-50 rounded-lg p-2 border border-amber-100">
+                                                <div className="flex items-center justify-between mb-1.5">
                                                     <div className="flex items-center gap-1 text-amber-800 font-bold text-xs">
                                                         <AlertTriangle className="w-3 h-3" />
-                                                        <span>Duplicate Found</span>
+                                                        <span>Similar item in pantry</span>
                                                     </div>
-                                                    <div className="flex gap-2">
+                                                    <div className="flex gap-1.5">
                                                         <button
                                                             onClick={() => updateStagingItem(item.id, { mergeWithDuplicate: false })}
-                                                            className={`px-2 py-0.5 text-[10px] font-bold rounded border ${!item.mergeWithDuplicate ? 'bg-white border-amber-300 text-amber-900 shadow-sm' : 'border-transparent text-amber-600 hover:bg-amber-100'}`}
+                                                            className={`px-1.5 py-0.5 text-[10px] font-bold rounded border ${!item.mergeWithDuplicate ? 'bg-white border-amber-300 text-amber-900 shadow-sm' : 'border-transparent text-amber-600'}`}
                                                         >
-                                                            New Item
+                                                            New
                                                         </button>
                                                         <button
                                                             onClick={() => updateStagingItem(item.id, { mergeWithDuplicate: true })}
-                                                            className={`px-2 py-0.5 text-[10px] font-bold rounded border ${item.mergeWithDuplicate ? 'bg-white border-amber-300 text-amber-900 shadow-sm' : 'border-transparent text-amber-600 hover:bg-amber-100'}`}
+                                                            className={`px-1.5 py-0.5 text-[10px] font-bold rounded border ${item.mergeWithDuplicate ? 'bg-white border-amber-300 text-amber-900 shadow-sm' : 'border-transparent text-amber-600'}`}
                                                         >
                                                             Merge
                                                         </button>
@@ -3504,9 +3502,8 @@ If you find no additional items, return: { "items": [] }`;
                                                 </div>
 
                                                 {item.mergeWithDuplicate && (
-                                                    <div className="space-y-2 text-xs">
-                                                        {/* Unit Conversion */}
-                                                        <div className="text-slate-600 bg-white/60 p-1.5 rounded">
+                                                    <div className="space-y-1 text-xs">
+                                                        <div className="text-slate-600 bg-white/60 p-1 rounded">
                                                             {item.conversionValid ? (
                                                                 <>Adding <strong className="text-emerald-700">+{item.convertedQty} {item.existingUnit}</strong> to existing.</>
                                                             ) : (
@@ -3517,23 +3514,27 @@ If you find no additional items, return: { "items": [] }`;
                                                             )}
                                                         </div>
 
-                                                        {/* Name Conflict */}
                                                         {item.name.trim().toLowerCase() !== item.duplicateMatch.trim().toLowerCase() && (
-                                                            <div className="flex items-center justify-between bg-white/60 p-1.5 rounded">
-                                                                <span className="font-semibold text-slate-500 text-[10px]">Name?</span>
-                                                                <div className="flex gap-1 text-[10px]">
-                                                                    <button
-                                                                        onClick={() => updateStagingItem(item.id, { useNewName: false })}
-                                                                        className={`px-1.5 py-0.5 rounded ${!item.useNewName ? 'bg-amber-100 text-amber-900 font-bold' : 'text-slate-500'}`}
-                                                                    >
-                                                                        Keep Existing
-                                                                    </button>
-                                                                    <button
-                                                                        onClick={() => updateStagingItem(item.id, { useNewName: true })}
-                                                                        className={`px-1.5 py-0.5 rounded ${item.useNewName ? 'bg-amber-100 text-amber-900 font-bold' : 'text-slate-500'}`}
-                                                                    >
-                                                                        Use New
-                                                                    </button>
+                                                            <div className="bg-white/60 p-1.5 rounded space-y-1">
+                                                                <div className="text-[10px] text-slate-500">
+                                                                    Existing: <strong className="text-slate-700">"{item.duplicateMatch}"</strong>
+                                                                </div>
+                                                                <div className="flex items-center justify-between">
+                                                                    <span className="font-semibold text-slate-600 text-[10px]">Use which name?</span>
+                                                                    <div className="flex gap-1 text-[10px]">
+                                                                        <button
+                                                                            onClick={() => updateStagingItem(item.id, { useNewName: false })}
+                                                                            className={`px-1.5 py-0.5 rounded ${!item.useNewName ? 'bg-amber-100 text-amber-900 font-bold' : 'text-slate-500'}`}
+                                                                        >
+                                                                            Existing
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => updateStagingItem(item.id, { useNewName: true })}
+                                                                            className={`px-1.5 py-0.5 rounded ${item.useNewName ? 'bg-amber-100 text-amber-900 font-bold' : 'text-slate-500'}`}
+                                                                        >
+                                                                            New
+                                                                        </button>
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                         )}
@@ -3546,11 +3547,11 @@ If you find no additional items, return: { "items": [] }`;
                             </div>
                         </div>
 
-                        {/* Sticky Footer */}
-                        <div className="p-4 bg-white border-t border-slate-100 sticky bottom-0 z-20 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] rounded-b-2xl">
+                        {/* Footer - Pinned at bottom */}
+                        <div className="flex-shrink-0 p-4 bg-white border-t border-slate-200 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
                             <button
                                 onClick={confirmStaging}
-                                className="w-full btn-primary py-3 rounded-xl flex items-center justify-center gap-2 text-base shadow-lg shadow-indigo-200"
+                                className="w-full btn-primary py-3 rounded-xl flex items-center justify-center gap-2 text-base"
                             >
                                 <span className="flex items-center justify-center w-6 h-6 bg-white/20 rounded-full text-xs font-bold">
                                     {stagingData.items.filter(i => !i.excluded).length}
@@ -3559,7 +3560,7 @@ If you find no additional items, return: { "items": [] }`;
                                 <ArrowRight className="w-4 h-4 ml-1" />
                             </button>
                             {pendingFiles.length > 0 && (
-                                <p className="text-center text-xs text-slate-400 mt-2 font-medium">
+                                <p className="text-center text-xs text-slate-400 mt-1.5">
                                     {pendingFiles.length} more photo{pendingFiles.length > 1 ? 's' : ''} in queue
                                 </p>
                             )}
@@ -11540,7 +11541,8 @@ Rules:
 /* -------------------------------------------------------------------------- */
 
 function ImageViewer({ src, onClose }) {
-    useBackGesture(onClose);
+    // Always active when rendered - uses correct 2-arg syntax
+    useBackGesture(true, onClose);
 
     if (!src) return null;
 

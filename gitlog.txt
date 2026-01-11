@@ -1,0 +1,29 @@
+c446650 Bump version to 2026.01.10.4 - Refine Inventory UI & Staple Logic
+84aaeec Fix continuous infinite scroll, improve loading triggers, and fix scroll-to-today logic
+8de5596 feat: Track missing ingredients for deduction at cook time
+61232d1 Corrected version number format to 2026.01.10.1 and pushed to GitHub.
+29be2f7 Overhaul Meal Planning Wizard selection flow, fix auto-generation bug, and refine UI. Bump version to 3.2026.01.10.
+ec4814f v3: Refine tutorial, implement favorite toggle, fix storage quota issues, and improve image clarity
+c6352fd v2.0.0: Unify version display, fix allocation caching
+7c82647 v1.2.0: Fix allocation caching, unify modal behavior, update version
+26a089d v1.1.0: Fix reservation badges, image generation, allocation caching
+f7aaa63 Fix tutorial pre-selection, remove duplicate wizard, and update version 2026.01.05.1
+ae109b2 Fix: Simplify useBackGesture to prevent app exit on back gesture
+e5ad871 Fix: useBackGesture race condition causing recipe cards not to open
+cdc6a5f Fix AI ingredient matching to convert recipe units to pantry units
+12104b1 Add back gesture navigation to dashboard from other screens
+d7c0373 Version bump to 2026.01.04.1
+fcbd780 Refactor IngredientMatchModal: Full-screen card UI, Inventory Picker, new Confidence styles. Bump version to 2026.01.03.1
+11c009d Enhanced tutorial system with glowing outline, dummy data, and required API key setup
+2eb5b92 iOS PWA notification support with helper functions v2025.12.28.7
+5298aed FIX: Wrap ALL Notification API in Settings panel v2025.12.28.6
+aa2b102 FIX: Wrap Notification API in try-catch for iOS Safari v2025.12.28.5
+9abef4b iOS fix: Add Error Boundary, disable SW, global error handler v2025.12.28.4
+40bd112 Major iOS fix: load Tailwind async, inline loading CSS, v2025.12.28.3
+7bf5021 Bump version to 2025.12.28.2
+56ea56e iOS fix: completely unregister ALL SWs, clear ALL caches, add failsafe timeout
+64d11d0 Add version info to Settings modal, centralize version constant
+44ac167 Add version info to API key setup screen
+75c56c9 Fix iOS: add loading screen, clear old SW cache, error handling
+bb87b47 Trigger GitHub Pages deployment
+1c2e06e Migrate to Vite build for iOS Safari compatibility

@@ -1,0 +1,55 @@
+
+                                  </div>
+                              ))}
+                          </div>
+  
+                          <button onClick={confirmDeduction} className="w-full btn-primary text-sm py-2">
+                              Confirm & Mark as Cooked
+                          </button>
+                      </div>
+                  )}
+              </Modal>
+  
+              {/* Add Item Modal */}
+              <Modal isOpen={!!addItemModal} onClose={() => setAddItemModal(null)}>
+                  {addItemModal && (
+                      <div className="p-6 space-y-4">
+>                         <h2 className="text-xl font-bold">Add to Inventory</h2>
+                          <input value={addItemModal.name} onChange={e => setAddItemModal({ ...addItemModal, name: e.target.value })} placeholder="Item name" className="input-field" />
+                          <div className="flex gap-3 items-center">
+                              <input type="number" value={addItemModal.quantity} onChange={e => setAddItemModal({ ...addItemModal, quantity: e.target.value === '' ? '' : parseFloat(e.target.value) })} className="w-20 input-field text-center" />
+                          </div>
+                          <div>
+                              <label className="text-xs font-bold text-slate-500 mb-1 block">Unit</label>
+                              <UnitPicker value={addItemModal.unit} onChange={(u) => setAddItemModal({ ...addItemModal, unit: u })} compact />
+                          </div>
+                          <select value={addItemModal.location} onChange={e => setAddItemModal({ ...addItemModal, location: e.target.value })} className="w-full select-field">
+                              {DEFAULT_LOCATIONS.map(l => <option key={l} value={l}>{l}</option>)}
+                          </select>
+>                         <button onClick={confirmAddItem} className="w-full btn-primary">Add to Inventory</button>
+                      </div>
+                  )}
+              </Modal>
+  
+              {/* Meal Scheduler Wizard */}
+              <MealSchedulerWizard
+                  isOpen={showMealWizard}
+                  onClose={() => setShowMealWizard(false)}
+                  apiKey={apiKey}
+                  model={selectedModel}
+                  inventory={inventory}
+                  family={family}
+                  mealPlan={mealPlan}
+                  setMealPlan={setMealPlan}
+                  wizardDays={wizardDays}
+                  setWizardDays={setWizardDays}
+                  wizardEaters={wizardEaters}
+                  setWizardEaters={setWizardEaters}
+                  wizardExtraGuests={wizardExtraGuests}
+                  setWizardExtraGuests={setWizardExtraGuests}
+                  wizardMealType={wizardMealType}
+                  setWizardMealType={setWizardMealType}
+                  wizardLeftoverDays={wizardLeftoverDays}
+                  setWizardLeftoverDays={setWizardLeftoverDays}
+                  wizardPrompt={wizardPrompt}
+

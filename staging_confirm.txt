@@ -1,0 +1,44 @@
+
+      };
+  
+      const handleDuplicateOverride = async () => {
+          if (pendingFileRef.current) {
+              await processImage(pendingFileRef.current);
+              pendingFileRef.current = null;
+          }
+          setDuplicateWarning(null);
+      };
+  
+>     const confirmStaging = async () => {
+          if (!stagingData) return;
+  
+          // Validate: check for empty names on non-excluded items
+          const itemsToAdd = stagingData.items.filter(item => !item.excluded);
+          const emptyNameItems = itemsToAdd.filter(item => !item.name || item.name.trim() === '');
+  
+          if (emptyNameItems.length > 0) {
+              setStagingError('Please enter a name for all items before saving.');
+              return;
+          }
+                                  >
+                                      {isAnalyzing ? (
+                                          <><Loader2 className="w-5 h-5 animate-spin" /> Searching...</>
+                                      ) : (
+                                          <><Sparkles className="w-5 h-5" /> Search for more items in image?</>
+                                      )}
+                                  </button>
+                              )}
+  
+                              {/* Confirm */}
+>                             <button onClick={confirmStaging} className="w-full btn-primary">
+                                  Add {stagingData.items.filter(i => !i.excluded).length} Items to Inventory
+                                  {pendingFiles.length > 0 && (
+                                      <span className="ml-2 opacity-75">({pendingFiles.length} more photo{pendingFiles.length > 1 ? 's' : ''} to review)</span>
+                                  )}
+                              </button>
+                          </div>
+                      </div>
+                  )}
+              </Modal>
+  
+
