@@ -5134,7 +5134,7 @@ Return JSON: {"storage": "...", "reheat": "...", "expiresInDays": 4}`;
 // CALENDAR VIEW (Agenda Style)
 // ============================================================================
 
-const CalendarView = ({ apiKey, model, mealPlan, setMealPlan, inventory, setInventory, family, recipes, customRecipes, favorites, downloadICSFn, onCook, onFavorite, onAddToLeftovers, leftovers, setLeftovers, onMoveToHistory, allocatedIngredients, setAllocatedIngredients, onOpenWizard, activeTab, setActiveTab, selectedLeftoverId, setSelectedLeftoverId, getAvailableQuantity, getItemReservations }) => {
+const CalendarView = ({ apiKey, model, mealPlan, setMealPlan, inventory, setInventory, family, recipes, customRecipes, favorites, downloadICSFn, onCook, onFavorite, onAddToLeftovers, leftovers, setLeftovers, onMoveToHistory, allocatedIngredients, setAllocatedIngredients, onOpenWizard, activeTab, setActiveTab, selectedLeftoverId, setSelectedLeftoverId, getAvailableQuantity, getItemReservations, setIngredientLoading, setIngredientMatchData, setToastData, history, setHistory, dayStates, setDayStates }) => {
     const [selectedMeal, setSelectedMeal] = useState(null);
     // Derive selectedLeftover from ID for compatibility
     const selectedLeftover = selectedLeftoverId ? leftovers.find(l => l.id === selectedLeftoverId) : null;
@@ -5170,19 +5170,26 @@ const CalendarView = ({ apiKey, model, mealPlan, setMealPlan, inventory, setInve
     useBackGesture(!!showReschedule, () => setShowReschedule(null));
     useBackGesture(!!showDeleteConfirm, () => setShowDeleteConfirm(null));
 
-    // Generate Dates: Extended Range for "Infinite Scroll" feel
+    // Dynamic Infinite Scroll State
+    const [historyDaysLoaded, setHistoryDaysLoaded] = useState(90);
+    const [futureDaysLoaded, setFutureDaysLoaded] = useState(90);
+    const topSentinelRef = useRef(null);
+    const bottomSentinelRef = useRef(null);
+    const scrollContainerRef = useRef(null);
+
+    // Generate Dates dynamically based on loaded count
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // Past 30 days
-    const historyDays = Array.from({ length: 30 }, (_, i) => {
+    // Past days (loaded dynamically)
+    const historyDays = Array.from({ length: historyDaysLoaded }, (_, i) => {
         const date = new Date(today);
-        date.setDate(date.getDate() - (30 - i));
+        date.setDate(date.getDate() - (historyDaysLoaded - i));
         return date;
     });
 
-    // Future 180 days
-    const agendaDays = Array.from({ length: 180 }, (_, i) => {
+    // Future days (loaded dynamically)
+    const agendaDays = Array.from({ length: futureDaysLoaded }, (_, i) => {
         const date = new Date(today);
         date.setDate(date.getDate() + i);
         return date;
@@ -5190,16 +5197,55 @@ const CalendarView = ({ apiKey, model, mealPlan, setMealPlan, inventory, setInve
 
     const allDays = [...historyDays, ...agendaDays];
 
+    // Scroll-based infinite loading
+    const lastLoadTimeRef = useRef(0);
+    const hasInitializedRef = useRef(false);
+
+    useEffect(() => {
+        const container = scrollContainerRef.current;
+        if (!container) return;
+
+        const handleScroll = () => {
+            // Skip if we haven't scrolled to today yet
+            if (!hasInitializedRef.current) return;
+
+            const { scrollTop, scrollHeight, clientHeight } = container;
+            const now = Date.now();
+
+            // Throttle: only allow loading every 500ms
+            if (now - lastLoadTimeRef.current < 500) return;
+
+            // Near top - load more past days (trigger early, ~15-20 days before boundary)
+            if (scrollTop < 2500) {
+                lastLoadTimeRef.current = now;
+                setHistoryDaysLoaded(prev => prev + 90);
+            }
+
+            // Near bottom - load more future days (trigger early)
+            if (scrollHeight - scrollTop - clientHeight < 2500) {
+                lastLoadTimeRef.current = now;
+                setFutureDaysLoaded(prev => prev + 90);
+            }
+        };
+
+        container.addEventListener('scroll', handleScroll);
+        return () => container.removeEventListener('scroll', handleScroll);
+    }, [activeTab, historyDaysLoaded]);
+
     // Scroll to today on mount
     useEffect(() => {
         if (todayRef.current) {
-            todayRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            todayRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            // Mark as initialized after scrolling to today
+            setTimeout(() => {
+                hasInitializedRef.current = true;
+            }, 500);
         }
     }, [todayRef]);
 
     const scrollToToday = () => {
         if (todayRef.current) {
-            todayRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            todayRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     };
 
@@ -5322,7 +5368,11 @@ const CalendarView = ({ apiKey, model, mealPlan, setMealPlan, inventory, setInve
     };
 
     const markAsCookedConfirmed = (meal) => {
-        // Only mark local state here, deduction happens in confirmIngredientMatch
+        // Save previous state for undo
+        const previousMealPlan = { ...mealPlan };
+        const previousSlot = mealPlan[meal.slotKey] ? JSON.parse(JSON.stringify(mealPlan[meal.slotKey])) : null;
+
+        // Mark as cooked
         const newMealPlan = { ...mealPlan };
         const slot = newMealPlan[meal.slotKey];
         if (slot) {
@@ -5336,19 +5386,36 @@ const CalendarView = ({ apiKey, model, mealPlan, setMealPlan, inventory, setInve
         }
 
         // Add to history
+        const historyEntryId = generateId();
         const historyEntry = {
             ...meal,
             cookedAt: new Date().toISOString(),
-            id: generateId()
+            id: historyEntryId
         };
         setHistory(prev => [historyEntry, ...prev]);
 
-        showToast("Cent' Anni! Meal cooked & inventory updated.");
+        // Show toast with undo option
+        setToastData?.({
+            message: `Marked "${meal.name}" as cooked 🍳`,
+            duration: 8000,
+            onUndo: () => {
+                // Restore previous meal plan state
+                if (previousSlot) {
+                    setMealPlan(prev => ({ ...prev, [meal.slotKey]: previousSlot }));
+                }
+                // Remove from history
+                setHistory(prev => prev.filter(h => h.id !== historyEntryId));
+                setToastData?.({ message: "Undo successful - meal restored", duration: 2000 });
+            }
+        });
     };
 
     const handleMarkAsEaten = (meal) => {
         if (!meal.isLeftover) return;
         if (meal.isEaten) return;
+
+        // Save previous state for undo
+        const previousSlot = mealPlan[meal.slotKey] ? JSON.parse(JSON.stringify(mealPlan[meal.slotKey])) : null;
 
         // Update state
         const newMealPlan = { ...mealPlan };
@@ -5367,6 +5434,19 @@ const CalendarView = ({ apiKey, model, mealPlan, setMealPlan, inventory, setInve
             }
             setMealPlan(newMealPlan);
         }
+
+        // Show toast with undo option
+        setToastData?.({
+            message: `Finished eating "${meal.name}" leftovers 🍽️`,
+            duration: 6000,
+            onUndo: () => {
+                // Restore previous meal plan state
+                if (previousSlot) {
+                    setMealPlan(prev => ({ ...prev, [meal.slotKey]: previousSlot }));
+                }
+                setToastData?.({ message: "Undo successful - leftover restored", duration: 2000 });
+            }
+        });
     };
 
     const requestDelete = (slotKey, mealId, title) => {
@@ -5712,8 +5792,9 @@ Generate cooking/storage details. Return JSON:
     };
 
     return (
-        <div className="w-full min-h-full pb-32">
-            <div className="p-4 space-y-4">
+        <div className="w-full h-full flex flex-col pb-32">
+            {/* Sticky Header Section */}
+            <div className="sticky top-0 z-20 bg-slate-50 p-4 space-y-4 border-b border-slate-100 shadow-sm">
                 {/* Header */}
                 <div className="flex items-center justify-between">
                     <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
@@ -5746,7 +5827,7 @@ Generate cooking/storage details. Return JSON:
                     <Sparkles className="w-4 h-4 inline mr-2" /> Plan Your Week
                 </button>
 
-                {calendarViewMode === 'agenda' ? (
+                {calendarViewMode === 'agenda' && (
                     <>
                         {/* Tabs */}
                         <div className="flex bg-slate-100 rounded-xl p-1">
@@ -5768,11 +5849,21 @@ Generate cooking/storage details. Return JSON:
                                 </span>
                             </button>
                         </div>
+                    </>
+                )}
+            </div>
 
+            {/* Scrollable Content Area */}
+            <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4">
+                {calendarViewMode === 'agenda' ? (
+                    <>
                         {activeTab === 'upcoming' ? (
                             <div className="space-y-3 relative min-h-[500px]">
+                                {/* Top Sentinel for Infinite Scroll - MUST be first element */}
+                                <div ref={topSentinelRef} data-sentinel="top" className="h-4 -mt-2" />
+
                                 {/* Jump to Today Button */}
-                                <div className="sticky top-2 z-10 flex justify-center pointer-events-none mb-2">
+                                <div className="sticky top-0 z-10 flex justify-center pointer-events-none mb-2">
                                     <button
                                         onClick={scrollToToday}
                                         className="pointer-events-auto bg-slate-900/80 backdrop-blur text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1.5 hover:bg-slate-800 transition-colors"
@@ -5792,8 +5883,7 @@ Generate cooking/storage details. Return JSON:
                                     const isToday = date.toDateString() === today.toDateString();
                                     const isPast = date < today;
 
-                                    // Skip past days with no meals unless it's yesterday (for context)
-                                    if (isPast && meals.length === 0 && dayIdx < allDays.length - 92) return null;
+                                    // Show all past days (removed filtering to enable infinite scroll into past)
 
                                     return (
                                         <div key={dayIdx} ref={isToday ? todayRef : null} className={`agenda-day scroll-mt-24 ${isToday ? 'ring-2 ring-indigo-100 rounded-xl bg-indigo-50/30' : ''}`}>
@@ -5823,7 +5913,7 @@ Generate cooking/storage details. Return JSON:
                                                     // Determine click behavior
                                                     const handleMealClick = () => {
                                                         if (isLeftover && !parentCooked) {
-                                                            alert("You need to cook the main meal first!");
+                                                            setToastData?.({ message: "Cook the main meal first before editing this leftover", duration: 3000 });
                                                             return;
                                                         }
                                                         setSelectedMeal(meal);
@@ -5872,37 +5962,50 @@ Generate cooking/storage details. Return JSON:
 
                                                                 {/* Actions */}
                                                                 <div className="flex items-center gap-1">
-                                                                    {/* Quick Action Button - COOK */}
-                                                                    {!isLeftover && !isCooked && (
-                                                                        <button
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                // Mark as Cooked Logic
-                                                                                // Trigger logic via generic onCook handler which handles deduction
-                                                                                if (parentCooked) { // Redundant for main meal, but safe
-                                                                                    // Optimistic UI update handled by handler if needed, but we rely on callback
+                                                                    {/* Quick Action Button - COOK or COOKED STATE */}
+                                                                    {!isLeftover && (
+                                                                        isCooked ? (
+                                                                            <span className="px-2 py-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 rounded-lg opacity-60 flex items-center gap-1">
+                                                                                <Check className="w-3 h-3" /> Cooked
+                                                                            </span>
+                                                                        ) : (
+                                                                            <button
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    // Mark as Cooked Logic
+                                                                                    // Trigger logic via generic onCook handler which handles deduction
                                                                                     handleMarkAsCooked(meal);
-                                                                                }
-                                                                            }}
-                                                                            className="p-2 text-indigo-600 bg-indigo-50 hover:bg-slate-100 hover:text-indigo-700 rounded-full transition-colors"
-                                                                            title="Mark as Cooked"
-                                                                        >
-                                                                            <Check className="w-4 h-4" />
-                                                                        </button>
+                                                                                }}
+                                                                                className="p-2 text-indigo-600 bg-indigo-50 hover:bg-slate-100 hover:text-indigo-700 rounded-full transition-colors"
+                                                                                title="Mark as Cooked"
+                                                                            >
+                                                                                <Check className="w-4 h-4" />
+                                                                            </button>
+                                                                        )
                                                                     )}
 
-                                                                    {/* Quick Action Button - EAT (Leftover) */}
-                                                                    {isLeftover && parentCooked && !isEaten && (
-                                                                        <button
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                handleMarkAsEaten(meal);
-                                                                            }}
-                                                                            className="p-2 text-amber-600 bg-amber-50 hover:bg-amber-100 rounded-full"
-                                                                            title="Mark as Eaten"
-                                                                        >
-                                                                            <Utensils className="w-4 h-4" />
-                                                                        </button>
+                                                                    {/* Quick Action Button - EAT or EATEN STATE (Leftover) */}
+                                                                    {isLeftover && (
+                                                                        isEaten ? (
+                                                                            <span className="px-2 py-1 text-[10px] font-bold text-slate-500 bg-slate-100 rounded-lg opacity-60 flex items-center gap-1">
+                                                                                <Utensils className="w-3 h-3" /> Eaten
+                                                                            </span>
+                                                                        ) : parentCooked ? (
+                                                                            <button
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    handleMarkAsEaten(meal);
+                                                                                }}
+                                                                                className="p-2 text-amber-600 bg-amber-50 hover:bg-amber-100 rounded-full"
+                                                                                title="Mark as Eaten"
+                                                                            >
+                                                                                <Utensils className="w-4 h-4" />
+                                                                            </button>
+                                                                        ) : (
+                                                                            <span className="px-2 py-1 text-[10px] font-medium text-slate-400 bg-slate-100 rounded-lg flex items-center gap-1" title="Cook main meal first">
+                                                                                <Clock className="w-3 h-3" /> Waiting
+                                                                            </span>
+                                                                        )
                                                                     )}
 
                                                                     <button
@@ -5920,6 +6023,9 @@ Generate cooking/storage details. Return JSON:
                                         </div>
                                     );
                                 })}
+
+                                {/* Bottom Sentinel for Infinite Scroll */}
+                                <div ref={bottomSentinelRef} className="h-1" />
                             </div>
                         ) : (
                             /* Leftovers Tab */
@@ -6084,7 +6190,7 @@ Generate cooking/storage details. Return JSON:
                                                 <div className="text-xs text-indigo-500">{meal.mealType}</div>
                                             </div>
                                             <button
-                                                onClick={(e) => { e.stopPropagation(); removeMeal(meal.slotKey, meal.id); }}
+                                                onClick={(e) => { e.stopPropagation(); requestDelete(meal.slotKey, meal.id, meal.name); }}
                                                 className="p-1 text-slate-300 hover:text-red-500"
                                             >
                                                 <X className="w-4 h-4" />
@@ -6194,8 +6300,11 @@ Generate cooking/storage details. Return JSON:
                                 {/* Option 1: AI Generator (Plan Your Week / Single Meal) */}
                                 <button
                                     onClick={() => {
+                                        // Pre-select the clicked date in wizard
+                                        const dateKey = getLocalDateKey(showAddCustomMeal.date);
+                                        setDayStates?.({ [dateKey]: 'cook' }); // Clear others and set this date
                                         setShowAddCustomMeal(null);
-                                        onOpenWizard(); // Triggers the full wizard, though arguably we might want a "Single Meal" generator here
+                                        onOpenWizard();
                                     }}
                                     className="flex items-center gap-4 p-4 bg-gradient-to-r from-indigo-50 to-indigo-100/50 rounded-xl hover:shadow-md transition-all text-left group"
                                 >
@@ -9113,6 +9222,32 @@ function MealPrepMate() {
         document.querySelectorAll('.tutorial-spotlight').forEach(e => e.classList.remove('tutorial-spotlight'));
     }, [setInventory, setFamily, setQuickMeals, setLeftovers, setShoppingList, setFavorites, setCustomRecipes, setHistory, setMealPlan]);
 
+    // Reconstruct history from mealPlan (one-time migration for existing data)
+    useEffect(() => {
+        // Check for cooked meals in mealPlan that aren't in history
+        const existingIds = new Set(history.map(h => h.id));
+        const missingHistory = [];
+
+        Object.entries(mealPlan).forEach(([slotKey, slot]) => {
+            const meals = slot?.meals || (slot?.selected ? [slot.selected] : []);
+            meals.forEach(meal => {
+                if (meal.isCooked && !existingIds.has(meal.id)) {
+                    missingHistory.push({
+                        ...meal,
+                        cookedAt: meal.scheduledFor || new Date().toISOString(),
+                        id: meal.id
+                    });
+                }
+            });
+        });
+
+        if (missingHistory.length > 0) {
+            console.log(`[MealPrepMate] Reconstructed ${missingHistory.length} history entries from mealPlan`);
+            setHistory(prev => [...missingHistory, ...prev]);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []); // Run only once on mount
+
     // Tutorial steps definition - comprehensive walkthrough
     const tutorialSteps = [
         // Step 0: Welcome
@@ -10212,6 +10347,7 @@ Rules:
                     family={family}
                     recipes={recipes}
                     history={history}
+                    setHistory={setHistory}
                     customRecipes={customRecipes}
                     downloadICSFn={downloadICS}
                     onCook={handleCook}
@@ -10230,6 +10366,11 @@ Rules:
                     setSelectedLeftoverId={setSelectedLeftoverId}
                     getAvailableQuantity={getAvailableQuantity}
                     getItemReservations={getItemReservations}
+                    setIngredientLoading={setIngredientLoading}
+                    setIngredientMatchData={setIngredientMatchData}
+                    setToastData={setToastData}
+                    dayStates={dayStates}
+                    setDayStates={setDayStates}
                 />}
             </div>
 
