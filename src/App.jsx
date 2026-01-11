@@ -7,9 +7,10 @@ import {
     UserCheck, History, User, ThermometerSnowflake, Settings, Key, Bell,
     MessageCircle, Download, Upload, Leaf, Copy, Share, Calendar, CalendarDays,
     AlertTriangle, MapPin, Package, ChevronDown, ChevronRight, ChevronLeft,
-    Flame, Beef, Wheat, Droplet, GripVertical, MoreHorizontal, List, Grid3x3, ClipboardList, Zap, HelpCircle,
-    ArrowRight, Search, BookOpen, Snowflake
+    Flame, Beef, Wheat, Droplet, GripVertical, MoreHorizontal, List, Grid3x3, ClipboardList, HelpCircle,
+    ArrowRight, Search, BookOpen, Snowflake, Zap, Pencil
 } from 'lucide-react';
+import { convertUnit } from './unitConversion';
 
 // ============================================================================
 // CONSTANTS & DEFAULTS
@@ -2002,27 +2003,34 @@ const LeftoverCard = ({ leftover, leftovers, setLeftovers, onSelect, onMoveToHis
 
             {/* Serve/Remove Actions */}
             <div className="flex gap-2 mt-3">
-                <div className="flex-1 flex items-center gap-1">
-                    <span className="text-xs text-slate-500">Ate:</span>
-                    <input
-                        onClick={(e) => e.stopPropagation()}
-                        type="number"
-                        min="1"
-                        max={leftover.portions || 10}
-                        defaultValue="1"
-                        className="w-12 text-center input-field py-1 text-sm"
-                        id={inputId}
-                    />
-                    <button
-                        onClick={handleServe}
-                        className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded hover:bg-emerald-100"
-                    >
-                        Servings
-                    </button>
-                </div>
                 <button
-                    onClick={(e) => { e.stopPropagation(); onMoveToHistory?.(leftover, 'Removed'); setLeftovers(leftovers.filter(l => l.id !== leftover.id)); }}
-                    className="text-xs font-bold text-red-500 px-2 py-1 hover:bg-red-50 rounded"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        // Eat 1 serving logic
+                        const newPortions = Math.max(0, (leftover.portions || 1) - 1);
+                        if (newPortions <= 0) {
+                            // If finished, move to history
+                            onMoveToHistory?.(leftover, 'Finished');
+                            setLeftovers(leftovers.filter(l => l.id !== leftover.id));
+                        } else {
+                            // Otherwise just update portions
+                            setLeftovers(leftovers.map(l =>
+                                l.id === leftover.id ? { ...l, portions: newPortions } : l
+                            ));
+                        }
+                    }}
+                    className="flex-1 btn-primary py-2 text-xs flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm"
+                >
+                    <Utensils className="w-3 h-3" /> Eat 1 Serving
+                </button>
+
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onMoveToHistory?.(leftover, 'Removed');
+                        setLeftovers(leftovers.filter(l => l.id !== leftover.id));
+                    }}
+                    className="px-3 py-2 text-xs font-bold text-red-500 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
                 >
                     Remove
                 </button>
@@ -2098,9 +2106,9 @@ const LeftoverDetailModal = ({ leftover, leftovers, setLeftovers, onClose, onMov
             <div className="flex gap-2 pt-2">
                 <button
                     onClick={handleEatOne}
-                    className="flex-1 btn-primary bg-emerald-600"
+                    className="flex-1 btn-primary bg-emerald-600 flex items-center justify-center gap-2"
                 >
-                    Eat 1 Serving
+                    <Utensils className="w-4 h-4" /> Eat 1 Serving
                 </button>
                 <button
                     onClick={handleRemove}
@@ -2117,223 +2125,325 @@ const InventoryItem = ({
     item,
     expandedItemId,
     setExpandedItemId,
+    onToggleExpand,
     updateItem,
     deleteItem,
     allLocations,
     handleLocationChange,
     getItemReservations,
     getAvailableQuantity,
-    showLocationBadge = false
+    showLocationBadge = false,
+    handleQuantityBlur,
+    shoppingList,
+    setShoppingList,
+    setToastData
 }) => {
     const isExpanded = expandedItemId === item.id;
     const expirationStatus = getExpirationStatus(item.expiresAt);
+
+    // Format helper
+    const formatDateForInput = (isoString) => {
+        if (!isoString) return '';
+        return isoString.split('T')[0];
+    };
+
+    // Calculate Visual Alert State for Quantity
+    const minQty = item.minStockLevel || 0;
+    const currentQty = parseFloat(item.quantity) || 0;
+    const available = getAvailableQuantity(item); // accounts for reservations
+
+    let qtyStyleClass = 'bg-slate-100 text-slate-700 border-slate-200 shadow-inner'; // Default
+
+    if (item.isStaple && minQty > 0) {
+        if (currentQty < minQty) {
+            // RED: Actual quantity is below minimum
+            qtyStyleClass = 'bg-red-50 text-red-700 border-red-500 shadow-inner';
+        } else if (available < minQty) {
+            // YELLOW: Reserves will drop it below minimum
+            qtyStyleClass = 'bg-amber-50 text-amber-700 border-amber-400 shadow-inner';
+        }
+    } else if (expirationStatus === 'expired') {
+        qtyStyleClass = 'bg-red-50 text-red-600 border-red-100 shadow-inner';
+    } else if (expirationStatus === 'soon') {
+        qtyStyleClass = 'bg-amber-50 text-amber-600 border-amber-100 shadow-inner';
+    }
+
+    // Auto-resize textarea logic
+    const nameInputRef = useRef(null);
+    const prevMinStock = useRef(item.minStockLevel || 1);
+    useEffect(() => {
+        if (isExpanded && nameInputRef.current) {
+            // Reset height to calculate scrollHeight correctly
+            nameInputRef.current.style.height = 'auto';
+            const scrollHeight = nameInputRef.current.scrollHeight;
+            nameInputRef.current.style.height = scrollHeight + 'px';
+        }
+    }, [isExpanded, item.name]);
 
     return (
         <div id={`inventory-item-${item.id}`} className="inventory-item">
             {/* Main Row - Always visible */}
             <div
-                className="flex items-center gap-2 cursor-pointer"
-                onClick={() => setExpandedItemId(isExpanded ? null : item.id)}
+                className={`transition-all duration-300 ${isExpanded ? 'bg-indigo-50/30 -mx-2 px-2 py-3 rounded-xl ring-1 ring-indigo-50' : 'bg-white border-transparent hover:bg-slate-50 rounded-xl p-2 my-1'}`}
+                onClick={() => {
+                    if (onToggleExpand) {
+                        onToggleExpand(item.id);
+                    } else {
+                        setExpandedItemId(isExpanded ? null : item.id);
+                    }
+                }}
             >
-                {/* Quantity - color-coded by expiration */}
-                <input
-                    type="number"
-                    min="0.01"
-                    step="0.01"
-                    value={item.quantity}
-                    onChange={(e) => {
-                        e.stopPropagation();
-                        updateItem(item.id, { quantity: e.target.value === '' ? '' : parseFloat(e.target.value) });
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                    className={`w-14 text-center font-bold rounded-lg py-1.5 border-0 focus:ring-2 text-sm ${expirationStatus === 'expired'
-                        ? 'bg-red-100 text-red-600 focus:ring-red-500'
-                        : expirationStatus === 'soon'
-                            ? 'bg-amber-100 text-amber-600 focus:ring-amber-500'
-                            : 'bg-emerald-50 text-emerald-600 focus:ring-emerald-500'
-                        }`}
-                />
-
-                {/* Unit - Compact */}
-                <span className="text-xs text-slate-500 font-medium w-16 flex-shrink-0">{item.unit || 'each'}</span>
-
-                {/* Name + Expiration + Reservations + Location Badge */}
-                <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-x-2">
-                        <span className="font-bold text-slate-700 break-words">{item.name}</span>
-                        {showLocationBadge && (
-                            <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded uppercase tracking-wider">
-                                {item.location || 'Pantry'}
-                            </span>
-                        )}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2 mt-0.5">
-                        {item.expiresAt && (
-                            <span className={`text-xs ${expirationStatus === 'expired'
-                                ? 'text-red-500'
-                                : expirationStatus === 'soon'
-                                    ? 'text-amber-500'
-                                    : 'text-slate-400'
-                                }`}>
-                                {expirationStatus === 'expired'
-                                    ? 'Expired'
-                                    : `Exp ${formatExpDate(item.expiresAt)}`}
-                            </span>
-                        )}
-                        {(() => {
-                            const reservations = getItemReservations(item.name);
-                            if (reservations.length > 0) {
-                                return (
-                                    <div className="flex flex-col gap-1 mt-1">
-                                        <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded font-bold inline-flex items-center w-fit">
-                                            📅 {reservations.length} Reserved
-                                        </span>
-                                        {isExpanded && (
-                                            <div className="bg-indigo-50 rounded-lg p-2 space-y-1">
-                                                {reservations.map((res, idx) => (
-                                                    <div key={idx} className="text-[10px] text-indigo-800 flex justify-between items-center border-b border-indigo-100 last:border-0 pb-1 last:pb-0">
-                                                        <span className="font-medium truncate max-w-[120px]">{res.recipeName}</span>
-                                                        <span className="font-bold flex-shrink-0 ml-2">{res.amount} {res.unit}</span>
-                                                    </div>
-                                                ))}
-                                                <div className="text-[10px] font-bold text-indigo-900 text-right pt-1 mt-1 border-t border-indigo-200">
-                                                    Available: {getAvailableQuantity(item).toFixed(2)} {item.unit}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                );
+                <div className="flex items-center gap-3">
+                    {/* Quantity Input */}
+                    <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={item.quantity === 0 ? '' : item.quantity}
+                        onChange={(e) => {
+                            e.stopPropagation();
+                            updateItem(item.id, { quantity: e.target.value === '' ? '' : parseFloat(e.target.value) });
+                        }}
+                        onBlur={(e) => {
+                            handleQuantityBlur(item, e.target.value);
+                        }}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                e.target.blur();
                             }
-                            return null;
-                        })()}
-                    </div>
-                </div>
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        className={`w-14 text-center font-bold rounded-lg py-1.5 border-2 text-sm transition-all focus:ring-0 focus:border-emerald-500 ${qtyStyleClass}`}
+                    />
 
-                {/* Expand Indicator */}
-                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-            </div>
+                    {/* Unit - Compact */}
+                    <span className="text-xs text-slate-500 font-medium w-16 flex-shrink-0">{item.unit || 'each'}</span>
 
-            {/* Expanded Row - Details & Actions */}
-            {isExpanded && (
-                <div className="mt-3 pt-3 border-t border-slate-100 space-y-3 animate-fade-in">
-                    {/* Name Edit */}
-                    <div subterranean-id="name-edit">
-                        <div className="flex items-center justify-between mb-1">
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Item Name</label>
-                            {getItemReservations(item.name).length > 0 && (
-                                <span className="text-[10px] bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded font-bold uppercase">Reserved</span>
+                    {/* Name (Editable) + Expiration + Reservations + Location Badge */}
+                    <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-x-2">
+                            {/* Inline Editable Name */}
+                            {isExpanded ? (
+                                <textarea
+                                    ref={nameInputRef}
+                                    value={item.name}
+                                    onChange={(e) => {
+                                        updateItem(item.id, { name: e.target.value });
+                                        e.target.style.height = 'auto';
+                                        e.target.style.height = e.target.scrollHeight + 'px';
+                                    }}
+                                    onFocus={(e) => {
+                                        e.target.style.height = 'auto';
+                                        e.target.style.height = e.target.scrollHeight + 'px';
+                                    }}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="font-bold text-slate-700 bg-slate-100 border border-slate-200 rounded-lg px-2 py-1 focus:ring-2 focus:ring-emerald-500 w-full transition-all resize-none overflow-hidden block"
+                                    placeholder="Item Name"
+                                    rows={1}
+                                />
+                            ) : (
+                                <span className="font-bold text-slate-700 break-words">{item.name}</span>
+                            )}
+                            {showLocationBadge && (
+                                <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                                    {item.location || 'Pantry'}
+                                </span>
                             )}
                         </div>
-                        <input
-                            type="text"
-                            value={item.name}
-                            onChange={(e) => updateItem(item.id, { name: e.target.value })}
-                            className="w-full input-field text-sm"
-                            placeholder="Item name"
-                        />
+                        <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                            {item.expiresAt && (
+                                <span className={`text-xs ${expirationStatus === 'expired'
+                                    ? 'text-red-500'
+                                    : expirationStatus === 'soon'
+                                        ? 'text-amber-500'
+                                        : 'text-slate-400'
+                                    }`}>
+                                    {expirationStatus === 'expired'
+                                        ? 'Expired'
+                                        : `Exp ${formatDateForInput(item.expiresAt)}`}
+                                </span>
+                            )}
+                            {(() => {
+                                const reservations = getItemReservations(item.name);
+                                if (reservations.length > 0) {
+                                    return (
+                                        <div className="flex flex-col gap-1 mt-1">
+                                            <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded font-bold inline-flex items-center w-fit">
+                                                📅 {reservations.length} Reserved
+                                            </span>
+                                            {isExpanded && (
+                                                <div className="bg-indigo-50 rounded-lg p-2 space-y-1">
+                                                    {reservations.map((res, idx) => (
+                                                        <div key={idx} className="text-[10px] text-indigo-800 flex justify-between items-center border-b border-indigo-100 last:border-0 pb-1 last:pb-0">
+                                                            <span className="font-medium truncate max-w-[120px]">{res.recipeName}</span>
+                                                            <span className="font-bold flex-shrink-0 ml-2">{res.amount} {res.unit}</span>
+                                                        </div>
+                                                    ))}
+                                                    <div className="text-[10px] font-bold text-indigo-900 text-right pt-1 mt-1 border-t border-indigo-200">
+                                                        Available: {getAvailableQuantity(item).toFixed(2)} {item.unit}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                }
+                                return null;
+                            })()}
+                        </div>
                     </div>
 
-                    {/* Unit & Location Row */}
-                    <div className="grid grid-cols-2 gap-2">
+                    {/* Expand Indicator (Pencil) */}
+                    <div className={`transition-all duration-300 ${isExpanded ? 'bg-indigo-100 text-indigo-600 rotate-12' : 'bg-slate-100 text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-500'} p-1.5 rounded-lg`}>
+                        <Pencil className="w-3 h-3" />
+                    </div>
+                </div>
+
+                {/* Expanded Row - Details & Actions */}
+                {isExpanded && (
+                    <div className="mt-3 pt-3 border-t border-slate-100 space-y-3 animate-fade-in" onClick={(e) => e.stopPropagation()}>
+
+                        {/* Unit & Location Row */}
+                        <div className="grid grid-cols-2 gap-2">
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Unit</label>
+                                <UnitPicker
+                                    value={item.unit || 'each'}
+                                    onChange={(u) => updateItem(item.id, { unit: u })}
+                                    compact
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Location</label>
+                                <select
+                                    value={item.location || 'Pantry'}
+                                    onChange={(e) => handleLocationChange(e.target.value, item.id)}
+                                    className="select-field w-full text-sm"
+                                >
+                                    {allLocations.map(l => <option key={l} value={l}>{l}</option>)}
+                                    <option value="__new__">+ New Location</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        {/* Notes */}
                         <div>
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Unit</label>
-                            <UnitPicker
-                                value={item.unit || 'each'}
-                                onChange={(u) => updateItem(item.id, { unit: u })}
-                                compact
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Notes</label>
+                            <textarea
+                                value={item.notes || ''}
+                                onChange={(e) => updateItem(item.id, { notes: e.target.value })}
+                                placeholder="Add notes (e.g., brand, special info)..."
+                                className="w-full input-field text-sm resize-none"
+                                rows={2}
                             />
                         </div>
-                        <div>
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Location</label>
-                            <select
-                                value={item.location || 'Pantry'}
-                                onChange={(e) => handleLocationChange(e.target.value, item.id)}
-                                className="select-field w-full text-sm"
+
+                        {/* Expiration Date */}
+                        <div className="flex items-center gap-2">
+                            <div className="flex-1">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Expiration Date</label>
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="date"
+                                        value={formatDateForInput(item.expiresAt)}
+                                        onChange={(e) => updateItem(item.id, { expiresAt: e.target.value || null })}
+                                        className={`flex-1 input-field text-sm ${expirationStatus === 'expired'
+                                            ? 'border-red-500 text-red-600'
+                                            : expirationStatus === 'soon'
+                                                ? 'border-amber-500 text-amber-600'
+                                                : ''
+                                            }`}
+                                    />
+                                    {item.expiresAt && (
+                                        <button
+                                            onClick={() => updateItem(item.id, { expiresAt: null })}
+                                            className="text-slate-400 hover:text-slate-600"
+                                        >
+                                            <X className="w-4 h-4" />
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Staple Toggle & Actions */}
+                        <div className="bg-slate-50 p-3 rounded-xl flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        updateItem(item.id, { isStaple: !item.isStaple });
+                                    }}
+                                    className={`w-11 h-6 rounded-full transition-colors relative flex-shrink-0 ${item.isStaple ? 'bg-amber-500' : 'bg-slate-300'}`}
+                                >
+                                    <div className={`w-4 h-4 bg-white rounded-full shadow absolute top-1 transition-all ${item.isStaple ? 'left-6' : 'left-1'}`} />
+                                </button>
+                                <div>
+                                    <span className="text-sm font-bold text-slate-700 block">Staple Item</span>
+                                    <span className="text-[10px] text-slate-400 block">Track and auto-add to shopping list</span>
+                                </div>
+                            </div>
+
+                            {item.isStaple && (
+                                <div className="flex items-center gap-2 animate-fade-in ml-2">
+                                    <span className="text-xs font-bold text-slate-500">Min:</span>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        step="0.1"
+                                        value={item.minStockLevel ?? ''}
+                                        onFocus={() => {
+                                            if (item.minStockLevel) prevMinStock.current = item.minStockLevel;
+                                        }}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            updateItem(item.id, { minStockLevel: val === '' ? '' : parseFloat(val) });
+                                        }}
+                                        onBlur={(e) => {
+                                            if (e.target.value === '') {
+                                                updateItem(item.id, { minStockLevel: prevMinStock.current || 1 });
+                                            }
+                                        }}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="w-14 text-center input-field text-sm font-bold border-2 border-emerald-400 py-1 px-1 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
+                                    />
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Actions Row */}
+                        <div className="flex items-center gap-3 pt-2">
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    const newItem = {
+                                        id: Date.now().toString(),
+                                        name: item.name,
+                                        quantity: 1,
+                                        checked: false,
+                                        category: 'Unsorted'
+                                    };
+                                    setShoppingList?.(prev => [...prev, newItem]);
+                                    setToastData?.({ message: `Added "${item.name}" to shopping list 🛒`, duration: 2000 });
+                                }}
+                                className="flex-1 py-2 btn-secondary bg-indigo-50 text-indigo-600 hover:bg-indigo-100 flex items-center justify-center gap-2 rounded-xl text-sm font-bold transition-colors"
                             >
-                                {allLocations.map(l => <option key={l} value={l}>{l}</option>)}
-                                <option value="__new__">+ New Location</option>
-                            </select>
+                                <ShoppingCart className="w-4 h-4" /> Add to List
+                            </button>
+
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    deleteItem(item.id);
+                                }}
+                                className="py-2 px-4 text-red-500 bg-red-50 hover:bg-red-100 flex items-center justify-center rounded-xl transition-colors font-bold text-xs"
+                            >
+                                <Trash2 className="w-4 h-4" />
+                            </button>
                         </div>
                     </div>
-
-                    {/* Notes */}
-                    <div>
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Notes</label>
-                        <textarea
-                            value={item.notes || ''}
-                            onChange={(e) => updateItem(item.id, { notes: e.target.value })}
-                            placeholder="Add notes (e.g., brand, special info)..."
-                            className="w-full input-field text-sm resize-none"
-                            rows={2}
-                        />
-                    </div>
-
-                    {/* Expiration Date */}
-                    <div className="flex items-center gap-2">
-                        <div className="flex-1">
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Expiration Date</label>
-                            <div className="flex items-center gap-2">
-                                <input
-                                    type="date"
-                                    value={item.expiresAt || ''}
-                                    onChange={(e) => updateItem(item.id, { expiresAt: e.target.value || null })}
-                                    className={`flex-1 input-field text-sm ${expirationStatus === 'expired'
-                                        ? 'border-red-500 text-red-600'
-                                        : expirationStatus === 'soon'
-                                            ? 'border-amber-500 text-amber-600'
-                                            : ''
-                                        }`}
-                                />
-                                {item.expiresAt && (
-                                    <button
-                                        onClick={() => updateItem(item.id, { expiresAt: null })}
-                                        className="text-slate-400 hover:text-slate-600"
-                                    >
-                                        <X className="w-4 h-4" />
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Staple Item Toggle */}
-                    <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl">
-                        <button
-                            onClick={() => updateItem(item.id, { isStaple: !item.isStaple })}
-                            className={`w-10 h-5 rounded-full transition-colors relative ${item.isStaple ? 'bg-amber-500' : 'bg-slate-300'}`}
-                        >
-                            <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${item.isStaple ? 'translate-x-5' : 'translate-x-0.5'}`} />
-                        </button>
-                        <div>
-                            <span className="text-sm font-bold text-slate-700">Staple Item</span>
-                            <p className="text-[10px] text-slate-400">Track and auto-add to shopping list</p>
-                        </div>
-                        {item.isStaple && (
-                            <div className="flex items-center gap-1 ml-auto">
-                                <span className="text-[10px] font-bold text-slate-500">Min:</span>
-                                <input
-                                    type="number"
-                                    min="0.1"
-                                    step="0.1"
-                                    value={item.minStockLevel || 1}
-                                    onChange={e => updateItem(item.id, { minStockLevel: e.target.value === '' ? 0 : parseFloat(e.target.value) })}
-                                    className="w-14 input-field text-center text-sm py-1"
-                                />
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Delete Button */}
-                    <button
-                        onClick={() => deleteItem(item.id)}
-                        className="w-full py-2.5 text-red-500 text-sm font-bold flex items-center justify-center gap-2 hover:bg-red-50 rounded-xl transition-colors mt-2"
-                    >
-                        <Trash2 className="w-4 h-4" /> Delete Item
-                    </button>
-                </div>
-            )
-            }
-        </div >
+                )}
+            </div>
+        </div>
     );
 };
 
@@ -2341,7 +2451,7 @@ const InventoryItem = ({
 // INVENTORY VIEW (Enhanced with editable fields)
 // ============================================================================
 
-const InventoryView = ({ apiKey, model, inventory, setInventory, knownLocations, setKnownLocations, processedFiles, setProcessedFiles, allocatedIngredients, expandedItemId, setExpandedItemId, getAvailableQuantity, getItemReservations }) => {
+const InventoryView = ({ apiKey, model, inventory, setInventory, knownLocations, setKnownLocations, processedFiles, setProcessedFiles, allocatedIngredients, expandedItemId, setExpandedItemId, getAvailableQuantity, getItemReservations, shoppingList, setShoppingList, setToastData }) => {
     // Persisted form state (survives refresh)
     const [newItem, setNewItem] = useLocalStorage('mpm_inv_new_item', '');
     const [newQty, setNewQty] = useLocalStorage('mpm_inv_new_qty', 1);
@@ -2449,6 +2559,48 @@ const InventoryView = ({ apiKey, model, inventory, setInventory, knownLocations,
         setShowNewLocationModal(false);
     };
 
+    const checkAndRefillStaple = (item) => {
+        if (!item?.isStaple) return;
+
+        const currentQty = (item.quantity === '' || isNaN(item.quantity)) ? 0 : parseFloat(item.quantity);
+        const minQty = (item.minStockLevel === undefined || item.minStockLevel === null) ? 1 : parseFloat(item.minStockLevel);
+
+        if (currentQty <= minQty) {
+            // Check if already in shopping list (unchecked)
+            const alreadyInList = shoppingList.some(li =>
+                li.name.trim().toLowerCase() === item.name.trim().toLowerCase() && !li.checked
+            );
+
+            if (!alreadyInList) {
+                console.log(`[Inventory] 📉 Auto-adding staple "${item.name}" to shopping list coverage (collapse check)`);
+                setShoppingList(prev => [...prev, {
+                    id: Date.now().toString(),
+                    name: item.name,
+                    quantity: 1,
+                    checked: false,
+                    category: 'Staples'
+                }]);
+                setToastData?.({ message: `📉 Low stock: "${item.name}" added to shopping list.`, duration: 3000 });
+            }
+        }
+    };
+
+    const handleToggleItem = (itemId) => {
+        if (expandedItemId === itemId) {
+            // Collapsing: Check logic for the item being closed
+            const closingItem = inventory.find(i => i.id === itemId);
+            if (closingItem) checkAndRefillStaple(closingItem);
+            setExpandedItemId(null);
+        } else {
+            // Expanding new item: Check logic for PREVIOUSLY open item if any
+            if (expandedItemId) {
+                const prevItem = inventory.find(i => i.id === expandedItemId);
+                if (prevItem) checkAndRefillStaple(prevItem);
+            }
+            setExpandedItemId(itemId);
+        }
+    };
+
     const addItem = (e) => {
         e?.preventDefault();
         if (!newItem.trim()) return;
@@ -2488,8 +2640,53 @@ const InventoryView = ({ apiKey, model, inventory, setInventory, knownLocations,
         ));
     };
 
+    // New handler for onBlur / Enter key on quantity inputs
+    const handleQuantityBlur = (item, currentVal) => {
+        const qty = parseFloat(currentVal);
+        if (!isNaN(qty) && qty <= 0) {
+            if (!item.isStaple) {
+                // Auto-delete non-staple items
+                const oldInventory = [...inventory];
+                setInventory(prev => prev.filter(i => i.id !== item.id));
+
+                setToastData?.({
+                    message: `🗑️ Used up "${item.name}". Removed from inventory.`,
+                    duration: 5000,
+                    onUndo: () => {
+                        setInventory(oldInventory);
+                        setToastData?.({ message: `Restored "${item.name}"`, duration: 2000 });
+                    }
+                });
+            } else {
+                // Warn for staple items but don't delete
+                setToastData?.({ message: `⚠️ "${item.name}" is empty but kept because it's a staple.`, duration: 4000 });
+            }
+        }
+    };
+
     const deleteItem = (id) => {
-        setInventory(inventory.filter(item => item.id !== id));
+        // 1. Find the item to be "deleted" (for Undo/Toast purposes)
+        const itemToDelete = inventory.find(i => i.id === id);
+        if (!itemToDelete) {
+            console.warn('[InventoryView] ⚠️ Delete cancelled: Item ID not found.');
+            return;
+        }
+
+        // 2. Snapshot current inventory for Undo
+        const prevInventory = [...inventory];
+
+        // 3. Update state (Optimistic Delete)
+        setInventory(prev => prev.filter(item => item.id !== id));
+
+        // 4. Show Toast with Undo
+        setToastData?.({
+            message: `🗑️ Deleted "${itemToDelete.name}"`,
+            duration: 5000,
+            onUndo: () => {
+                setInventory(prevInventory);
+                setToastData?.({ message: `Restored "${itemToDelete.name}"`, duration: 2000 });
+            }
+        });
     };
 
     const handleImageSelect = async (e) => {
@@ -2585,12 +2782,52 @@ Return JSON: {
                 filename: file.name,
                 isReceipt: result.isReceipt || false,
                 suggestedLocation: result.suggestedLocation || 'Pantry',
-                items: (result.items || []).map(item => ({
-                    ...item,
-                    id: generateId(),
-                    excluded: false,
-                    location: item.suggestedLocation || result.suggestedLocation || 'Pantry'
-                }))
+                items: (result.items || []).map(item => {
+                    // Robust duplicate finding logic
+                    const normalizedItemName = item.name.toLowerCase().trim();
+                    const existingMatch = inventory.find(i =>
+                        i.name.toLowerCase().trim() === normalizedItemName ||
+                        (item.duplicateMatch && i.name.toLowerCase().trim() === item.duplicateMatch.toLowerCase().trim())
+                    );
+
+                    let mergeProps = {
+                        isDuplicate: false,
+                        duplicateMatch: null,
+                        mergeWithDuplicate: false,
+                        conversionValid: false,
+                        convertedQty: null,
+                        existingUnit: null,
+                        useNewName: false
+                    };
+
+                    if (existingMatch) {
+                        mergeProps.isDuplicate = true;
+                        mergeProps.duplicateMatch = existingMatch.name;
+                        mergeProps.existingUnit = existingMatch.unit;
+                        mergeProps.mergeWithDuplicate = true; // Default to merge
+
+                        const converted = convertUnit(item.quantity, item.unit, existingMatch.unit);
+                        if (converted !== null) {
+                            mergeProps.conversionValid = true;
+                            mergeProps.convertedQty = converted;
+                        } else {
+                            // Fallback: incompatible units, but maybe 1:1 if user forces?
+                            // For now, if incompatible, we still default to merge but show warning?
+                            // User "otherwise do 1 to 1 for all non-standard units"
+                            mergeProps.conversionValid = false;
+                            // We'll set convertedQty to original qty as default 1:1 fallback
+                            mergeProps.convertedQty = item.quantity;
+                        }
+                    }
+
+                    return {
+                        ...item,
+                        id: generateId(),
+                        excluded: false,
+                        location: item.suggestedLocation || result.suggestedLocation || 'Pantry',
+                        ...mergeProps
+                    }
+                })
             });
 
             setIsAnalyzing(false);
@@ -2620,16 +2857,66 @@ Return JSON: {
             return;
         }
 
-        const newItems = itemsToAdd.map(item => ({
-            id: generateId(),
-            name: item.name,
-            quantity: item.quantity || 1,
-            unit: item.unit || 'each',
-            location: item.location,
-            notes: item.notes || '',
-            expiresAt: item.expiresAt || null,
-            addedAt: new Date().toISOString()
-        }));
+        const newItems = [];
+        const updatedInventory = [...inventory];
+
+        itemsToAdd.forEach(item => {
+            if (item.isDuplicate && item.mergeWithDuplicate) {
+                // Find existing item to merge with
+                const matchName = item.duplicateMatch || item.name;
+                const existingIndex = updatedInventory.findIndex(i =>
+                    i.name.toLowerCase() === matchName.toLowerCase()
+                );
+
+                if (existingIndex !== -1) {
+                    const existing = updatedInventory[existingIndex];
+                    const qtyToAdd = parseFloat(item.convertedQty) || parseFloat(item.quantity) || 0;
+
+                    const updates = {
+                        quantity: (parseFloat(existing.quantity) || 0) + qtyToAdd,
+                        addedAt: new Date().toISOString()
+                    };
+
+                    // Rename if requested
+                    if (item.useNewName) {
+                        updates.name = item.name;
+                    }
+
+                    updatedInventory[existingIndex] = {
+                        ...existing,
+                        ...updates
+                    };
+                } else {
+                    // Fallback to new item
+                    newItems.push({
+                        id: generateId(),
+                        name: item.name,
+                        quantity: item.quantity || 1,
+                        unit: item.unit || 'each',
+                        location: item.location,
+                        notes: item.notes || '',
+                        expiresAt: item.expiresAt || null,
+                        addedAt: new Date().toISOString(),
+                        isStaple: item.isStaple || false,
+                        alertBelow: item.alertBelow || 1
+                    });
+                }
+            } else {
+                // Create new item
+                newItems.push({
+                    id: generateId(),
+                    name: item.name,
+                    quantity: item.quantity || 1,
+                    unit: item.unit || 'each',
+                    location: item.location,
+                    notes: item.notes || '',
+                    expiresAt: item.expiresAt || null,
+                    addedAt: new Date().toISOString(),
+                    isStaple: item.isStaple || false,
+                    alertBelow: item.alertBelow || 1
+                });
+            }
+        });
 
         // Add any new locations to known locations
         const newLocs = newItems
@@ -2644,7 +2931,7 @@ Return JSON: {
             setProcessedFiles([...processedFiles, stagingData.filename]);
         }
 
-        setInventory([...inventory, ...newItems]);
+        setInventory([...updatedInventory, ...newItems]);
         setStagingData(null);
         setStagingError(null);
 
@@ -2961,6 +3248,7 @@ If you find no additional items, return: { "items": [] }`;
                                         item={item}
                                         expandedItemId={expandedItemId}
                                         setExpandedItemId={setExpandedItemId}
+                                        onToggleExpand={handleToggleItem}
                                         updateItem={updateItem}
                                         deleteItem={deleteItem}
                                         allLocations={allLocations}
@@ -2968,6 +3256,10 @@ If you find no additional items, return: { "items": [] }`;
 
                                         getItemReservations={getItemReservations}
                                         getAvailableQuantity={getAvailableQuantity}
+                                        shoppingList={shoppingList}
+                                        setShoppingList={setShoppingList}
+                                        setToastData={setToastData}
+                                        handleQuantityBlur={handleQuantityBlur}
                                     />
                                 ))}
                             </div>
@@ -2987,6 +3279,7 @@ If you find no additional items, return: { "items": [] }`;
                                 item={item}
                                 expandedItemId={expandedItemId}
                                 setExpandedItemId={setExpandedItemId}
+                                onToggleExpand={handleToggleItem}
                                 updateItem={updateItem}
                                 deleteItem={deleteItem}
                                 allLocations={allLocations}
@@ -2994,6 +3287,10 @@ If you find no additional items, return: { "items": [] }`;
                                 getItemReservations={getItemReservations}
                                 getAvailableQuantity={getAvailableQuantity}
                                 showLocationBadge={true}
+                                shoppingList={shoppingList}
+                                setShoppingList={setShoppingList}
+                                setToastData={setToastData}
+                                handleQuantityBlur={handleQuantityBlur}
                             />
                         ))}
                     </div>
@@ -3003,43 +3300,46 @@ If you find no additional items, return: { "items": [] }`;
             {/* Staging Modal */}
             <Modal isOpen={!!stagingData} onClose={() => setStagingData(null)} size="large">
                 {stagingData && (
-                    <div className="p-0">
-                        {/* Image Preview - Clickable to expand */}
-                        {stagingData.imageUrl && (
-                            <div className="relative">
-                                <img
-                                    src={stagingData.imageUrl}
-                                    alt="Scanned"
-                                    className="staging-image cursor-pointer"
-                                    onClick={() => setShowImageViewer(true)}
-                                />
-                                <div className="absolute bottom-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded-lg">
-                                    Tap to zoom
-                                </div>
-                            </div>
-                        )}
+                    <div className="flex flex-col h-[80vh] -m-6">
+                        {/* Scrollable Content */}
+                        <div className="flex-1 overflow-y-auto p-6 space-y-6">
 
-                        <div className="p-6 space-y-6">
-                            <div className="flex items-center justify-between">
+                            {/* Header */}
+                            <div className="flex items-start justify-between">
                                 <div>
-                                    <h2 className="text-2xl font-bold text-slate-900">Review Scanned Items</h2>
-                                    <p className="text-slate-500 text-sm mt-1">
-                                        {stagingData.isReceipt ? 'Receipt detected - set individual locations' : 'Edit items before adding to inventory'}
+                                    <h2 className="text-xl font-bold text-slate-900">Review Items</h2>
+                                    <p className="text-slate-500 text-xs">
+                                        {stagingData.isReceipt ? 'Receipt mode' : 'Confirm details below'}
                                     </p>
                                 </div>
                                 {stagingData.isReceipt && (
-                                    <span className="bg-amber-100 text-amber-700 text-xs font-bold px-3 py-1 rounded-full">Receipt</span>
+                                    <span className="bg-amber-100 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">Receipt</span>
                                 )}
                             </div>
 
+                            {/* Image Preview - Clickable to expand */}
+                            {stagingData.imageUrl && (
+                                <div className="relative rounded-xl overflow-hidden shadow-sm border border-slate-100 group">
+                                    <img
+                                        src={stagingData.imageUrl}
+                                        alt="Scanned"
+                                        className="w-full h-32 object-cover cursor-pointer transition-transform group-hover:scale-105"
+                                        onClick={() => setShowImageViewer(true)}
+                                    />
+                                    <div className="absolute bottom-2 right-2 bg-black/60 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-lg pointer-events-none">
+                                        Tap to zoom
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Batch Location (non-receipt only) */}
                             {!stagingData.isReceipt && (
-                                <div className="bg-slate-50 p-4 rounded-xl">
-                                    <label className="text-sm font-bold text-slate-600 mb-2 block">Storage Location (applies to all)</label>
+                                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Storage Location (All)</label>
                                     <select
                                         value={stagingData.suggestedLocation}
                                         onChange={(e) => updateBatchLocation(e.target.value)}
-                                        className="select-field w-full"
+                                        className="select-field w-full text-sm py-1.5"
                                     >
                                         {allLocations.map(l => <option key={l} value={l}>{l}</option>)}
                                         <option value="__new__">+ New Location...</option>
@@ -3049,69 +3349,67 @@ If you find no additional items, return: { "items": [] }`;
 
                             {/* Error Message */}
                             {stagingError && (
-                                <div className="bg-red-50 border border-red-200 text-red-600 text-sm p-3 rounded-xl flex items-center gap-2">
+                                <div className="bg-red-50 border border-red-200 text-red-600 text-sm p-3 rounded-xl flex items-center gap-2 animate-pulse">
                                     <AlertCircle className="w-4 h-4 flex-shrink-0" />
                                     {stagingError}
                                 </div>
                             )}
 
-                            {/* Items List Header with Action Buttons */}
-                            <div className="flex items-center justify-between mb-2">
-                                <span className="text-sm font-bold text-slate-600">Items to Review</span>
+                            {/* Items List Header */}
+                            <div className="flex items-center justify-between sticky top-0 bg-white z-10 py-2 border-b border-slate-100">
+                                <span className="text-sm font-bold text-slate-700">Items ({stagingData.items.filter(i => !i.excluded).length})</span>
                                 <div className="flex gap-2">
-                                    <button onClick={addManualStagingItem} className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-lg hover:bg-slate-200 flex items-center gap-1">
+                                    <button onClick={addManualStagingItem} className="text-xs font-bold text-slate-600 bg-slate-100 px-2 py-1.5 rounded-lg hover:bg-slate-200 flex items-center gap-1 transition-colors">
                                         <Plus className="w-3 h-3" /> Add
                                     </button>
                                     {stagingData.imageUrl && (
                                         <button
                                             onClick={rescanWithContext}
                                             disabled={isAnalyzing}
-                                            className="text-xs font-bold text-indigo-500 bg-indigo-50 px-2 py-1 rounded-lg hover:bg-indigo-100 flex items-center gap-1 disabled:opacity-50"
+                                            className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1.5 rounded-lg hover:bg-indigo-100 flex items-center gap-1 disabled:opacity-50 transition-colors"
                                         >
-                                            {isAnalyzing ? (
-                                                <Loader2 className="w-3 h-3 animate-spin" />
-                                            ) : (
-                                                <Sparkles className="w-3 h-3" />
-                                            )}
-                                            {isAnalyzing ? 'Scanning...' : 'Find More'}
+                                            {isAnalyzing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                                            {isAnalyzing ? 'Scanning...' : 'Scan More'}
                                         </button>
                                     )}
                                 </div>
                             </div>
 
                             {/* Items List */}
-                            <div ref={stagingListRef} className="space-y-3 max-h-[40vh] overflow-y-auto">
+                            <div ref={stagingListRef} className="space-y-3 pb-4">
                                 {stagingData.items.map((item) => (
-                                    <div key={item.id} className={`bg-white border rounded-xl p-3 ${item.excluded ? 'opacity-50' : ''} ${item.confidence === 'low' ? 'confidence-low' :
-                                        item.confidence === 'medium' ? 'confidence-medium' : 'confidence-high'
-                                        }`}>
-                                        {/* Row 1: Checkbox + Name (full width, wrapping) */}
-                                        <div className="flex items-start gap-2 mb-2">
+                                    <div key={item.id} className={`bg-white border rounded-xl p-3 transition-all ${item.excluded ? 'opacity-50 grayscale bg-slate-50' : 'shadow-sm hover:shadow-md'} ${item.confidence === 'low' ? 'border-red-100 ring-1 ring-red-50' : 'border-slate-200'}`}>
+
+                                        {/* Row 1: Checkbox + Name */}
+                                        <div className="flex items-start gap-3 mb-2">
                                             <input
                                                 type="checkbox"
                                                 checked={!item.excluded}
                                                 onChange={(e) => updateStagingItem(item.id, { excluded: !e.target.checked })}
-                                                className="w-5 h-5 mt-1 flex-shrink-0 rounded border-slate-300 text-emerald-500 focus:ring-emerald-500"
+                                                className="w-5 h-5 mt-1 rounded border-slate-300 text-emerald-500 focus:ring-emerald-500 cursor-pointer"
                                             />
-                                            <input
-                                                type="text"
-                                                value={item.name}
-                                                onChange={(e) => { updateStagingItem(item.id, { name: e.target.value }); setStagingError(null); }}
-                                                className={`flex-1 min-w-0 inventory-item-field font-medium text-sm ${!item.name && stagingError ? 'border-red-500 border rounded' : ''}`}
-                                                disabled={item.excluded}
-                                                placeholder="New item..."
-                                            />
+                                            <div className="flex-1 min-w-0">
+                                                <input
+                                                    type="text"
+                                                    value={item.name}
+                                                    onChange={(e) => { updateStagingItem(item.id, { name: e.target.value }); setStagingError(null); }}
+                                                    className={`w-full font-bold text-slate-800 bg-transparent border-none p-0 focus:ring-0 placeholder:text-slate-400 ${!item.name && stagingError ? 'border-b border-red-500' : ''}`}
+                                                    disabled={item.excluded}
+                                                    placeholder="Item Name"
+                                                />
+                                                {item.confidence === 'low' && <span className="text-[10px] text-red-500 font-medium block">Low confidence check name</span>}
+                                            </div>
                                         </div>
 
-                                        {/* Row 2: Qty, Unit, Location - fixed widths */}
-                                        <div className="flex gap-2 ml-7">
+                                        {/* Row 2: Qty, Unit, Location */}
+                                        <div className="grid grid-cols-[auto_auto_1fr] gap-2 ml-8 mb-2">
                                             <input
                                                 type="number"
                                                 min="0.01"
                                                 step="0.01"
                                                 value={item.quantity}
                                                 onChange={(e) => updateStagingItem(item.id, { quantity: e.target.value === '' ? '' : parseFloat(e.target.value) })}
-                                                className="w-14 flex-shrink-0 text-center bg-slate-50 rounded-lg py-1.5 border focus:border-emerald-500 text-sm"
+                                                className="w-16 text-center bg-slate-50 font-bold rounded-lg py-1.5 border border-slate-200 focus:border-emerald-500 text-sm"
                                                 disabled={item.excluded}
                                             />
                                             <UnitPickerButton
@@ -3129,7 +3427,7 @@ If you find no additional items, return: { "items": [] }`;
                                                             updateStagingItem(item.id, { location: e.target.value });
                                                         }
                                                     }}
-                                                    className="flex-1 min-w-0 select-field text-sm py-1.5"
+                                                    className="select-field text-xs py-1.5"
                                                     disabled={item.excluded}
                                                 >
                                                     {allLocations.map(l => <option key={l} value={l}>{l}</option>)}
@@ -3138,113 +3436,146 @@ If you find no additional items, return: { "items": [] }`;
                                             )}
                                         </div>
 
-                                        {/* Row 3: Expiration Date */}
-                                        <div className="flex items-center gap-2 ml-7 mt-2">
-                                            <label className="text-xs text-slate-500 whitespace-nowrap">Expires:</label>
+                                        {/* Row 3: Expiration + Staple (Compact Grid) */}
+                                        <div className="ml-8 grid grid-cols-2 gap-2 items-center">
                                             <input
                                                 type="date"
                                                 value={item.expiresAt || ''}
                                                 onChange={(e) => updateStagingItem(item.id, { expiresAt: e.target.value || null })}
-                                                className="flex-1 min-w-0 input-field text-xs py-1.5"
+                                                className="input-field text-xs py-1.5 w-full"
                                                 disabled={item.excluded}
-                                                placeholder="Select date"
                                             />
-                                        </div>
 
-                                        {/* Row 4: Staple Item Toggle */}
-                                        <div className="flex items-center justify-between ml-7 mt-2 bg-slate-50 p-2 rounded-lg">
-                                            <span className="text-xs text-slate-600">Staple Item</span>
-                                            <div className="flex items-center gap-2">
-                                                {item.isStaple && (
-                                                    <div className="flex items-center gap-1">
-                                                        <span className="text-xs text-slate-400">Alert below:</span>
-                                                        <input
-                                                            type="number"
-                                                            min="1"
-                                                            value={item.alertBelow || 1}
-                                                            onChange={(e) => updateStagingItem(item.id, { alertBelow: parseInt(e.target.value) || 1 })}
-                                                            className="w-12 text-center text-xs input-field py-0.5"
-                                                            disabled={item.excluded}
-                                                        />
-                                                    </div>
-                                                )}
+                                            {/* Staple Toggle Compact */}
+                                            <div className="flex items-center justify-end gap-2">
+                                                <span className="text-[10px] uppercase font-bold text-slate-400">Staple</span>
                                                 <button
                                                     type="button"
-                                                    onClick={() => updateStagingItem(item.id, { isStaple: !item.isStaple, alertBelow: item.alertBelow || 1 })}
+                                                    onClick={() => updateStagingItem(item.id, { isStaple: !item.isStaple })}
                                                     disabled={item.excluded}
-                                                    className={`w-10 h-5 rounded-full transition-colors ${item.isStaple ? 'bg-emerald-500' : 'bg-slate-300'} ${item.excluded ? 'opacity-50' : ''}`}
+                                                    className={`w-8 h-4 rounded-full transition-colors relative ${item.isStaple ? 'bg-emerald-500' : 'bg-slate-300'}`}
                                                 >
-                                                    <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform ${item.isStaple ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                                                    <div className={`w-3 h-3 bg-white rounded-full shadow absolute top-0.5 transition-all ${item.isStaple ? 'left-4.5' : 'left-0.5'}`} style={{ left: item.isStaple ? '18px' : '2px' }} />
                                                 </button>
                                             </div>
                                         </div>
 
-                                        {/* Duplicate Warning */}
-                                        {item.isDuplicate && (
-                                            <div className="mt-2 text-xs text-amber-600 flex items-center gap-1 ml-7">
-                                                <AlertTriangle className="w-3 h-3" />
-                                                Already in inventory{item.duplicateMatch ? `: ${item.duplicateMatch}` : ''}
+                                        {/* Min Stock Level (if Staple) */}
+                                        {item.isStaple && !item.excluded && (
+                                            <div className="ml-8 mt-2 pt-2 border-t border-slate-100 flex items-center justify-between animate-fade-in">
+                                                <span className="text-xs font-semibold text-slate-600">Restock at qty:</span>
+                                                <div className="flex items-center gap-1">
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        step="0.1"
+                                                        value={item.alertBelow || item.minStockLevel || 1}
+                                                        onChange={(e) => updateStagingItem(item.id, { minStockLevel: parseFloat(e.target.value) || 0, alertBelow: parseFloat(e.target.value) || 0 })}
+                                                        className="w-14 text-center input-field text-xs py-1"
+                                                        disabled={item.excluded}
+                                                    />
+                                                    <span className="text-[10px] text-slate-400">{item.unit || 'each'}</span>
+                                                </div>
                                             </div>
                                         )}
 
-                                        {/* Confidence Indicator */}
-                                        {item.confidence === 'low' && (
-                                            <div className="mt-2 text-xs text-red-600 ml-7">
-                                                Low confidence - please verify
+                                        {/* Duplicate & Merge Logic */}
+                                        {item.isDuplicate && (
+                                            <div className="mt-3 ml-8 bg-amber-50 rounded-lg p-2.5 border border-amber-100">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <div className="flex items-center gap-1 text-amber-800 font-bold text-xs">
+                                                        <AlertTriangle className="w-3 h-3" />
+                                                        <span>Duplicate Found</span>
+                                                    </div>
+                                                    <div className="flex gap-2">
+                                                        <button
+                                                            onClick={() => updateStagingItem(item.id, { mergeWithDuplicate: false })}
+                                                            className={`px-2 py-0.5 text-[10px] font-bold rounded border ${!item.mergeWithDuplicate ? 'bg-white border-amber-300 text-amber-900 shadow-sm' : 'border-transparent text-amber-600 hover:bg-amber-100'}`}
+                                                        >
+                                                            New Item
+                                                        </button>
+                                                        <button
+                                                            onClick={() => updateStagingItem(item.id, { mergeWithDuplicate: true })}
+                                                            className={`px-2 py-0.5 text-[10px] font-bold rounded border ${item.mergeWithDuplicate ? 'bg-white border-amber-300 text-amber-900 shadow-sm' : 'border-transparent text-amber-600 hover:bg-amber-100'}`}
+                                                        >
+                                                            Merge
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                {item.mergeWithDuplicate && (
+                                                    <div className="space-y-2 text-xs">
+                                                        {/* Unit Conversion */}
+                                                        <div className="text-slate-600 bg-white/60 p-1.5 rounded">
+                                                            {item.conversionValid ? (
+                                                                <>Adding <strong className="text-emerald-700">+{item.convertedQty} {item.existingUnit}</strong> to existing.</>
+                                                            ) : (
+                                                                <span className="text-amber-700 flex items-start gap-1">
+                                                                    <HelpCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                                                                    Diff units ({item.unit} vs {item.existingUnit}). Adding 1:1.
+                                                                </span>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Name Conflict */}
+                                                        {item.name.trim().toLowerCase() !== item.duplicateMatch.trim().toLowerCase() && (
+                                                            <div className="flex items-center justify-between bg-white/60 p-1.5 rounded">
+                                                                <span className="font-semibold text-slate-500 text-[10px]">Name?</span>
+                                                                <div className="flex gap-1 text-[10px]">
+                                                                    <button
+                                                                        onClick={() => updateStagingItem(item.id, { useNewName: false })}
+                                                                        className={`px-1.5 py-0.5 rounded ${!item.useNewName ? 'bg-amber-100 text-amber-900 font-bold' : 'text-slate-500'}`}
+                                                                    >
+                                                                        Keep Existing
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => updateStagingItem(item.id, { useNewName: true })}
+                                                                        className={`px-1.5 py-0.5 rounded ${item.useNewName ? 'bg-amber-100 text-amber-900 font-bold' : 'text-slate-500'}`}
+                                                                    >
+                                                                        Use New
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
                                     </div>
                                 ))}
                             </div>
+                        </div>
 
-                            {/* Confirm */}
-                            <button onClick={confirmStaging} className="w-full btn-primary">
-                                Add {stagingData.items.filter(i => !i.excluded).length} Items to Inventory
-                                {pendingFiles.length > 0 && (
-                                    <span className="ml-2 opacity-75">({pendingFiles.length} more photo{pendingFiles.length > 1 ? 's' : ''} to review)</span>
-                                )}
+                        {/* Sticky Footer */}
+                        <div className="p-4 bg-white border-t border-slate-100 sticky bottom-0 z-20 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] rounded-b-2xl">
+                            <button
+                                onClick={confirmStaging}
+                                className="w-full btn-primary py-3 rounded-xl flex items-center justify-center gap-2 text-base shadow-lg shadow-indigo-200"
+                            >
+                                <span className="flex items-center justify-center w-6 h-6 bg-white/20 rounded-full text-xs font-bold">
+                                    {stagingData.items.filter(i => !i.excluded).length}
+                                </span>
+                                Add to Inventory
+                                <ArrowRight className="w-4 h-4 ml-1" />
                             </button>
+                            {pendingFiles.length > 0 && (
+                                <p className="text-center text-xs text-slate-400 mt-2 font-medium">
+                                    {pendingFiles.length} more photo{pendingFiles.length > 1 ? 's' : ''} in queue
+                                </p>
+                            )}
                         </div>
                     </div>
                 )}
             </Modal>
 
             {/* Image Viewer Modal - Enhanced Zoom */}
-            {
-                showImageViewer && stagingData?.imageUrl && (
-                    <div
-                        className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center p-4"
-                        onClick={() => setShowImageViewer(false)}
-                    >
-                        <button
-                            className="absolute top-4 right-4 z-10 bg-white/20 text-white p-3 rounded-full hover:bg-white/30 transition-colors"
-                            onClick={() => setShowImageViewer(false)}
-                        >
-                            <X className="w-6 h-6" />
-                        </button>
-                        <div
-                            className="w-full h-full flex items-center justify-center overflow-auto"
-                            style={{ touchAction: 'manipulation' }}
-                            onClick={(e) => e.stopPropagation()}
-                        >
-                            <img
-                                src={stagingData.imageUrl}
-                                alt="Full size - pinch to zoom"
-                                className="max-w-none cursor-zoom-in"
-                                style={{
-                                    maxHeight: '90vh',
-                                    width: 'auto',
-                                    height: 'auto',
-                                    touchAction: 'pinch-zoom pan-x pan-y'
-                                }}
-                            />
-                        </div>
-                        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-black/70 text-white text-sm px-4 py-2 rounded-full backdrop-blur-sm">
-                            📱 Pinch to zoom • Tap X to close
-                        </div>
-                    </div>
-                )
-            }
+            {/* Image Viewer w/ Back Gesture */}
+            {showImageViewer && stagingData?.imageUrl && (
+                <ImageViewer
+                    src={stagingData.imageUrl}
+                    onClose={() => setShowImageViewer(false)}
+                />
+            )}
 
             {/* Duplicate File Warning */}
             <ConfirmDialog
@@ -5199,7 +5530,7 @@ const CalendarView = ({ apiKey, model, mealPlan, setMealPlan, inventory, setInve
 
     // Scroll-based infinite loading
     const lastLoadTimeRef = useRef(0);
-    const hasInitializedRef = useRef(false);
+    const hasInitializedRef = useRef(false); // Track initialization
 
     useEffect(() => {
         const container = scrollContainerRef.current;
@@ -10296,7 +10627,7 @@ Rules:
             {/* Main Content */}
             <div className="flex-1 overflow-y-auto scrollbar-hide w-full relative bg-white">
                 {view === 'dashboard' && <Dashboard />}
-                {view === 'inventory' && <InventoryView apiKey={apiKey} model={selectedModel} inventory={inventory} setInventory={setInventory} knownLocations={knownLocations} setKnownLocations={setKnownLocations} processedFiles={processedFiles} setProcessedFiles={setProcessedFiles} allocatedIngredients={allocatedIngredients} expandedItemId={expandedInventoryItemId} setExpandedItemId={setExpandedInventoryItemId} getAvailableQuantity={getAvailableQuantity} getItemReservations={getItemReservations} />}
+                {view === 'inventory' && <InventoryView apiKey={apiKey} model={selectedModel} inventory={inventory} setInventory={setInventory} knownLocations={knownLocations} setKnownLocations={setKnownLocations} processedFiles={processedFiles} setProcessedFiles={setProcessedFiles} allocatedIngredients={allocatedIngredients} expandedItemId={expandedInventoryItemId} setExpandedItemId={setExpandedInventoryItemId} getAvailableQuantity={getAvailableQuantity} getItemReservations={getItemReservations} shoppingList={shoppingList} setShoppingList={setShoppingList} setToastData={setToastData} />}
                 {view === 'family' && <FamilyView familyMembers={family} setFamilyMembers={setFamily} />}
                 {view === 'recipes' && (
                     <RecipeEngine
@@ -11200,6 +11531,36 @@ Rules:
                     />
                 )
             }
+        </div>
+    );
+}
+
+/* -------------------------------------------------------------------------- */
+/*                               Sub-Components                               */
+/* -------------------------------------------------------------------------- */
+
+function ImageViewer({ src, onClose }) {
+    useBackGesture(onClose);
+
+    if (!src) return null;
+
+    return (
+        <div
+            className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center p-4 animate-fade-in"
+            onClick={onClose}
+        >
+            <button
+                className="absolute top-4 right-4 z-10 bg-white/20 text-white p-3 rounded-full hover:bg-white/30 transition-colors backdrop-blur-sm"
+                onClick={onClose}
+            >
+                <X className="w-6 h-6" />
+            </button>
+            <img
+                src={src}
+                alt="Full Scan"
+                className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+            />
         </div>
     );
 }
