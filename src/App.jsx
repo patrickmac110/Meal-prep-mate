@@ -9549,9 +9549,9 @@ function MealPrepMate() {
     useBackGesture(showTutorialSetup, () => setShowTutorialSetup(false));
 
     // Navigate back to dashboard when on any other screen (only if no modals are open)
+    // Note: stagingData/showImageViewer are handled in InventoryPanel's own back gestures
     const noModalsOpen = !showSettings && !addItemModal && !showMealWizard && !chatOpen &&
-        !ingredientMatchData && !showScheduleModal && !selectedRecipe && !showTutorialSetup &&
-        !stagingData && !showImageViewer;
+        !ingredientMatchData && !showScheduleModal && !selectedRecipe && !showTutorialSetup;
     useBackGesture(view !== 'dashboard' && noModalsOpen, () => setView('dashboard'));
 
     // Inject dummy data when tutorial starts
