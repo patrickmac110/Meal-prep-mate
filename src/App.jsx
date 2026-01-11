@@ -2491,9 +2491,9 @@ const InventoryView = ({ apiKey, model, inventory, setInventory, knownLocations,
     const stagingListRef = useRef(null);
 
     // Intercept back gesture for modals
-    // IMPORTANT: showImageViewer must be first so it closes before stagingData checks
+    // Handler stack ensures only topmost fires - staging registers first, image viewer on top when open
+    useBackGesture(!!stagingData, () => setStagingData(null));
     useBackGesture(showImageViewer, () => setShowImageViewer(false));
-    useBackGesture(!!stagingData && !showImageViewer, () => setStagingData(null));
     useBackGesture(showNewLocationModal, () => setShowNewLocationModal(false));
 
     // Normalize location names (case-insensitive)
