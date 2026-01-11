@@ -8,7 +8,7 @@ import {
     MessageCircle, Download, Upload, Leaf, Copy, Share, Calendar, CalendarDays,
     AlertTriangle, MapPin, Package, ChevronDown, ChevronRight, ChevronLeft,
     Flame, Beef, Wheat, Droplet, GripVertical, MoreHorizontal, List, Grid3x3, ClipboardList, HelpCircle,
-    ArrowRight, Search, BookOpen, Snowflake, Zap, Pencil
+    ArrowRight, Search, BookOpen, Snowflake, Zap, Pencil, Eye
 } from 'lucide-react';
 import { convertUnit } from './unitConversion';
 
@@ -824,11 +824,11 @@ const Modal = ({ isOpen, onClose, children, size = 'default' }) => {
         <div className="modal-overlay" onClick={onClose}>
             <div className={`modal-content ${sizeClasses}`} onClick={e => e.stopPropagation()}>
                 <div className="flex justify-end p-4 absolute right-0 top-0 z-10">
-                    <button onClick={onClose} className="p-2 bg-white/80 hover:bg-white rounded-full shadow-sm backdrop-blur-md transition-all">
-                        <X className="w-5 h-5 text-slate-700" />
+                    <button onClick={onClose} className="p-2 bg-white/80 dark:bg-slate-800/80 hover:bg-white dark:hover:bg-slate-800 rounded-full shadow-sm backdrop-blur-md transition-all">
+                        <X className="w-5 h-5 text-slate-700 dark:text-slate-200" />
                     </button>
                 </div>
-                <div id="modal-scroll-container" className="overflow-y-auto flex-1 bg-slate-50">{children}</div>
+                <div id="modal-scroll-container" className="overflow-y-auto flex-1 bg-slate-50 dark:bg-slate-900">{children}</div>
             </div>
         </div>
     );
@@ -838,14 +838,14 @@ const ConfirmDialog = ({ isOpen, onClose, onConfirm, title, message, confirmText
     if (!isOpen) return null;
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
-            <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl space-y-4">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl space-y-4 border border-slate-100 dark:border-slate-700">
                 <div className="flex items-start gap-3">
-                    <div className={`p-2 rounded-full ${danger ? 'bg-red-100' : 'bg-amber-100'}`}>
-                        <AlertTriangle className={`w-5 h-5 ${danger ? 'text-red-600' : 'text-amber-600'}`} />
+                    <div className={`p-2 rounded-full ${danger ? 'bg-red-100 dark:bg-red-900/30' : 'bg-amber-100 dark:bg-amber-900/30'}`}>
+                        <AlertTriangle className={`w-5 h-5 ${danger ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}`} />
                     </div>
                     <div>
-                        <h3 className="font-bold text-lg text-slate-900">{title}</h3>
-                        <p className="text-slate-600 text-sm mt-1">{message}</p>
+                        <h3 className="font-bold text-lg text-slate-900 dark:text-white">{title}</h3>
+                        <p className="text-slate-600 dark:text-slate-300 text-sm mt-1">{message}</p>
                     </div>
                 </div>
                 <div className="flex gap-3">
@@ -979,8 +979,8 @@ const IngredientMatchModal = ({
                 <div className="flex flex-col h-[90vh] sm:h-[80vh]">
                     {/* Header - Fixed */}
                     <div className="p-4 pb-2 flex-shrink-0">
-                        <h2 className="text-xl font-bold text-slate-800">{title}</h2>
-                        <p className="text-slate-500 text-sm mt-1">{subtitle}</p>
+                        <h2 className="text-xl font-bold text-slate-800 dark:text-white">{title}</h2>
+                        <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">{subtitle}</p>
                     </div>
 
                     {/* Scrollable Content */}
@@ -989,8 +989,8 @@ const IngredientMatchModal = ({
                             // Determine style based on confidence
                             const isLowConf = match.confidence === 'low';
                             const isMedConf = match.confidence === 'medium';
-                            const borderColor = isLowConf ? 'border-red-300' : isMedConf ? 'border-amber-200' : 'border-slate-200';
-                            const bgColor = isLowConf ? 'bg-red-50/50' : 'bg-white';
+                            const borderColor = isLowConf ? 'border-red-300 dark:border-red-900/50' : isMedConf ? 'border-amber-200 dark:border-amber-900/50' : 'border-slate-200 dark:border-slate-700';
+                            const bgColor = isLowConf ? 'bg-red-50/50 dark:bg-red-900/10' : 'bg-white dark:bg-slate-900/50';
 
                             return (
                                 <div
@@ -1003,10 +1003,10 @@ const IngredientMatchModal = ({
                                         className="w-full flex items-center justify-between group mb-3"
                                     >
                                         <div className="flex items-center gap-2">
-                                            <span className="font-bold text-slate-800 text-lg text-left leading-tight">
+                                            <span className="font-bold text-slate-800 dark:text-white text-lg text-left leading-tight">
                                                 {match.inventoryItemName || 'Select Item...'}
                                             </span>
-                                            <ChevronDown className="w-4 h-4 text-slate-400 group-hover:text-slate-600" />
+                                            <ChevronDown className="w-4 h-4 text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300" />
                                         </div>
                                         {/* Confidence Indicator (Dot) */}
                                         <div className={`w-3 h-3 rounded-full flex-shrink-0 ${match.confidence === 'high' ? 'bg-emerald-500' :
@@ -1017,23 +1017,23 @@ const IngredientMatchModal = ({
 
                                     {/* Low Confidence Warning */}
                                     {isLowConf && (
-                                        <div className="mb-3 text-xs text-red-600 bg-red-100 px-2 py-1 rounded flex items-center gap-1.5 font-medium">
+                                        <div className="mb-3 text-xs text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/30 px-2 py-1 rounded flex items-center gap-1.5 font-medium">
                                             <AlertCircle className="w-3 h-3" />
                                             Uncertain match - please verify
                                         </div>
                                     )}
 
                                     {/* Middle: Recipe Requirement */}
-                                    <div className="text-xs text-slate-500 mb-4 bg-slate-50 p-2 rounded-lg border border-slate-100">
-                                        Recipe calls for: <span className="font-medium text-slate-700 block mt-0.5 text-sm">{match.recipeIngredient}</span>
+                                    <div className="text-xs text-slate-500 dark:text-slate-400 mb-4 bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg border border-slate-100 dark:border-slate-700">
+                                        Recipe calls for: <span className="font-medium text-slate-700 dark:text-slate-300 block mt-0.5 text-sm">{match.recipeIngredient}</span>
                                     </div>
 
                                     {/* Bottom: Use/Reserve Logic */}
                                     <div className="flex items-end justify-between gap-4">
                                         <div className="flex-1">
-                                            <div className="text-xs text-slate-500 mb-1">Have in Pantry</div>
-                                            <div className="font-medium text-slate-700 bg-slate-100 px-3 py-2 rounded-lg text-sm">
-                                                {match.currentQuantity} <span className="text-slate-500 text-xs">{match.currentUnit}</span>
+                                            <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Have in Pantry</div>
+                                            <div className="font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-3 py-2 rounded-lg text-sm">
+                                                {match.currentQuantity} <span className="text-slate-500 dark:text-slate-500 text-xs">{match.currentUnit}</span>
                                             </div>
                                         </div>
 
@@ -1042,7 +1042,7 @@ const IngredientMatchModal = ({
                                         </div>
 
                                         <div className="flex-1">
-                                            <div className="text-xs font-bold text-indigo-600 mb-1">{isAllocate ? 'Reserve' : 'Use'}</div>
+                                            <div className="text-xs font-bold text-indigo-600 dark:text-indigo-400 mb-1">{isAllocate ? 'Reserve' : 'Use'}</div>
                                             <div className="relative">
                                                 <input
                                                     type="number"
@@ -1050,7 +1050,7 @@ const IngredientMatchModal = ({
                                                     step="0.1"
                                                     value={match.amount}
                                                     onChange={(e) => handleAmountChange(idx, e.target.value)}
-                                                    className="w-full text-center border-2 border-indigo-100 rounded-lg py-1.5 font-bold text-indigo-700 focus:border-indigo-500 focus:ring-0 outline-none transition-colors bg-indigo-50/30"
+                                                    className="w-full text-center border-2 border-indigo-100 dark:border-indigo-900/50 rounded-lg py-1.5 font-bold text-indigo-700 dark:text-indigo-300 focus:border-indigo-500 focus:ring-0 outline-none transition-colors bg-indigo-50/30 dark:bg-indigo-900/20"
                                                 />
                                                 <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400 pointer-events-none">
                                                     {match.currentUnit}
@@ -1064,19 +1064,19 @@ const IngredientMatchModal = ({
 
                         {/* Still Missing Items Indicator */}
                         {stillMissing && stillMissing.length > 0 && (
-                            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
+                            <div className="rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-900/10 p-4 shadow-sm">
                                 <div className="flex items-center gap-2 mb-2">
-                                    <AlertCircle className="w-5 h-5 text-amber-600" />
-                                    <span className="font-bold text-amber-800">Still Missing from Pantry</span>
+                                    <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-500" />
+                                    <span className="font-bold text-amber-800 dark:text-amber-300">Still Missing from Pantry</span>
                                 </div>
-                                <p className="text-sm text-amber-700 mb-3">
+                                <p className="text-sm text-amber-700 dark:text-amber-400 mb-3">
                                     These ingredients weren't found in your inventory. They won't be deducted.
                                 </p>
                                 <div className="flex flex-wrap gap-2">
                                     {stillMissing.map((item, idx) => (
                                         <span
                                             key={idx}
-                                            className="px-3 py-1.5 rounded-full bg-amber-100 text-amber-800 text-sm font-medium border border-amber-200"
+                                            className="px-3 py-1.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 text-sm font-medium border border-amber-200 dark:border-amber-800/50"
                                         >
                                             {item}
                                         </span>
@@ -1087,7 +1087,7 @@ const IngredientMatchModal = ({
                     </div>
 
                     {/* Footer - Fixed */}
-                    <div className="p-4 border-t bg-white flex gap-3 flex-shrink-0">
+                    <div className="p-4 border-t dark:border-slate-800 bg-white dark:bg-slate-900 flex gap-3 flex-shrink-0">
                         {skipText && onSkip && (
                             <button onClick={onClose} className="flex-1 btn-secondary text-sm py-3">
                                 {skipText}
@@ -1187,7 +1187,7 @@ const UnitPicker = ({ value, onChange, compact = false }) => {
                         onClick={() => handleSelect(u)}
                         className={`px-2 py-1 rounded-lg text-xs font-bold transition-colors ${value === u
                             ? 'bg-emerald-500 text-white'
-                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                            : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
                             }`}
                     >
                         {u}
@@ -1196,7 +1196,7 @@ const UnitPicker = ({ value, onChange, compact = false }) => {
                 <button
                     type="button"
                     onClick={() => setShowModal(true)}
-                    className="px-2 py-1 rounded-lg text-xs font-bold bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
+                    className="px-2 py-1 rounded-lg text-xs font-bold bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50"
                 >
                     More...
                 </button>
@@ -1205,18 +1205,18 @@ const UnitPicker = ({ value, onChange, compact = false }) => {
             {/* Full Unit Picker Modal */}
             <Modal isOpen={showModal} onClose={() => setShowModal(false)}>
                 <div className="p-6 space-y-4">
-                    <h2 className="text-xl font-bold text-slate-900">Select Unit</h2>
+                    <h2 className="text-xl font-bold text-slate-900 dark:text-white">Select Unit</h2>
                     {Object.entries(UNITS_BY_CATEGORY).map(([category, units]) => (
                         <div key={category}>
-                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">{category}</h3>
+                            <h3 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-2">{category}</h3>
                             <div className="flex flex-wrap gap-2">
                                 {units.map(u => (
                                     <button
                                         key={u}
                                         onClick={() => handleSelect(u)}
-                                        className={`px-3 py-2 rounded-lg text-sm font-bold transition-colors ${value === u
-                                            ? 'bg-emerald-500 text-white'
-                                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                        className={`px-3 py-2 rounded-lg text-sm font-bold transition-all ${value === u
+                                            ? 'bg-emerald-600 dark:bg-emerald-500 text-white shadow-md scale-[1.02]'
+                                            : 'bg-slate-100 dark:bg-slate-700/50 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-transparent dark:border-slate-600/50'
                                             }`}
                                     >
                                         {u}
@@ -1248,8 +1248,8 @@ const UnitPickerButton = ({ value, onChange, disabled = false }) => {
                 onClick={() => !disabled && setShowModal(true)}
                 disabled={disabled}
                 className={`px-3 py-1.5 rounded-lg text-sm font-bold flex items-center gap-1 transition-colors ${disabled
-                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                    : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
+                    ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed'
+                    : 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50'
                     }`}
             >
                 {value}
@@ -1259,18 +1259,18 @@ const UnitPickerButton = ({ value, onChange, disabled = false }) => {
             {/* Full Unit Picker Modal */}
             <Modal isOpen={showModal} onClose={() => setShowModal(false)}>
                 <div className="p-6 space-y-4">
-                    <h2 className="text-xl font-bold text-slate-900">Select Unit</h2>
+                    <h2 className="text-xl font-bold text-slate-900 dark:text-white">Select Unit</h2>
                     {Object.entries(UNITS_BY_CATEGORY).map(([category, units]) => (
                         <div key={category}>
-                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">{category}</h3>
+                            <h3 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-2">{category}</h3>
                             <div className="flex flex-wrap gap-2">
                                 {units.map(u => (
                                     <button
                                         key={u}
                                         onClick={() => handleSelect(u)}
-                                        className={`px-3 py-2 rounded-lg text-sm font-bold transition-colors ${value === u
-                                            ? 'bg-emerald-500 text-white'
-                                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                        className={`px-3 py-2 rounded-lg text-sm font-bold transition-all ${value === u
+                                            ? 'bg-emerald-600 dark:bg-emerald-500 text-white shadow-md scale-[1.02]'
+                                            : 'bg-slate-100 dark:bg-slate-700/50 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-transparent dark:border-slate-600/50'
                                             }`}
                                     >
                                         {u}
@@ -1286,47 +1286,48 @@ const UnitPickerButton = ({ value, onChange, disabled = false }) => {
 };
 
 // Reusable Recipe Card Component - matches RecipeEngine vertical card design
+// Reusable Recipe Card Component - matches RecipeEngine vertical card design
 const RecipeCard = ({ recipe, onClick, showUseButton, onUseRecipe }) => (
-    <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden w-full" onClick={onClick}>
-        <div className="h-32 bg-orange-50 flex items-center justify-center overflow-hidden cursor-pointer">
+    <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-sm overflow-hidden w-full" onClick={onClick}>
+        <div className="h-32 bg-orange-50 dark:bg-orange-900/30 flex items-center justify-center overflow-hidden cursor-pointer">
             {recipe.imageUrl ? (
                 <img src={recipe.imageUrl} className="w-full h-full object-cover" alt={recipe.name} />
             ) : recipe.imageLoading ? (
                 <Loader2 className="text-orange-300 w-8 h-8 animate-spin" />
             ) : (
-                <ChefHat className="text-orange-200 w-12 h-12" />
+                <ChefHat className="text-orange-200 dark:text-orange-800 w-12 h-12" />
             )}
         </div>
         <div className="p-5 cursor-pointer">
-            <h3 className="font-bold text-xl text-slate-800 leading-tight mb-2">{recipe.name}</h3>
+            <h3 className="font-bold text-xl text-slate-800 dark:text-gray-100 leading-tight mb-2">{recipe.name}</h3>
             <MacroBadges macros={recipe.macros} servings={recipe.servings} />
             <div className="flex gap-2 mt-3 flex-wrap">
                 {recipe.time && (
-                    <span className="text-xs font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded-md flex items-center gap-1"><Clock className="w-3 h-3" /> {recipe.time}</span>
+                    <span className="text-xs font-bold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-1 rounded-md flex items-center gap-1"><Clock className="w-3 h-3" /> {recipe.time}</span>
                 )}
                 {recipe.missing_ingredients?.length > 0 && (
-                    <span className="text-xs font-bold bg-purple-50 text-purple-700 px-2 py-1 rounded-md">{recipe.missing_ingredients.length} missing</span>
+                    <span className="text-xs font-bold bg-purple-50 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 px-2 py-1 rounded-md">{recipe.missing_ingredients.length} missing</span>
                 )}
                 {recipe.leftoverDays > 0 && (
-                    <span className="text-xs font-bold bg-emerald-50 text-emerald-700 px-2 py-1 rounded-md">+{recipe.leftoverDays} leftover{recipe.leftoverDays > 1 ? 's' : ''}</span>
+                    <span className="text-xs font-bold bg-emerald-50 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 px-2 py-1 rounded-md">+{recipe.leftoverDays} leftover{recipe.leftoverDays > 1 ? 's' : ''}</span>
                 )}
             </div>
-            <p className="text-sm text-slate-500 line-clamp-2 leading-relaxed mt-3">{recipe.description}</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed mt-3">{recipe.description}</p>
 
             {/* Action button */}
             {showUseButton && onUseRecipe ? (
                 <button
                     onClick={(e) => { e.stopPropagation(); onUseRecipe(recipe); }}
-                    className="w-full mt-4 btn-primary bg-emerald-600 text-sm"
+                    className="w-full mt-4 btn-primary bg-emerald-600 dark:bg-emerald-700/40 dark:text-emerald-400 dark:border-emerald-800/50 border border-transparent shadow-sm text-sm"
                 >
                     <Check className="w-4 h-4 inline mr-1" /> Use This Recipe
                 </button>
             ) : (
                 <button
                     onClick={(e) => { e.stopPropagation(); onClick?.(); }}
-                    className="w-full mt-4 flex items-center justify-center gap-1 bg-orange-50 text-orange-600 py-2.5 px-3 rounded-lg text-sm font-bold hover:bg-orange-100 transition-colors"
+                    className="w-full mt-4 flex items-center justify-center gap-2 bg-slate-50 dark:bg-slate-700/50 text-indigo-600 dark:text-indigo-400 py-2.5 px-3 rounded-xl text-sm font-bold border border-slate-200 dark:border-slate-600 shadow-sm hover:bg-slate-100 dark:hover:bg-slate-700 hover:scale-[1.01] active:scale-[0.98] transition-all"
                 >
-                    View Details
+                    <Eye className="w-4 h-4" /> View Details
                 </button>
             )}
         </div>
@@ -1523,15 +1524,15 @@ const RecipeDetailModal = ({
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} size="large">
-            <div className="bg-white min-h-full pb-10">
+            <div className="bg-white dark:bg-slate-900 min-h-full pb-10">
                 {/* Image Header */}
-                <div className="w-full h-48 bg-gradient-to-br from-orange-100 to-amber-50 flex items-center justify-center overflow-hidden relative">
+                <div className="w-full h-48 bg-gradient-to-br from-orange-100 to-amber-50 dark:from-orange-900/30 dark:to-amber-900/20 flex items-center justify-center overflow-hidden relative">
                     {displayRecipe.imageUrl ? (
                         <img src={displayRecipe.imageUrl} className="w-full h-full object-cover" alt={displayRecipe.name} />
                     ) : displayRecipe.imageLoading || imageGenerating ? (
                         <Loader2 className="w-12 h-12 text-orange-300 animate-spin" />
                     ) : (
-                        <ChefHat className="w-20 h-20 text-orange-200" />
+                        <ChefHat className="w-20 h-20 text-orange-200 dark:text-orange-800" />
                     )}
 
                     {/* Image editing overlay in edit mode */}
@@ -1596,7 +1597,7 @@ const RecipeDetailModal = ({
                                 </button>
                                 <button
                                     onClick={handleCancel}
-                                    className="px-3 py-1.5 bg-slate-200 text-slate-700 rounded-full text-sm font-bold shadow-md"
+                                    className="px-3 py-1.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-full text-sm font-bold shadow-md"
                                 >
                                     Cancel
                                 </button>
@@ -1613,17 +1614,17 @@ const RecipeDetailModal = ({
                                 type="text"
                                 value={editedRecipe?.name || ''}
                                 onChange={(e) => updateField('name', e.target.value)}
-                                className="text-2xl font-bold text-slate-900 mb-2 w-full input-field"
+                                className="text-2xl font-bold text-slate-900 dark:text-white mb-2 w-full input-field"
                                 placeholder="Recipe name"
                             />
                         ) : (
-                            <h2 className="text-2xl font-bold text-slate-900 mb-2">{displayRecipe.name}</h2>
+                            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">{displayRecipe.name}</h2>
                         )}
 
                         {editMode ? (
                             <div className="grid grid-cols-5 gap-2 mt-2">
                                 <div>
-                                    <label className="text-xs text-slate-500">Calories</label>
+                                    <label className="text-xs text-slate-500 dark:text-slate-400">Calories</label>
                                     <input
                                         type="number"
                                         value={editedRecipe?.macros?.calories || ''}
@@ -1633,7 +1634,7 @@ const RecipeDetailModal = ({
                                     />
                                 </div>
                                 <div>
-                                    <label className="text-xs text-slate-500">Protein (g)</label>
+                                    <label className="text-xs text-slate-500 dark:text-slate-400">Protein (g)</label>
                                     <input
                                         type="number"
                                         value={editedRecipe?.macros?.protein || ''}
@@ -1643,7 +1644,7 @@ const RecipeDetailModal = ({
                                     />
                                 </div>
                                 <div>
-                                    <label className="text-xs text-slate-500">Carbs (g)</label>
+                                    <label className="text-xs text-slate-500 dark:text-slate-400">Carbs (g)</label>
                                     <input
                                         type="number"
                                         value={editedRecipe?.macros?.carbs || ''}
@@ -1653,7 +1654,7 @@ const RecipeDetailModal = ({
                                     />
                                 </div>
                                 <div>
-                                    <label className="text-xs text-slate-500">Fat (g)</label>
+                                    <label className="text-xs text-slate-500 dark:text-slate-400">Fat (g)</label>
                                     <input
                                         type="number"
                                         value={editedRecipe?.macros?.fat || ''}
@@ -1663,7 +1664,7 @@ const RecipeDetailModal = ({
                                     />
                                 </div>
                                 <div>
-                                    <label className="text-xs text-slate-500">Servings</label>
+                                    <label className="text-xs text-slate-500 dark:text-slate-400">Servings</label>
                                     <input
                                         type="number"
                                         value={editedRecipe?.servings || ''}
@@ -1676,18 +1677,18 @@ const RecipeDetailModal = ({
                         ) : (
                             <div className="flex flex-wrap items-center gap-4">
                                 <MacroBadges macros={displayRecipe.macros} servings={displayRecipe.servings} />
-                                <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-full">
+                                <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-full">
                                     <Users className="w-4 h-4 text-slate-500" />
-                                    <span className="text-xs font-bold text-slate-600">Servings:</span>
+                                    <span className="text-xs font-bold text-slate-600 dark:text-slate-300">Servings:</span>
                                     <div className="flex items-center gap-1">
                                         <button
                                             onClick={() => setTargetServings(Math.max(1, targetServings - 1))}
-                                            className="w-5 h-5 flex items-center justify-center bg-white rounded-full shadow-sm text-slate-600 hover:bg-slate-50"
+                                            className="w-5 h-5 flex items-center justify-center bg-white dark:bg-slate-700 rounded-full shadow-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-600"
                                         >-</button>
-                                        <span className="text-xs font-bold w-4 text-center">{targetServings}</span>
+                                        <span className="text-xs font-bold w-4 text-center dark:text-white">{targetServings}</span>
                                         <button
                                             onClick={() => setTargetServings(targetServings + 1)}
-                                            className="w-5 h-5 flex items-center justify-center bg-white rounded-full shadow-sm text-slate-600 hover:bg-slate-50"
+                                            className="w-5 h-5 flex items-center justify-center bg-white dark:bg-slate-700 rounded-full shadow-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-600"
                                         >+</button>
                                     </div>
                                 </div>
@@ -1697,7 +1698,7 @@ const RecipeDetailModal = ({
 
                     {/* Description */}
                     {(editMode || displayRecipe.description) && (
-                        <div className="border-l-4 border-emerald-400 pl-4">
+                        <div className="border-l-4 border-emerald-400 dark:border-emerald-600 pl-4">
                             {editMode ? (
                                 <textarea
                                     value={editedRecipe?.description || ''}
@@ -1706,17 +1707,17 @@ const RecipeDetailModal = ({
                                     placeholder="Recipe description/overview..."
                                 />
                             ) : (
-                                <p className="text-slate-600 leading-relaxed italic">{displayRecipe.description}</p>
+                                <p className="text-slate-600 dark:text-slate-300 leading-relaxed italic">{displayRecipe.description}</p>
                             )}
                         </div>
                     )}
 
                     {/* Family Adaptation */}
                     {(editMode || displayRecipe.family_adaptation || displayRecipe.dietary_adaptations) && (
-                        <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
+                        <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-xl p-4">
                             <div className="flex items-center gap-2 mb-2">
                                 <Users className="w-5 h-5 text-purple-600" />
-                                <span className="font-bold text-purple-700 text-sm uppercase tracking-wide">Family Adaptation</span>
+                                <span className="font-bold text-purple-700 dark:text-purple-400 text-sm uppercase tracking-wide">Family Adaptation</span>
                             </div>
                             {editMode ? (
                                 <textarea
@@ -1726,7 +1727,7 @@ const RecipeDetailModal = ({
                                     placeholder="Any modifications for family members..."
                                 />
                             ) : (
-                                <p className="text-purple-800 text-sm leading-relaxed">
+                                <p className="text-purple-800 dark:text-purple-300 text-sm leading-relaxed">
                                     {displayRecipe.family_adaptation || displayRecipe.dietary_adaptations}
                                 </p>
                             )}
@@ -1736,16 +1737,16 @@ const RecipeDetailModal = ({
                     {/* Ingredients */}
                     <div>
                         <h3 className="font-bold mb-3 flex items-center gap-2">
-                            <Check className="w-5 h-5 text-emerald-500" /> Ingredients
+                            <Check className="w-5 h-5 text-emerald-500" /> <span className="dark:text-white">Ingredients</span>
                             {editMode && (
                                 <button onClick={addIngredient} className="ml-auto text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded font-bold">
                                     + Add
                                 </button>
                             )}
                         </h3>
-                        <div className="bg-emerald-50/50 rounded-xl p-3 space-y-2">
+                        <div className="bg-emerald-50/50 dark:bg-emerald-900/20 rounded-xl p-3 space-y-2">
                             {(editMode ? editedRecipe?.ingredients : displayRecipe.ingredients)?.map((i, idx) => (
-                                <div key={idx} className="flex justify-between items-center p-2 bg-white rounded-lg gap-2">
+                                <div key={idx} className="flex justify-between items-center p-2 bg-white dark:bg-slate-800 rounded-lg gap-2">
                                     {editMode ? (
                                         <>
                                             <input
@@ -1768,7 +1769,7 @@ const RecipeDetailModal = ({
                                         </>
                                     ) : (
                                         <>
-                                            <span className="text-slate-700">{i.item}</span>
+                                            <span className="text-slate-700 dark:text-slate-200">{i.item}</span>
                                             <span className="text-emerald-600 font-bold text-sm">
                                                 {scaleQuantity(i.qty)}
                                             </span>
@@ -1777,7 +1778,7 @@ const RecipeDetailModal = ({
                                 </div>
                             ))}
                             {(!displayRecipe.ingredients || displayRecipe.ingredients.length === 0) && !editMode && (
-                                <div className="text-slate-400 text-sm italic text-center py-2">No ingredients listed</div>
+                                <div className="text-slate-400 dark:text-slate-500 text-sm italic text-center py-2">No ingredients listed</div>
                             )}
                         </div>
                     </div>
@@ -1785,15 +1786,15 @@ const RecipeDetailModal = ({
                     {/* Missing Ingredients - only shown in view mode, auto-populated */}
                     {!editMode && displayRecipe.missing_ingredients?.length > 0 && (
                         <div>
-                            <h3 className="font-bold mb-3 flex items-center gap-2"><ShoppingCart className="w-5 h-5 text-orange-500" /> Missing</h3>
-                            <div className="bg-orange-50 rounded-xl p-3 space-y-2">
+                            <h3 className="font-bold mb-3 flex items-center gap-2 dark:text-white"><ShoppingCart className="w-5 h-5 text-orange-500" /> Missing</h3>
+                            <div className="bg-orange-50 dark:bg-slate-800 rounded-xl p-3 space-y-2 border border-orange-200 dark:border-orange-500">
                                 {displayRecipe.missing_ingredients.map((i, idx) => (
-                                    <div key={idx} className="flex justify-between items-center p-2 bg-white rounded-lg">
-                                        <span className="text-slate-700">{i.item || i}</span>
+                                    <div key={idx} className="flex justify-between items-center p-2 bg-white dark:bg-slate-800 rounded-lg">
+                                        <span className="text-slate-700 dark:text-slate-200">{i.item || i}</span>
                                         <div className="flex items-center gap-2">
-                                            <span className="text-orange-600 font-bold text-sm">{i.total_amount_needed || 'Needed'}</span>
+                                            <span className="text-orange-600 dark:text-orange-400 font-bold text-sm">{i.total_amount_needed || 'Needed'}</span>
                                             {onAddMissingToInventory && (
-                                                <button onClick={() => onAddMissingToInventory(i)} className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded font-bold">
+                                                <button onClick={() => onAddMissingToInventory(i)} className="text-xs bg-emerald-100 dark:bg-emerald-800/50 text-emerald-700 dark:text-emerald-300 px-2 py-1 rounded font-bold">
                                                     I have this
                                                 </button>
                                             )}
@@ -1802,7 +1803,7 @@ const RecipeDetailModal = ({
                                 ))}
                             </div>
                             {onAddToShoppingList && (
-                                <button onClick={() => onAddToShoppingList(displayRecipe)} className="w-full mt-3 btn-secondary text-orange-600">
+                                <button onClick={() => onAddToShoppingList(displayRecipe)} className="w-full mt-3 btn-secondary text-orange-600 dark:text-orange-400">
                                     <ShoppingCart className="w-4 h-4 inline mr-1" /> Add All to Shopping List
                                 </button>
                             )}
@@ -1812,7 +1813,7 @@ const RecipeDetailModal = ({
                     {/* Instructions */}
                     <div>
                         <h3 className="font-bold mb-3 flex items-center gap-2">
-                            Instructions
+                            <span className="dark:text-white">Instructions</span>
                             {editMode && (
                                 <button onClick={addStep} className="ml-auto text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded font-bold">
                                     + Add Step
@@ -1822,7 +1823,7 @@ const RecipeDetailModal = ({
                         <div className="space-y-4">
                             {(editMode ? editedRecipe?.steps : displayRecipe.steps)?.map((s, idx) => (
                                 <div key={idx} className="flex gap-4">
-                                    <span className="bg-slate-100 text-slate-600 w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold">{idx + 1}</span>
+                                    <span className="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold">{idx + 1}</span>
                                     {editMode ? (
                                         <div className="flex-1 flex gap-2">
                                             <textarea
@@ -1836,23 +1837,23 @@ const RecipeDetailModal = ({
                                             </button>
                                         </div>
                                     ) : (
-                                        <p className="text-slate-700 leading-relaxed pt-1">{s}</p>
+                                        <p className="text-slate-700 dark:text-slate-300 leading-relaxed pt-1">{s}</p>
                                     )}
                                 </div>
                             ))}
                             {(!displayRecipe.steps || displayRecipe.steps.length === 0) && !editMode && (
-                                <div className="text-slate-400 text-sm italic text-center py-2">No instructions listed</div>
+                                <div className="text-slate-400 dark:text-slate-500 text-sm italic text-center py-2">No instructions listed</div>
                             )}
                         </div>
                     </div>
 
                     {/* Storage & Reheating */}
                     {(editMode || displayRecipe.storage_instructions || displayRecipe.reheating_tips) && (
-                        <div className="p-4 bg-blue-50 rounded-xl space-y-2">
+                        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl space-y-2">
                             {editMode ? (
                                 <>
                                     <div>
-                                        <label className="text-xs font-bold text-blue-700">Storage Instructions</label>
+                                        <label className="text-xs font-bold text-blue-700 dark:text-blue-400">Storage Instructions</label>
                                         <input
                                             type="text"
                                             value={editedRecipe?.storage_instructions || ''}
@@ -1862,7 +1863,7 @@ const RecipeDetailModal = ({
                                         />
                                     </div>
                                     <div>
-                                        <label className="text-xs font-bold text-blue-700">Reheating Tips</label>
+                                        <label className="text-xs font-bold text-blue-700 dark:text-blue-400">Reheating Tips</label>
                                         <input
                                             type="text"
                                             value={editedRecipe?.reheating_tips || ''}
@@ -1875,12 +1876,12 @@ const RecipeDetailModal = ({
                             ) : (
                                 <>
                                     {displayRecipe.storage_instructions && (
-                                        <div className="text-sm text-blue-700">
+                                        <div className="text-sm text-blue-700 dark:text-blue-400">
                                             <strong>Storage:</strong> {displayRecipe.storage_instructions}
                                         </div>
                                     )}
                                     {displayRecipe.reheating_tips && (
-                                        <div className="text-sm text-blue-700">
+                                        <div className="text-sm text-blue-700 dark:text-blue-400">
                                             <strong>Reheat:</strong> {displayRecipe.reheating_tips}
                                         </div>
                                     )}
@@ -1897,7 +1898,7 @@ const RecipeDetailModal = ({
                                     <button
                                         onClick={() => onFavorite(displayRecipe)}
                                         className={`flex-1 flex items-center justify-center gap-2 transition-all h-12 rounded-xl font-bold ${isFavorite
-                                            ? 'bg-pink-50 text-pink-600 border border-pink-100'
+                                            ? 'bg-pink-50 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400 border border-pink-100 dark:border-pink-800'
                                             : 'btn-secondary'
                                             }`}
                                     >
@@ -1911,7 +1912,11 @@ const RecipeDetailModal = ({
                                     </button>
                                 )}
                                 {showCookButton && onCook && (
-                                    <button id="recipe-cook-button" onClick={() => onCook(displayRecipe)} className="flex-1 btn-primary flex items-center justify-center gap-2">
+                                    <button
+                                        id="recipe-cook-button"
+                                        onClick={() => onCook(displayRecipe)}
+                                        className="flex-1 btn-primary bg-emerald-600 dark:bg-emerald-700/40 dark:text-emerald-400 dark:border-emerald-800/50 border border-transparent flex items-center justify-center gap-2"
+                                    >
                                         <Check className="w-5 h-5" /> Cook
                                     </button>
                                 )}
@@ -1983,25 +1988,25 @@ const LeftoverCard = ({ leftover, leftovers, setLeftovers, onSelect, onMoveToHis
 
     return (
         <div
-            className={`bg-white border rounded-xl p-4 cursor-pointer hover:shadow-md transition-shadow ${isExpired ? 'border-red-200 bg-red-50' : isExpiringSoon ? 'border-amber-200' : 'border-slate-100'}`}
+            className={`bg-white dark:bg-slate-800 border rounded-xl p-4 cursor-pointer hover:shadow-md transition-shadow ${isExpired ? 'border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-900/10' : isExpiringSoon ? 'border-amber-200 dark:border-amber-900/50' : 'border-slate-100 dark:border-slate-700'}`}
             onClick={() => onSelect(leftover)}
         >
             <div className="flex gap-3">
                 {leftover.imageUrl ? (
                     <img src={leftover.imageUrl} className="w-16 h-16 rounded-lg object-cover" alt="" />
                 ) : (
-                    <div className="w-16 h-16 rounded-lg bg-rose-100 flex items-center justify-center">
-                        <ThermometerSnowflake className="w-6 h-6 text-rose-300" />
+                    <div className="w-16 h-16 rounded-lg bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center">
+                        <ThermometerSnowflake className="w-6 h-6 text-rose-300 dark:text-rose-500" />
                     </div>
                 )}
                 <div className="flex-1">
-                    <h3 className="font-bold text-slate-800">{leftover.name}</h3>
+                    <h3 className="font-bold text-slate-800 dark:text-gray-100">{leftover.name}</h3>
                     <div className="flex items-center gap-2 mt-1">
-                        <span className="text-sm font-bold text-indigo-600">{leftover.portions || '?'} servings</span>
+                        <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400">{leftover.portions || '?'} servings</span>
                         {isExpired ? (
-                            <span className="text-xs font-bold text-red-600 bg-red-100 px-2 py-0.5 rounded">Expired</span>
+                            <span className="text-xs font-bold text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/30 px-2 py-0.5 rounded">Expired</span>
                         ) : (
-                            <span className={`text-xs font-bold px-2 py-0.5 rounded ${isExpiringSoon ? 'text-amber-600 bg-amber-100' : 'text-slate-500 bg-slate-100'}`}>
+                            <span className={`text-xs font-bold px-2 py-0.5 rounded ${isExpiringSoon ? 'text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/30' : 'text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700'}`}>
                                 {daysLeft} day{daysLeft !== 1 ? 's' : ''} left
                             </span>
                         )}
@@ -2038,7 +2043,7 @@ const LeftoverCard = ({ leftover, leftovers, setLeftovers, onSelect, onMoveToHis
                         onMoveToHistory?.(leftover, 'Removed');
                         setLeftovers(leftovers.filter(l => l.id !== leftover.id));
                     }}
-                    className="px-3 py-2 text-xs font-bold text-red-500 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+                    className="px-3 py-2 text-xs font-bold text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-lg transition-colors"
                 >
                     Remove
                 </button>
@@ -2082,39 +2087,39 @@ const LeftoverDetailModal = ({ leftover, leftovers, setLeftovers, onClose, onMov
                 <img src={leftover.imageUrl} className="w-full h-40 object-cover rounded-xl" alt="" />
             )}
             <div className="flex items-start justify-between">
-                <h2 className="text-xl font-bold text-slate-900">{leftover.name}</h2>
-                <span className={`text-xs font-bold px-2 py-1 rounded ${isExpired ? 'text-red-600 bg-red-100' : 'text-slate-500 bg-slate-100'}`}>
+                <h2 className="text-xl font-bold text-slate-900 dark:text-white">{leftover.name}</h2>
+                <span className={`text-xs font-bold px-2 py-1 rounded ${isExpired ? 'text-red-600 bg-red-100 dark:bg-red-900/40 dark:text-red-400' : 'text-slate-500 bg-slate-100 dark:bg-slate-800 dark:text-slate-400'}`}>
                     {isExpired ? 'Expired' : `${daysLeft} day${daysLeft !== 1 ? 's' : ''} left`}
                 </span>
             </div>
 
-            <div className="bg-indigo-50 p-3 rounded-xl text-center">
-                <div className="text-2xl font-bold text-indigo-600">{leftover.portions || '?'}</div>
-                <div className="text-xs text-indigo-500">servings remaining</div>
+            <div className="bg-indigo-50 dark:bg-indigo-900/30 p-3 rounded-xl text-center">
+                <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">{leftover.portions || '?'}</div>
+                <div className="text-xs text-indigo-500 dark:text-indigo-300">servings remaining</div>
             </div>
 
             {/* Storage & Reheating - Side by Side */}
             <div className="grid grid-cols-2 gap-3">
-                <div className="bg-slate-50 p-4 rounded-xl">
+                <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-xl">
                     <div className="flex items-center gap-2 mb-2">
-                        <Refrigerator className="w-4 h-4 text-slate-500" />
-                        <span className="text-xs font-bold text-slate-400 uppercase">Storage</span>
+                        <Refrigerator className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+                        <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase">Storage</span>
                     </div>
-                    <p className="text-sm text-slate-600">{leftover.storage_instructions || leftover.tip || 'Store in airtight container. Good for 3-4 days.'}</p>
+                    <p className="text-sm text-slate-600 dark:text-slate-300">{leftover.storage_instructions || leftover.tip || 'Store in airtight container. Good for 3-4 days.'}</p>
                 </div>
-                <div className="bg-slate-50 p-4 rounded-xl">
+                <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-xl">
                     <div className="flex items-center gap-2 mb-2">
-                        <Flame className="w-4 h-4 text-orange-500" />
-                        <span className="text-xs font-bold text-slate-400 uppercase">Reheat</span>
+                        <Flame className="w-4 h-4 text-orange-500 dark:text-orange-400" />
+                        <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase">Reheat</span>
                     </div>
-                    <p className="text-sm text-slate-600">{leftover.reheating_tips || leftover.reheat || 'Microwave 2-3 minutes until hot.'}</p>
+                    <p className="text-sm text-slate-600 dark:text-slate-300">{leftover.reheating_tips || leftover.reheat || 'Microwave 2-3 minutes until hot.'}</p>
                 </div>
             </div>
 
             <div className="flex gap-2 pt-2">
                 <button
                     onClick={handleEatOne}
-                    className="flex-1 btn-primary bg-emerald-600 flex items-center justify-center gap-2"
+                    className="flex-1 btn-primary bg-emerald-600 dark:bg-emerald-700/40 dark:text-emerald-400 dark:border-emerald-800/50 border border-transparent flex items-center justify-center gap-2"
                 >
                     <Utensils className="w-4 h-4" /> Eat 1 Serving
                 </button>
@@ -2160,20 +2165,20 @@ const InventoryItem = ({
     const currentQty = parseFloat(item.quantity) || 0;
     const available = getAvailableQuantity(item); // accounts for reservations
 
-    let qtyStyleClass = 'bg-slate-100 text-slate-700 border-slate-200 shadow-inner'; // Default
+    let qtyStyleClass = 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-600 shadow-inner'; // Default
 
     if (item.isStaple && minQty > 0) {
         if (currentQty < minQty) {
             // RED: Actual quantity is below minimum
-            qtyStyleClass = 'bg-red-50 text-red-700 border-red-500 shadow-inner';
+            qtyStyleClass = 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border-red-500 dark:border-red-500 shadow-inner';
         } else if (available < minQty) {
             // YELLOW: Reserves will drop it below minimum
-            qtyStyleClass = 'bg-amber-50 text-amber-700 border-amber-400 shadow-inner';
+            qtyStyleClass = 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border-amber-400 dark:border-amber-400 shadow-inner';
         }
     } else if (expirationStatus === 'expired') {
-        qtyStyleClass = 'bg-red-50 text-red-600 border-red-100 shadow-inner';
+        qtyStyleClass = 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 border-red-100 dark:border-red-900/50 shadow-inner';
     } else if (expirationStatus === 'soon') {
-        qtyStyleClass = 'bg-amber-50 text-amber-600 border-amber-100 shadow-inner';
+        qtyStyleClass = 'bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 border-amber-100 dark:border-amber-900/50 shadow-inner';
     }
 
     // Auto-resize textarea logic
@@ -2189,10 +2194,13 @@ const InventoryItem = ({
     }, [isExpanded, item.name]);
 
     return (
-        <div id={`inventory-item-${item.id}`} className="inventory-item">
+        <div
+            id={`inventory-item-${item.id}`}
+            className={`inventory-item group transition-all duration-200 border-b border-slate-100 dark:border-slate-800 last:border-0 rounded-xl my-0.5 ${isExpanded ? 'bg-indigo-50/40 dark:bg-indigo-900/20 ring-1 ring-indigo-50 dark:ring-indigo-900/30 shadow-sm' : 'hover:bg-slate-50 dark:hover:bg-slate-700/40'}`}
+        >
             {/* Main Row - Always visible */}
             <div
-                className={`transition-all duration-300 ${isExpanded ? 'bg-indigo-50/30 -mx-2 px-2 py-3 rounded-xl ring-1 ring-indigo-50' : 'bg-white border-transparent hover:bg-slate-50 rounded-xl p-2 my-1'}`}
+                className="flex items-center gap-3 py-2 px-2 cursor-pointer transition-colors"
                 onClick={() => {
                     if (onToggleExpand) {
                         onToggleExpand(item.id);
@@ -2201,256 +2209,259 @@ const InventoryItem = ({
                     }
                 }}
             >
-                <div className="flex items-center gap-3">
-                    {/* Quantity Input */}
-                    <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={item.quantity === 0 ? '' : item.quantity}
-                        onChange={(e) => {
-                            e.stopPropagation();
-                            updateItem(item.id, { quantity: e.target.value === '' ? '' : parseFloat(e.target.value) });
-                        }}
-                        onBlur={(e) => {
-                            handleQuantityBlur(item, e.target.value);
-                        }}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                                e.target.blur();
-                            }
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                        className={`w-14 text-center font-bold rounded-lg py-1.5 border-2 text-sm transition-all focus:ring-0 focus:border-emerald-500 ${qtyStyleClass}`}
-                    />
+                {/* Quantity Input */}
+                <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={item.quantity === 0 ? '' : item.quantity}
+                    onChange={(e) => {
+                        e.stopPropagation();
+                        updateItem(item.id, { quantity: e.target.value === '' ? '' : parseFloat(e.target.value) });
+                    }}
+                    onBlur={(e) => {
+                        handleQuantityBlur(item, e.target.value);
+                    }}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                            e.target.blur();
+                        }
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    className={`w-14 text-center font-bold rounded-lg py-1.5 border-2 text-sm transition-all focus:ring-0 focus:border-emerald-500 ${qtyStyleClass}`}
+                />
 
-                    {/* Unit - Compact */}
-                    <span className="text-xs text-slate-500 font-medium w-16 flex-shrink-0">{item.unit || 'each'}</span>
+                {/* Unit - Compact */}
+                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium w-16 flex-shrink-0">{item.unit || 'each'}</span>
 
-                    {/* Name (Editable) + Expiration + Reservations + Location Badge */}
-                    <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-x-2">
-                            {/* Inline Editable Name */}
-                            {isExpanded ? (
-                                <textarea
-                                    ref={nameInputRef}
-                                    value={item.name}
-                                    onChange={(e) => {
-                                        updateItem(item.id, { name: e.target.value });
-                                        e.target.style.height = 'auto';
-                                        e.target.style.height = e.target.scrollHeight + 'px';
-                                    }}
-                                    onFocus={(e) => {
-                                        e.target.style.height = 'auto';
-                                        e.target.style.height = e.target.scrollHeight + 'px';
-                                    }}
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="font-bold text-slate-700 bg-slate-100 border border-slate-200 rounded-lg px-2 py-1 focus:ring-2 focus:ring-emerald-500 w-full transition-all resize-none overflow-hidden block"
-                                    placeholder="Item Name"
-                                    rows={1}
-                                />
-                            ) : (
-                                <span className="font-bold text-slate-700 break-words">{item.name}</span>
-                            )}
-                            {showLocationBadge && (
-                                <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded uppercase tracking-wider">
-                                    {item.location || 'Pantry'}
-                                </span>
-                            )}
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2 mt-0.5">
-                            {item.expiresAt && (
-                                <span className={`text-xs ${expirationStatus === 'expired'
-                                    ? 'text-red-500'
-                                    : expirationStatus === 'soon'
-                                        ? 'text-amber-500'
-                                        : 'text-slate-400'
-                                    }`}>
-                                    {expirationStatus === 'expired'
-                                        ? 'Expired'
-                                        : `Exp ${formatDateForInput(item.expiresAt)}`}
-                                </span>
-                            )}
-                            {(() => {
-                                const reservations = getItemReservations(item.name);
-                                if (reservations.length > 0) {
-                                    return (
-                                        <div className="flex flex-col gap-1 mt-1">
-                                            <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded font-bold inline-flex items-center w-fit">
-                                                📅 {reservations.length} Reserved
-                                            </span>
-                                            {isExpanded && (
-                                                <div className="bg-indigo-50 rounded-lg p-2 space-y-1">
-                                                    {reservations.map((res, idx) => (
-                                                        <div key={idx} className="text-[10px] text-indigo-800 flex justify-between items-center border-b border-indigo-100 last:border-0 pb-1 last:pb-0">
-                                                            <span className="font-medium truncate max-w-[120px]">{res.recipeName}</span>
-                                                            <span className="font-bold flex-shrink-0 ml-2">{res.amount} {res.unit}</span>
-                                                        </div>
-                                                    ))}
-                                                    <div className="text-[10px] font-bold text-indigo-900 text-right pt-1 mt-1 border-t border-indigo-200">
-                                                        Available: {getAvailableQuantity(item).toFixed(2)} {item.unit}
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                }
-                                return null;
-                            })()}
-                        </div>
+                {/* Name & Feedback */}
+                <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-x-2">
+                        {isExpanded ? (
+                            <textarea
+                                ref={nameInputRef}
+                                value={item.name}
+                                onChange={(e) => {
+                                    updateItem(item.id, { name: e.target.value });
+                                    e.target.style.height = 'auto';
+                                    e.target.style.height = e.target.scrollHeight + 'px';
+                                }}
+                                onFocus={(e) => {
+                                    e.target.style.height = 'auto';
+                                    e.target.style.height = e.target.scrollHeight + 'px';
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                                className="font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg px-2 py-1 focus:ring-2 focus:ring-emerald-500 w-full transition-all resize-none overflow-hidden block"
+                                placeholder="Item Name"
+                                rows={1}
+                            />
+                        ) : (
+                            <span className="font-bold text-slate-700 dark:text-slate-200 break-words">{item.name}</span>
+                        )}
+                        {showLocationBadge && !isExpanded && (
+                            <span className="text-[10px] font-bold text-slate-400 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                                {item.location || 'Pantry'}
+                            </span>
+                        )}
                     </div>
-
-                    {/* Expand Indicator (Pencil) */}
-                    <div className={`transition-all duration-300 ${isExpanded ? 'bg-indigo-100 text-indigo-600 rotate-12' : 'bg-slate-100 text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-500'} p-1.5 rounded-lg`}>
-                        <Pencil className="w-3 h-3" />
+                    <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                        {item.expiresAt && (
+                            <span className={`text-xs ${expirationStatus === 'expired'
+                                ? 'text-red-500 dark:text-red-400'
+                                : expirationStatus === 'soon'
+                                    ? 'text-amber-500 dark:text-amber-400'
+                                    : 'text-slate-400 dark:text-slate-500'
+                                }`}>
+                                {expirationStatus === 'expired'
+                                    ? 'Expired'
+                                    : `Exp ${formatDateForInput(item.expiresAt)}`}
+                            </span>
+                        )}
+                        {(() => {
+                            const reservations = getItemReservations(item.name);
+                            if (reservations.length > 0) {
+                                return (
+                                    <span className="text-xs bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded font-bold inline-flex items-center w-fit">
+                                        📅 {reservations.length} Reserved
+                                    </span>
+                                );
+                            }
+                            return null;
+                        })()}
                     </div>
                 </div>
 
-                {/* Expanded Row - Details & Actions */}
-                {isExpanded && (
-                    <div className="mt-3 pt-3 border-t border-slate-100 space-y-3 animate-fade-in" onClick={(e) => e.stopPropagation()}>
+                {/* Pencil Icon */}
+                <div className={`transition-all duration-300 ${isExpanded ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rotate-12' : 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-400 p-1.5 rounded-lg'}`}>
+                    <Pencil className="w-3 h-3" />
+                </div>
+            </div>
 
-                        {/* Unit & Location Row */}
-                        <div className="grid grid-cols-2 gap-2">
-                            <div>
-                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Unit</label>
-                                <UnitPicker
-                                    value={item.unit || 'each'}
-                                    onChange={(u) => updateItem(item.id, { unit: u })}
-                                    compact
-                                />
-                            </div>
-                            <div>
-                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Location</label>
-                                <select
-                                    value={item.location || 'Pantry'}
-                                    onChange={(e) => handleLocationChange(e.target.value, item.id)}
-                                    className="select-field w-full text-sm"
-                                >
-                                    {allLocations.map(l => <option key={l} value={l}>{l}</option>)}
-                                    <option value="__new__">+ New Location</option>
-                                </select>
-                            </div>
-                        </div>
+            {/* Expanded Content - Separate Section */}
+            {isExpanded && (
+                <div className="p-3 pt-1 space-y-3 animate-fade-in border-t border-indigo-100/50 dark:border-indigo-900/30" onClick={(e) => e.stopPropagation()}>
+                    {/* Reservations Details (if any) */}
+                    {(() => {
+                        const reservations = getItemReservations(item.name);
+                        if (reservations.length > 0) {
+                            return (
+                                <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-lg p-3 space-y-1 mt-1">
+                                    <div className="text-[10px] font-bold text-indigo-400 dark:text-indigo-500 uppercase tracking-wider mb-1">Current Reservations</div>
+                                    {reservations.map((res, idx) => (
+                                        <div key={idx} className="text-xs text-indigo-800 dark:text-indigo-200 flex justify-between items-center border-b border-indigo-100 dark:border-indigo-800/30 last:border-0 pb-1.5 pt-1">
+                                            <span className="font-medium truncate">{res.recipeName}</span>
+                                            <span className="font-bold ml-2">{res.amount} {res.unit}</span>
+                                        </div>
+                                    ))}
+                                    <div className="text-[10px] font-bold text-indigo-900 dark:text-indigo-100 text-right pt-2 mt-1 border-t border-indigo-200 dark:border-indigo-800/50">
+                                        Total Available: {getAvailableQuantity(item).toFixed(2)} {item.unit}
+                                    </div>
+                                </div>
+                            );
+                        }
+                        return null;
+                    })()}
 
-                        {/* Notes */}
+                    {/* Unit & Location Row */}
+                    <div className="grid grid-cols-2 gap-2">
                         <div>
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Notes</label>
-                            <textarea
-                                value={item.notes || ''}
-                                onChange={(e) => updateItem(item.id, { notes: e.target.value })}
-                                placeholder="Add notes (e.g., brand, special info)..."
-                                className="w-full input-field text-sm resize-none"
-                                rows={2}
+                            <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-1">Unit</label>
+                            <UnitPicker
+                                value={item.unit || 'each'}
+                                onChange={(u) => updateItem(item.id, { unit: u })}
+                                compact
                             />
                         </div>
-
-                        {/* Expiration Date */}
-                        <div className="flex items-center gap-2">
-                            <div className="flex-1">
-                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Expiration Date</label>
-                                <div className="flex items-center gap-2">
-                                    <input
-                                        type="date"
-                                        value={formatDateForInput(item.expiresAt)}
-                                        onChange={(e) => updateItem(item.id, { expiresAt: e.target.value || null })}
-                                        className={`flex-1 input-field text-sm ${expirationStatus === 'expired'
-                                            ? 'border-red-500 text-red-600'
-                                            : expirationStatus === 'soon'
-                                                ? 'border-amber-500 text-amber-600'
-                                                : ''
-                                            }`}
-                                    />
-                                    {item.expiresAt && (
-                                        <button
-                                            onClick={() => updateItem(item.id, { expiresAt: null })}
-                                            className="text-slate-400 hover:text-slate-600"
-                                        >
-                                            <X className="w-4 h-4" />
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Staple Toggle & Actions */}
-                        <div className="bg-slate-50 p-3 rounded-xl flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        updateItem(item.id, { isStaple: !item.isStaple });
-                                    }}
-                                    className={`w-11 h-6 rounded-full transition-colors relative flex-shrink-0 ${item.isStaple ? 'bg-amber-500' : 'bg-slate-300'}`}
-                                >
-                                    <div className={`w-4 h-4 bg-white rounded-full shadow absolute top-1 transition-all ${item.isStaple ? 'left-6' : 'left-1'}`} />
-                                </button>
-                                <div>
-                                    <span className="text-sm font-bold text-slate-700 block">Staple Item</span>
-                                    <span className="text-[10px] text-slate-400 block">Track and auto-add to shopping list</span>
-                                </div>
-                            </div>
-
-                            {item.isStaple && (
-                                <div className="flex items-center gap-2 animate-fade-in ml-2">
-                                    <span className="text-xs font-bold text-slate-500">Min:</span>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        step="0.1"
-                                        value={item.minStockLevel ?? ''}
-                                        onFocus={() => {
-                                            if (item.minStockLevel) prevMinStock.current = item.minStockLevel;
-                                        }}
-                                        onChange={(e) => {
-                                            const val = e.target.value;
-                                            updateItem(item.id, { minStockLevel: val === '' ? '' : parseFloat(val) });
-                                        }}
-                                        onBlur={(e) => {
-                                            if (e.target.value === '') {
-                                                updateItem(item.id, { minStockLevel: prevMinStock.current || 1 });
-                                            }
-                                        }}
-                                        onClick={(e) => e.stopPropagation()}
-                                        className="w-14 text-center input-field text-sm font-bold border-2 border-emerald-400 py-1 px-1 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
-                                    />
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Actions Row */}
-                        <div className="flex items-center gap-3 pt-2">
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    const newItem = {
-                                        id: Date.now().toString(),
-                                        name: item.name,
-                                        quantity: 1,
-                                        checked: false,
-                                        category: 'Unsorted'
-                                    };
-                                    setShoppingList?.(prev => [...prev, newItem]);
-                                    setToastData?.({ message: `Added "${item.name}" to shopping list 🛒`, duration: 2000 });
-                                }}
-                                className="flex-1 py-2 btn-secondary bg-indigo-50 text-indigo-600 hover:bg-indigo-100 flex items-center justify-center gap-2 rounded-xl text-sm font-bold transition-colors"
+                        <div>
+                            <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-1">Location</label>
+                            <select
+                                value={item.location || 'Pantry'}
+                                onChange={(e) => handleLocationChange(e.target.value, item.id)}
+                                className="select-field w-full text-sm"
                             >
-                                <ShoppingCart className="w-4 h-4" /> Add to List
-                            </button>
-
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    deleteItem(item.id);
-                                }}
-                                className="py-2 px-4 text-red-500 bg-red-50 hover:bg-red-100 flex items-center justify-center rounded-xl transition-colors font-bold text-xs"
-                            >
-                                <Trash2 className="w-4 h-4" />
-                            </button>
+                                {allLocations.map(l => <option key={l} value={l}>{l}</option>)}
+                                <option value="__new__">+ New Location</option>
+                            </select>
                         </div>
                     </div>
-                )}
-            </div>
+
+                    {/* Notes */}
+                    <div>
+                        <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-1">Notes</label>
+                        <textarea
+                            value={item.notes || ''}
+                            onChange={(e) => updateItem(item.id, { notes: e.target.value })}
+                            placeholder="Add notes (e.g., brand, special info)..."
+                            className="w-full input-field text-sm resize-none"
+                            rows={2}
+                        />
+                    </div>
+
+                    {/* Expiration Date */}
+                    <div className="flex items-center gap-2">
+                        <div className="flex-1">
+                            <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-1">Expiration Date</label>
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="date"
+                                    value={formatDateForInput(item.expiresAt)}
+                                    onChange={(e) => updateItem(item.id, { expiresAt: e.target.value || null })}
+                                    className={`flex-1 input-field text-sm ${expirationStatus === 'expired'
+                                        ? 'border-red-500 text-red-600 dark:text-red-400'
+                                        : expirationStatus === 'soon'
+                                            ? 'border-amber-500 text-amber-600 dark:text-amber-400'
+                                            : ''
+                                        }`}
+                                />
+                                {item.expiresAt && (
+                                    <button
+                                        onClick={() => updateItem(item.id, { expiresAt: null })}
+                                        className="text-slate-400 dark:text-slate-500 hover:text-slate-600"
+                                    >
+                                        <X className="w-4 h-4" />
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Staple Toggle & Actions */}
+                    <div className="bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    updateItem(item.id, { isStaple: !item.isStaple });
+                                }}
+                                className={`w-11 h-6 rounded-full transition-colors relative flex-shrink-0 ${item.isStaple ? 'bg-amber-500' : 'bg-slate-300 dark:bg-slate-600'}`}
+                            >
+                                <div className={`w-4 h-4 bg-white rounded-full shadow absolute top-1 transition-all ${item.isStaple ? 'left-6' : 'left-1'}`} />
+                            </button>
+                            <div>
+                                <span className="text-sm font-bold text-slate-700 dark:text-slate-300 block">Staple Item</span>
+                                <span className="text-[10px] text-slate-400 dark:text-slate-500 block">Track and auto-add to shopping list</span>
+                            </div>
+                        </div>
+
+                        {item.isStaple && (
+                            <div className="flex items-center gap-2 animate-fade-in ml-2">
+                                <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Min:</span>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    step="0.1"
+                                    value={item.minStockLevel ?? ''}
+                                    onFocus={() => {
+                                        if (item.minStockLevel) prevMinStock.current = item.minStockLevel;
+                                    }}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        updateItem(item.id, { minStockLevel: val === '' ? '' : parseFloat(val) });
+                                    }}
+                                    onBlur={(e) => {
+                                        if (e.target.value === '') {
+                                            updateItem(item.id, { minStockLevel: prevMinStock.current || 1 });
+                                        }
+                                    }}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="w-14 text-center input-field text-sm font-bold border-2 border-emerald-400 py-1 px-1 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
+                                />
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Actions Row */}
+                    <div className="flex items-center gap-3 pt-2">
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                const newItem = {
+                                    id: Date.now().toString(),
+                                    name: item.name,
+                                    quantity: 1,
+                                    checked: false,
+                                    category: 'Unsorted'
+                                };
+                                setShoppingList?.(prev => [...prev, newItem]);
+                                setToastData?.({ message: `Added "${item.name}" to shopping list 🛒`, duration: 2000 });
+                            }}
+                            className="flex-1 py-2 btn-secondary bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 flex items-center justify-center gap-2 rounded-xl text-sm font-bold transition-colors"
+                        >
+                            <ShoppingCart className="w-4 h-4" /> Add to List
+                        </button>
+
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                deleteItem(item.id);
+                            }}
+                            className="py-2 px-4 text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 flex items-center justify-center rounded-xl transition-colors font-bold text-xs"
+                        >
+                            <Trash2 className="w-4 h-4" />
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
@@ -2806,7 +2817,7 @@ Return JSON: {
                 suggestedLocation: result.suggestedLocation || result.data?.suggestedLocation || 'Pantry',
                 items: (parsedItems || []).map(item => {
                     // Robust duplicate finding logic
-                    const normalizedItemName = item.name.toLowerCase().trim();
+                    const normalizedItemName = (item.name || '').toLowerCase().trim();
                     const existingMatch = inventory.find(i =>
                         i.name.toLowerCase().trim() === normalizedItemName ||
                         (item.duplicateMatch && i.name.toLowerCase().trim() === item.duplicateMatch.toLowerCase().trim())
@@ -3102,10 +3113,10 @@ If you find no additional items, return: { "items": [] }`;
 
             {/* Header */}
             <div className="flex items-center justify-between px-1">
-                <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+                <h2 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
                     <Refrigerator className="w-6 h-6 text-emerald-500" /> Pantry
                 </h2>
-                <span className="text-xs font-bold bg-slate-100 px-3 py-1.5 rounded-full text-slate-500">
+                <span className="text-xs font-bold bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-full text-slate-500 dark:text-slate-400">
                     {inventory.length} items
                 </span>
             </div>
@@ -3113,17 +3124,17 @@ If you find no additional items, return: { "items": [] }`;
             {/* Photo Capture Buttons - Camera, Upload & Manual Add */}
             <div className="flex gap-2">
                 <button onClick={() => cameraInputRef.current?.click()}
-                    className="flex-1 flex flex-col items-center justify-center gap-1 bg-emerald-50 text-emerald-600 p-3 rounded-xl font-bold hover:bg-emerald-100 active:scale-[0.98] transition-all">
+                    className="flex-1 flex flex-col items-center justify-center gap-1 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 p-3 rounded-xl font-bold hover:bg-emerald-100 dark:hover:bg-emerald-900/40 active:scale-[0.98] transition-all">
                     <Camera className="w-6 h-6" />
                     <span className="text-xs">Take Photo</span>
                 </button>
                 <button onClick={() => fileInputRef.current?.click()}
-                    className="flex-1 flex flex-col items-center justify-center gap-1 bg-indigo-50 text-indigo-600 p-3 rounded-xl font-bold hover:bg-indigo-100 active:scale-[0.98] transition-all">
+                    className="flex-1 flex flex-col items-center justify-center gap-1 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 p-3 rounded-xl font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900/40 active:scale-[0.98] transition-all">
                     <ImageIcon className="w-6 h-6" />
                     <span className="text-xs">Upload Photos</span>
                 </button>
                 <button onClick={() => setShowManualForm(!showManualForm)}
-                    className={`flex-1 flex flex-col items-center justify-center gap-1 p-3 rounded-xl font-bold active:scale-[0.98] transition-all ${showManualForm ? 'bg-amber-100 text-amber-700' : 'bg-amber-50 text-amber-600 hover:bg-amber-100'}`}>
+                    className={`flex-1 flex flex-col items-center justify-center gap-1 p-3 rounded-xl font-bold active:scale-[0.98] transition-all ${showManualForm ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300' : 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/40'}`}>
                     <Edit3 className="w-6 h-6" />
                     <span className="text-xs">Manually Add</span>
                 </button>
@@ -3134,7 +3145,7 @@ If you find no additional items, return: { "items": [] }`;
 
             {/* Manual Add Form - Collapsible */}
             {showManualForm && (
-                <div className="bg-white p-4 rounded-2xl border border-amber-200 space-y-3 animate-fade-in">
+                <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-amber-200 dark:border-amber-800/50 space-y-3 animate-fade-in">
                     <input value={newItem} onChange={(e) => setNewItem(e.target.value)}
                         placeholder="Item name..."
                         className="w-full input-field" />
@@ -3147,11 +3158,11 @@ If you find no additional items, return: { "items": [] }`;
                         </select>
                     </div>
                     <div>
-                        <label className="text-xs font-bold text-slate-500 mb-1 block">Unit</label>
+                        <label className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1 block">Unit</label>
                         <UnitPicker value={newUnit} onChange={setNewUnit} compact />
                     </div>
                     <div className="flex items-center gap-2">
-                        <label className="text-xs text-slate-500">Expires:</label>
+                        <label className="text-xs text-slate-500 dark:text-slate-400">Expires:</label>
                         <input
                             type="date"
                             value={newExpDate}
@@ -3160,22 +3171,22 @@ If you find no additional items, return: { "items": [] }`;
                         />
                     </div>
                     {/* Staple Item Toggle */}
-                    <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl">
+                    <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl">
                         <div>
-                            <span className="text-sm font-bold text-slate-700">Staple Item</span>
-                            <p className="text-xs text-slate-400">Alert when running low</p>
+                            <span className="text-sm font-bold text-slate-700 dark:text-slate-300">Staple Item</span>
+                            <p className="text-xs text-slate-400 dark:text-slate-500">Alert when running low</p>
                         </div>
                         <button
                             type="button"
                             onClick={() => setIsStapleItem(!isStapleItem)}
-                            className={`w-12 h-6 rounded-full transition-colors ${isStapleItem ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                            className={`w-12 h-6 rounded-full transition-colors ${isStapleItem ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`}
                         >
                             <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform ${isStapleItem ? 'translate-x-6' : 'translate-x-0.5'}`} />
                         </button>
                     </div>
                     {isStapleItem && (
                         <div className="flex items-center gap-2 animate-fade-in">
-                            <label className="text-xs text-slate-500">Alert when below:</label>
+                            <label className="text-xs text-slate-500 dark:text-slate-400">Alert when below:</label>
                             <input
                                 type="number"
                                 min="1"
@@ -3183,10 +3194,10 @@ If you find no additional items, return: { "items": [] }`;
                                 onChange={e => setAlertBelow(parseInt(e.target.value) || 1)}
                                 className="w-16 input-field text-center text-sm"
                             />
-                            <span className="text-xs text-slate-400">{newUnit}</span>
+                            <span className="text-xs text-slate-400 dark:text-slate-500">{newUnit}</span>
                         </div>
                     )}
-                    <button type="button" onClick={addItem} className="w-full btn-primary bg-amber-500 shadow-amber-200">
+                    <button type="button" onClick={addItem} className="w-full btn-primary bg-amber-500 shadow-amber-200 dark:shadow-none hover:bg-amber-600 border-none text-white">
                         <Plus className="w-5 h-5 inline mr-1" /> Add Item
                     </button>
                 </div>
@@ -3197,29 +3208,16 @@ If you find no additional items, return: { "items": [] }`;
                 {/* Search and Controls */}
                 <div className="flex gap-2 items-center">
                     <div className="relative flex-1">
-                        <input
-                            type="text"
-                            value={searchQuery}
-                            onChange={e => setSearchQuery(e.target.value)}
-                            placeholder="Search pantry..."
-                            className="w-full input-field pl-3 pr-8 text-sm"
-                        />
+                        <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search pantry..." className="w-full input-field pl-3 pr-8 text-sm" />
                         {searchQuery && (
-                            <button
-                                onClick={() => setSearchQuery('')}
-                                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                            >
+                            <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-slate-600">
                                 <X className="w-4 h-4" />
                             </button>
                         )}
                     </div>
                     <div className="flex items-center gap-1">
-                        <span className="text-xs text-slate-400 whitespace-nowrap">Sort by:</span>
-                        <select
-                            value={sortBy}
-                            onChange={e => setSortBy(e.target.value)}
-                            className="select-field text-xs py-2 px-2 w-auto"
-                        >
+                        <span className="text-xs text-slate-400 dark:text-slate-500 whitespace-nowrap">Sort by:</span>
+                        <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="select-field text-xs py-2 px-2 w-auto">
                             <option value="location">Location</option>
                             <option value="name">Name</option>
                             <option value="expiration">Expiration</option>
@@ -3227,54 +3225,48 @@ If you find no additional items, return: { "items": [] }`;
                         </select>
                     </div>
                     {sortBy === 'location' && groupedInventory && (
-                        <button
-                            onClick={() => {
-                                const allLocs = Object.keys(groupedInventory);
-                                const allCollapsed = allLocs.every(loc => collapsedLocations[loc]);
-                                const newState = {};
-                                allLocs.forEach(loc => { newState[loc] = !allCollapsed; });
-                                setCollapsedLocations(newState);
-                            }}
-                            className="px-3 py-2 text-xs font-bold text-slate-500 bg-slate-100 rounded-lg hover:bg-slate-200 whitespace-nowrap"
-                        >
+                        <button onClick={() => {
+                            const allLocs = Object.keys(groupedInventory);
+                            const allCollapsed = allLocs.every(loc => collapsedLocations[loc]);
+                            const newState = {};
+                            allLocs.forEach(loc => { newState[loc] = !allCollapsed; });
+                            setCollapsedLocations(newState);
+                        }} className="px-3 py-2 text-xs font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 whitespace-nowrap">
                             {Object.keys(groupedInventory).every(loc => collapsedLocations[loc]) ? 'Expand All' : 'Collapse All'}
                         </button>
                     )}
                 </div>
                 {inventory.length === 0 && (
-                    <div className="text-center py-12 text-slate-400">
-                        <Refrigerator className="w-16 h-16 mx-auto mb-4 text-slate-200" />
+                    <div className="text-center py-12 text-slate-400 dark:text-slate-500">
+                        <Refrigerator className="w-16 h-16 mx-auto mb-4 text-slate-200 dark:text-slate-700" />
                         <p>Your pantry is empty.</p>
                         <p className="text-sm mt-2">Upload photos of your pantry, fridge, or receipts to get started.</p>
                     </div>
                 )}
 
                 {inventory.length > 0 && groupedInventory && Object.keys(groupedInventory).length === 0 && searchQuery && (
-                    <div className="text-center py-8 text-slate-400">
+                    <div className="text-center py-8 text-slate-400 dark:text-slate-500">
                         <p className="text-sm">No items match "{searchQuery}"</p>
-                        <button onClick={() => setSearchQuery('')} className="text-emerald-600 text-sm mt-2 underline">Clear search</button>
+                        <button onClick={() => setSearchQuery('')} className="text-emerald-600 dark:text-emerald-400 text-sm mt-2 underline">Clear search</button>
                     </div>
                 )}
 
                 {/* Grouped by Location (default) */}
                 {sortBy === 'location' && groupedInventory && Object.keys(groupedInventory).sort().map(location => (
-                    <div key={location} className="space-y-2">
+                    <div key={location} className="space-y-1">
                         {/* Location Header - Collapsible */}
-                        <button
-                            onClick={() => toggleLocationCollapse(location)}
-                            className="flex items-center gap-2 w-full px-2 py-2 text-left hover:bg-slate-50 rounded-lg transition-colors"
-                        >
+                        <button onClick={() => toggleLocationCollapse(location)} className="flex items-center gap-2 w-full px-2 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg transition-colors">
                             {collapsedLocations[location] ?
-                                <ChevronRight className="w-4 h-4 text-slate-400" /> :
-                                <ChevronDown className="w-4 h-4 text-slate-400" />
+                                <ChevronRight className="w-4 h-4 text-slate-400 dark:text-slate-500" /> :
+                                <ChevronDown className="w-4 h-4 text-slate-400 dark:text-slate-500" />
                             }
-                            <span className="text-sm font-bold text-slate-500 uppercase tracking-wide">{location}</span>
-                            <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{groupedInventory[location].length}</span>
+                            <span className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">{location}</span>
+                            <span className="text-xs text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">{groupedInventory[location].length}</span>
                         </button>
 
                         {/* Items in this location */}
                         {!collapsedLocations[location] && (
-                            <div className="space-y-2 pl-2">
+                            <div className="space-y-1">
                                 {groupedInventory[location].map((item) => (
                                     <InventoryItem
                                         key={item.id}
@@ -3302,8 +3294,8 @@ If you find no additional items, return: { "items": [] }`;
 
                 {/* Flat List (for non-location sorts) */}
                 {sortBy !== 'location' && sortedInventory.length > 0 && (
-                    <div className="space-y-2">
-                        <p className="text-xs text-slate-400 px-2 uppercase tracking-wider font-bold">
+                    <div className="space-y-1">
+                        <p className="text-xs text-slate-400 dark:text-slate-500 px-2 uppercase tracking-wider font-bold">
                             Sorted by {sortBy === 'name' ? 'Name (A-Z)' : sortBy === 'expiration' ? 'Expiration' : 'Reserved Status'}
                         </p>
                         {sortedInventory.map((item) => (
@@ -3352,13 +3344,12 @@ If you find no additional items, return: { "items": [] }`;
                             </div>
                         )}
 
-                        {/* Scrollable Content Area */}
                         <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4">
                             {/* Header - Compact */}
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <h2 className="text-lg font-bold text-slate-900">Review Items</h2>
-                                    <p className="text-slate-500 text-xs">
+                                    <h2 className="text-lg font-bold text-slate-900 dark:text-white">Review Items</h2>
+                                    <p className="text-slate-500 dark:text-slate-400 text-xs">
                                         {stagingData.isReceipt ? 'Set locations per item' : 'Confirm details below'}
                                     </p>
                                 </div>
@@ -3366,8 +3357,8 @@ If you find no additional items, return: { "items": [] }`;
 
                             {/* Batch Location (non-receipt only) - Compact */}
                             {!stagingData.isReceipt && (
-                                <div className="bg-slate-50 p-2.5 rounded-xl">
-                                    <label className="text-xs font-bold text-slate-500 mb-1 block">Storage Location (All)</label>
+                                <div className="bg-slate-50 dark:bg-slate-800 p-2.5 rounded-xl">
+                                    <label className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1 block">Storage Location (All)</label>
                                     <select
                                         value={stagingData.suggestedLocation}
                                         onChange={(e) => updateBatchLocation(e.target.value)}
@@ -3381,24 +3372,24 @@ If you find no additional items, return: { "items": [] }`;
 
                             {/* Error Message */}
                             {stagingError && (
-                                <div className="bg-red-50 border border-red-200 text-red-600 text-sm p-2.5 rounded-xl flex items-center gap-2">
+                                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm p-2.5 rounded-xl flex items-center gap-2">
                                     <AlertCircle className="w-4 h-4 flex-shrink-0" />
                                     {stagingError}
                                 </div>
                             )}
 
                             {/* Items List Header - Compact */}
-                            <div className="flex items-center justify-between py-1.5 border-b border-slate-100">
-                                <span className="text-sm font-bold text-slate-700">Items ({stagingData.items.filter(i => !i.excluded).length})</span>
+                            <div className="flex items-center justify-between py-1.5 border-b border-slate-100 dark:border-slate-800">
+                                <span className="text-sm font-bold text-slate-700 dark:text-slate-300">Items ({stagingData.items.filter(i => !i.excluded).length})</span>
                                 <div className="flex gap-2">
-                                    <button onClick={addManualStagingItem} className="text-xs font-bold text-slate-600 bg-slate-100 px-2 py-1 rounded-lg hover:bg-slate-200 flex items-center gap-1">
+                                    <button onClick={addManualStagingItem} className="text-xs font-bold text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center gap-1">
                                         <Plus className="w-3 h-3" /> Add
                                     </button>
                                     {stagingData.imageUrl && (
                                         <button
                                             onClick={rescanWithContext}
                                             disabled={isAnalyzing}
-                                            className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg hover:bg-indigo-100 flex items-center gap-1 disabled:opacity-50"
+                                            className="text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-1 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/50 flex items-center gap-1 disabled:opacity-50"
                                         >
                                             {isAnalyzing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
                                             {isAnalyzing ? 'Scanning...' : 'Scan More'}
@@ -3410,7 +3401,7 @@ If you find no additional items, return: { "items": [] }`;
                             {/* Items List */}
                             <div ref={stagingListRef} className="space-y-2.5">
                                 {stagingData.items.map((item) => (
-                                    <div key={item.id} className={`bg-white border rounded-xl p-2.5 transition-all ${item.excluded ? 'opacity-50 grayscale bg-slate-50' : 'shadow-sm'} ${item.confidence === 'low' ? 'border-red-100 ring-1 ring-red-50' : 'border-slate-200'}`}>
+                                    <div key={item.id} className={`bg-white dark:bg-slate-900 border rounded-xl p-2.5 transition-all ${item.excluded ? 'opacity-50 grayscale bg-slate-50 dark:bg-slate-800' : 'shadow-sm'} ${item.confidence === 'low' ? 'border-red-100 dark:border-red-900/50 ring-1 ring-red-50 dark:ring-red-900/20' : 'border-slate-200 dark:border-slate-700'}`}>
 
                                         {/* Row 1: Checkbox + Name */}
                                         <div className="flex items-start gap-2.5 mb-1.5">
@@ -3418,18 +3409,18 @@ If you find no additional items, return: { "items": [] }`;
                                                 type="checkbox"
                                                 checked={!item.excluded}
                                                 onChange={(e) => updateStagingItem(item.id, { excluded: !e.target.checked })}
-                                                className="w-5 h-5 mt-0.5 rounded border-slate-300 text-emerald-500 focus:ring-emerald-500 cursor-pointer flex-shrink-0"
+                                                className="w-5 h-5 mt-0.5 rounded border-slate-300 dark:border-slate-600 text-orange-500 focus:ring-orange-500 focus:ring-offset-0 cursor-pointer flex-shrink-0 transition-all active:scale-90"
                                             />
                                             <div className="flex-1 min-w-0">
                                                 <input
                                                     type="text"
                                                     value={item.name}
                                                     onChange={(e) => { updateStagingItem(item.id, { name: e.target.value }); setStagingError(null); }}
-                                                    className={`w-full font-bold text-slate-800 bg-transparent border-none p-0 focus:ring-0 placeholder:text-slate-400 text-sm ${!item.name && stagingError ? 'border-b border-red-500' : ''}`}
+                                                    className={`w-full font-bold text-slate-800 dark:text-white bg-transparent border-none p-0 focus:ring-0 placeholder:text-slate-400 dark:placeholder:text-slate-500 text-sm ${!item.name && stagingError ? 'border-b border-red-500' : ''}`}
                                                     disabled={item.excluded}
                                                     placeholder="Item Name"
                                                 />
-                                                {item.confidence === 'low' && <span className="text-[10px] text-red-500 font-medium block">Low confidence - check name</span>}
+                                                {item.confidence === 'low' && <span className="text-[10px] text-red-500 dark:text-red-400 font-medium block">Low confidence - check name</span>}
                                             </div>
                                         </div>
 
@@ -3441,7 +3432,7 @@ If you find no additional items, return: { "items": [] }`;
                                                 step="0.01"
                                                 value={item.quantity}
                                                 onChange={(e) => updateStagingItem(item.id, { quantity: e.target.value === '' ? '' : parseFloat(e.target.value) })}
-                                                className="w-14 text-center bg-slate-50 font-bold rounded-lg py-1 border border-slate-200 focus:border-emerald-500 text-sm"
+                                                className="w-14 text-center bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-bold rounded-lg py-1 border border-slate-200 dark:border-slate-700 focus:border-emerald-500 text-sm"
                                                 disabled={item.excluded}
                                             />
                                             <UnitPickerButton
@@ -3459,7 +3450,7 @@ If you find no additional items, return: { "items": [] }`;
                                                             updateStagingItem(item.id, { location: e.target.value });
                                                         }
                                                     }}
-                                                    className="select-field text-xs py-1"
+                                                    className="select-field text-xs py-1 dark:bg-slate-800 dark:text-white dark:border-slate-700"
                                                     disabled={item.excluded}
                                                 >
                                                     {allLocations.map(l => <option key={l} value={l}>{l}</option>)}
@@ -3474,16 +3465,16 @@ If you find no additional items, return: { "items": [] }`;
                                                 type="date"
                                                 value={item.expiresAt || ''}
                                                 onChange={(e) => updateStagingItem(item.id, { expiresAt: e.target.value || null })}
-                                                className="input-field text-xs py-1 w-32"
+                                                className="input-field text-xs py-1 w-32 dark:[color-scheme:dark]"
                                                 disabled={item.excluded}
                                             />
                                             <div className="flex items-center gap-1.5 ml-auto">
-                                                <span className="text-[10px] uppercase font-bold text-slate-400">Staple</span>
+                                                <span className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500">Staple</span>
                                                 <button
                                                     type="button"
                                                     onClick={() => updateStagingItem(item.id, { isStaple: !item.isStaple })}
                                                     disabled={item.excluded}
-                                                    className={`w-8 h-4 rounded-full transition-colors relative ${item.isStaple ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                                                    className={`w-8 h-4 rounded-full transition-colors relative ${item.isStaple ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`}
                                                 >
                                                     <div className={`w-3 h-3 bg-white rounded-full shadow absolute top-0.5 transition-all`} style={{ left: item.isStaple ? '18px' : '2px' }} />
                                                 </button>
@@ -3492,8 +3483,8 @@ If you find no additional items, return: { "items": [] }`;
 
                                         {/* Min Stock Level (if Staple) */}
                                         {item.isStaple && !item.excluded && (
-                                            <div className="ml-7 mt-1.5 pt-1.5 border-t border-slate-100 flex items-center justify-between animate-fade-in">
-                                                <span className="text-xs text-slate-600">Restock at:</span>
+                                            <div className="ml-7 mt-1.5 pt-1.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between animate-fade-in">
+                                                <span className="text-xs text-slate-600 dark:text-slate-400">Restock at:</span>
                                                 <div className="flex items-center gap-1">
                                                     <input
                                                         type="number"
@@ -3501,32 +3492,32 @@ If you find no additional items, return: { "items": [] }`;
                                                         step="0.1"
                                                         value={item.alertBelow || item.minStockLevel || 1}
                                                         onChange={(e) => updateStagingItem(item.id, { minStockLevel: parseFloat(e.target.value) || 0, alertBelow: parseFloat(e.target.value) || 0 })}
-                                                        className="w-12 text-center input-field text-xs py-0.5"
+                                                        className="w-12 text-center input-field text-xs py-0.5 dark:bg-slate-800 dark:text-white dark:border-slate-700"
                                                         disabled={item.excluded}
                                                     />
-                                                    <span className="text-[10px] text-slate-400">{item.unit || 'each'}</span>
+                                                    <span className="text-[10px] text-slate-400 dark:text-slate-500">{item.unit || 'each'}</span>
                                                 </div>
                                             </div>
                                         )}
 
                                         {/* Similar Item & Merge Logic */}
                                         {item.isDuplicate && (
-                                            <div className="mt-2 ml-7 bg-amber-50 rounded-lg p-2 border border-amber-100">
+                                            <div className="mt-2 ml-7 bg-amber-50 dark:bg-amber-900/20 rounded-lg p-2 border border-amber-100 dark:border-amber-800/50">
                                                 <div className="flex items-center justify-between mb-1.5">
-                                                    <div className="flex items-center gap-1 text-amber-800 font-bold text-xs">
+                                                    <div className="flex items-center gap-1 text-amber-800 dark:text-amber-400 font-bold text-xs">
                                                         <AlertTriangle className="w-3 h-3" />
                                                         <span>Similar item in pantry</span>
                                                     </div>
                                                     <div className="flex gap-1.5">
                                                         <button
                                                             onClick={() => updateStagingItem(item.id, { mergeWithDuplicate: false })}
-                                                            className={`px-1.5 py-0.5 text-[10px] font-bold rounded border ${!item.mergeWithDuplicate ? 'bg-white border-amber-300 text-amber-900 shadow-sm' : 'border-transparent text-amber-600'}`}
+                                                            className={`px-1.5 py-0.5 text-[10px] font-bold rounded border ${!item.mergeWithDuplicate ? 'bg-white dark:bg-slate-900 border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-300 shadow-sm' : 'border-transparent text-amber-600 dark:text-amber-500 hover:text-amber-700 dark:hover:text-amber-400'}`}
                                                         >
                                                             New
                                                         </button>
                                                         <button
                                                             onClick={() => updateStagingItem(item.id, { mergeWithDuplicate: true })}
-                                                            className={`px-1.5 py-0.5 text-[10px] font-bold rounded border ${item.mergeWithDuplicate ? 'bg-white border-amber-300 text-amber-900 shadow-sm' : 'border-transparent text-amber-600'}`}
+                                                            className={`px-1.5 py-0.5 text-[10px] font-bold rounded border ${item.mergeWithDuplicate ? 'bg-white dark:bg-slate-900 border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-300 shadow-sm' : 'border-transparent text-amber-600 dark:text-amber-500 hover:text-amber-700 dark:hover:text-amber-400'}`}
                                                         >
                                                             Merge
                                                         </button>
@@ -3535,11 +3526,11 @@ If you find no additional items, return: { "items": [] }`;
 
                                                 {item.mergeWithDuplicate && (
                                                     <div className="space-y-1 text-xs">
-                                                        <div className="text-slate-600 bg-white/60 p-1 rounded">
+                                                        <div className="text-slate-600 dark:text-slate-300 bg-white/60 dark:bg-slate-800/50 p-1 rounded">
                                                             {item.conversionValid ? (
-                                                                <>Adding <strong className="text-emerald-700">+{item.convertedQty} {item.existingUnit}</strong> to existing.</>
+                                                                <>Adding <strong className="text-emerald-700 dark:text-emerald-500">+{item.convertedQty} {item.existingUnit}</strong> to existing.</>
                                                             ) : (
-                                                                <span className="text-amber-700 flex items-start gap-1">
+                                                                <span className="text-amber-700 dark:text-amber-400 flex items-start gap-1">
                                                                     <HelpCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
                                                                     Diff units ({item.unit} vs {item.existingUnit}). Adding 1:1.
                                                                 </span>
@@ -3547,22 +3538,22 @@ If you find no additional items, return: { "items": [] }`;
                                                         </div>
 
                                                         {item.name.trim().toLowerCase() !== item.duplicateMatch.trim().toLowerCase() && (
-                                                            <div className="bg-white/60 p-1.5 rounded space-y-1">
-                                                                <div className="text-[10px] text-slate-500">
-                                                                    Existing: <strong className="text-slate-700">"{item.duplicateMatch}"</strong>
+                                                            <div className="bg-white/60 dark:bg-slate-800/50 p-1.5 rounded space-y-1">
+                                                                <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                                                                    Existing: <strong className="text-slate-700 dark:text-slate-200">"{item.duplicateMatch}"</strong>
                                                                 </div>
                                                                 <div className="flex items-center justify-between">
-                                                                    <span className="font-semibold text-slate-600 text-[10px]">Use which name?</span>
+                                                                    <span className="font-semibold text-slate-600 dark:text-slate-300 text-[10px]">Use which name?</span>
                                                                     <div className="flex gap-1 text-[10px]">
                                                                         <button
                                                                             onClick={() => updateStagingItem(item.id, { useNewName: false })}
-                                                                            className={`px-1.5 py-0.5 rounded ${!item.useNewName ? 'bg-amber-100 text-amber-900 font-bold' : 'text-slate-500'}`}
+                                                                            className={`px-1.5 py-0.5 rounded ${!item.useNewName ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-300 font-bold' : 'text-slate-500 dark:text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
                                                                         >
                                                                             Existing
                                                                         </button>
                                                                         <button
                                                                             onClick={() => updateStagingItem(item.id, { useNewName: true })}
-                                                                            className={`px-1.5 py-0.5 rounded ${item.useNewName ? 'bg-amber-100 text-amber-900 font-bold' : 'text-slate-500'}`}
+                                                                            className={`px-1.5 py-0.5 rounded ${item.useNewName ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-300 font-bold' : 'text-slate-500 dark:text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
                                                                         >
                                                                             New
                                                                         </button>
@@ -3580,7 +3571,7 @@ If you find no additional items, return: { "items": [] }`;
                         </div>
 
                         {/* Footer - Pinned at bottom */}
-                        <div className="flex-shrink-0 p-4 bg-white border-t border-slate-200 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
+                        <div className="flex-shrink-0 p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
                             <button
                                 onClick={confirmStaging}
                                 className="w-full btn-primary py-3 rounded-xl flex items-center justify-center gap-2 text-base"
@@ -3622,7 +3613,7 @@ If you find no additional items, return: { "items": [] }`;
 
             {/* New Location Modal */}
             <Modal isOpen={showNewLocationModal} onClose={() => setShowNewLocationModal(false)}>
-                <div className="p-6 space-y-4">
+                <div className="p-6 space-y-4 bg-white dark:bg-slate-900 dark:text-white">
                     <h2 className="text-xl font-bold">Add New Location</h2>
                     <input
                         value={newLocationInput}
@@ -3744,15 +3735,15 @@ const FamilyView = ({ familyMembers, setFamilyMembers }) => {
     return (
         <div className="w-full p-4 space-y-5 pb-32">
             <div className="flex items-center justify-between px-1">
-                <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+                <h2 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
                     <Users className="w-6 h-6 text-purple-500" /> Family
                 </h2>
-                <span className="text-xs font-bold bg-purple-50 text-purple-600 px-3 py-1.5 rounded-full">
+                <span className="text-xs font-bold bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 px-3 py-1.5 rounded-full">
                     ~{calculatedServings.toFixed(1)} servings/meal
                 </span>
             </div>
 
-            <form onSubmit={addMember} className="space-y-3 w-full bg-white p-4 rounded-2xl border border-slate-100">
+            <form onSubmit={addMember} className="space-y-3 w-full bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-700">
                 {/* Name - Full Width */}
                 <input value={name} onChange={e => setName(e.target.value)} placeholder="Name" className="w-full input-field" />
 
@@ -3791,7 +3782,7 @@ const FamilyView = ({ familyMembers, setFamilyMembers }) => {
                             title="Servings"
                             placeholder="srv"
                         />
-                        <span className="text-xs text-slate-400">srv</span>
+                        <span className="text-xs text-slate-400 dark:text-slate-500">srv</span>
                     </div>
                 </div>
 
@@ -3806,30 +3797,30 @@ const FamilyView = ({ familyMembers, setFamilyMembers }) => {
                     <option value="athlete">Athlete (larger portions)</option>
                 </select>
                 <input value={preferences} onChange={e => setPreferences(e.target.value)} placeholder="Likes/Dislikes (optional)" className="w-full input-field text-sm" />
-                <button className="w-full btn-primary bg-purple-600 shadow-purple-200">Add Family Member</button>
+                <button className="w-full btn-primary bg-purple-600 dark:bg-purple-700 shadow-purple-200 dark:shadow-none">Add Family Member</button>
             </form>
 
             <div className="space-y-3 w-full">
                 {membersWithCurrentAge.map(m => (
-                    <div key={m.id} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex justify-between items-center w-full">
+                    <div key={m.id} className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm flex justify-between items-center w-full">
                         <div className="flex-1">
-                            <div className="font-bold text-slate-800 text-lg flex items-center gap-2 flex-wrap">
+                            <div className="font-bold text-slate-800 dark:text-gray-100 text-lg flex items-center gap-2 flex-wrap">
                                 {m.name}
-                                <span className="bg-slate-100 text-slate-500 text-xs px-2 py-0.5 rounded-full font-bold">
+                                <span className="bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 text-xs px-2 py-0.5 rounded-full font-bold">
                                     {m.displayAge} • {m.gender === 'male' ? '♂' : '♀'}
                                 </span>
-                                <span className="bg-purple-100 text-purple-600 text-xs px-2 py-0.5 rounded-full font-bold">
+                                <span className="bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 text-xs px-2 py-0.5 rounded-full font-bold">
                                     {m.servings || 1}× srv
                                 </span>
                             </div>
-                            <div className="text-sm text-purple-600 font-medium mt-1">{m.diet !== 'None' ? m.diet : 'No restrictions'}</div>
-                            {m.preferences && <div className="text-xs text-slate-400 mt-1 flex items-center gap-1"><MessageCircle className="w-3 h-3" /> {m.preferences}</div>}
+                            <div className="text-sm text-purple-600 dark:text-purple-400 font-medium mt-1">{m.diet !== 'None' ? m.diet : 'No restrictions'}</div>
+                            {m.preferences && <div className="text-xs text-slate-400 dark:text-slate-500 mt-1 flex items-center gap-1"><MessageCircle className="w-3 h-3" /> {m.preferences}</div>}
                         </div>
                         <div className="flex gap-1">
-                            <button onClick={() => setEditingMember({ ...m })} className="p-3 text-slate-300 hover:text-blue-500">
+                            <button onClick={() => setEditingMember({ ...m })} className="p-3 text-slate-300 dark:text-slate-600 hover:text-blue-500 dark:hover:text-blue-400">
                                 <Edit3 className="w-5 h-5" />
                             </button>
-                            <button onClick={() => setFamilyMembers(familyMembers.filter(f => f.id !== m.id))} className="p-3 text-slate-300 hover:text-red-500">
+                            <button onClick={() => setFamilyMembers(familyMembers.filter(f => f.id !== m.id))} className="p-3 text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400">
                                 <Trash2 className="w-5 h-5" />
                             </button>
                         </div>
@@ -3841,7 +3832,7 @@ const FamilyView = ({ familyMembers, setFamilyMembers }) => {
             <Modal isOpen={!!editingMember} onClose={() => setEditingMember(null)}>
                 {editingMember && (
                     <div className="p-6 space-y-4">
-                        <h2 className="text-xl font-bold">Edit Family Member</h2>
+                        <h2 className="text-xl font-bold text-slate-900 dark:text-white">Edit Family Member</h2>
                         <input
                             value={editingMember.name}
                             onChange={e => setEditingMember({ ...editingMember, name: e.target.value })}
@@ -3890,7 +3881,7 @@ const FamilyView = ({ familyMembers, setFamilyMembers }) => {
                             className="input-field"
                         />
                         <div>
-                            <label className="text-sm font-bold text-slate-600 block mb-1">Servings per meal</label>
+                            <label className="text-sm font-bold text-slate-600 dark:text-slate-400 block mb-1">Servings per meal</label>
                             <input
                                 type="number"
                                 step="0.25"
@@ -3904,7 +3895,7 @@ const FamilyView = ({ familyMembers, setFamilyMembers }) => {
                         <button
                             onClick={saveMemberEdit}
                             disabled={!editingMember.servings && editingMember.servings !== 0}
-                            className={`w-full btn-primary bg-purple-600 ${(!editingMember.servings && editingMember.servings !== 0) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            className={`w-full btn-primary bg-purple-600 dark:bg-purple-700 ${(!editingMember.servings && editingMember.servings !== 0) ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                             Save Changes
                         </button>
@@ -4346,11 +4337,18 @@ STRICT JSON Output:
 
             // Generate images asynchronously
             newRecipes.forEach(async (recipe) => {
-                const prompt = `Professional food photography of ${recipe.name}, appetizing, well-lit, on a clean white plate, restaurant quality, high resolution`;
-                const imageUrl = await generateImageWithGemini(apiKey, prompt);
-                setRecipes(prev => prev.map(r =>
-                    r.id === recipe.id ? { ...r, imageUrl, imageLoading: false } : r
-                ));
+                try {
+                    const prompt = `Professional food photography of ${recipe.name}, appetizing, well-lit, on a clean white plate, restaurant quality, high resolution`;
+                    const imageUrl = await generateImageWithGemini(apiKey, prompt);
+                    setRecipes(prev => prev.map(r =>
+                        r.id === recipe.id ? { ...r, imageUrl, imageLoading: false } : r
+                    ));
+                } catch (err) {
+                    console.error("Failed to generate recipe image:", err);
+                    setRecipes(prev => prev.map(r =>
+                        r.id === recipe.id ? { ...r, imageLoading: false } : r
+                    ));
+                }
             });
         } else {
             alert("No recipes generated. Try again.");
@@ -4361,16 +4359,16 @@ STRICT JSON Output:
     return (
         <div className="w-full min-h-full pb-32">
             {loading && <LoadingOverlay message="Creating recipes..." />}
-            <div className="bg-white px-4 pt-4 pb-2 sticky top-0 z-20 border-b border-slate-50">
-                <div className="flex bg-slate-100 rounded-xl p-1 w-full">
-                    <button id="recipe-tab-ideas" onClick={() => setActiveTab('generate')} className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${activeTab === 'generate' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-400'}`}>Ideas</button>
-                    <button id="recipe-tab-custom" onClick={() => setActiveTab('custom')} className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${activeTab === 'custom' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-400'}`}>
+            <div className="bg-white dark:bg-slate-900 px-4 pt-4 pb-2 sticky top-0 z-20 border-b border-slate-50 dark:border-slate-800">
+                <div className="flex bg-slate-100 dark:bg-slate-800 rounded-xl p-1 w-full">
+                    <button id="recipe-tab-ideas" onClick={() => setActiveTab('generate')} className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${activeTab === 'generate' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-400 dark:text-slate-500'}`}>Ideas</button>
+                    <button id="recipe-tab-custom" onClick={() => setActiveTab('custom')} className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${activeTab === 'custom' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-400 dark:text-slate-500'}`}>
                         <span className="flex items-center justify-center gap-1"><Plus className="w-3 h-3" /> My</span>
                     </button>
-                    <button id="recipe-tab-favorites" onClick={() => setActiveTab('favorites')} className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${activeTab === 'favorites' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-400'}`}>
+                    <button id="recipe-tab-favorites" onClick={() => setActiveTab('favorites')} className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${activeTab === 'favorites' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-400 dark:text-slate-500'}`}>
                         <span className="flex items-center justify-center gap-1"><Heart className="w-3 h-3" /> Saved</span>
                     </button>
-                    <button id="recipe-tab-history" onClick={() => setActiveTab('history')} className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${activeTab === 'history' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-400'}`}>Cooked</button>
+                    <button id="recipe-tab-history" onClick={() => setActiveTab('history')} className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${activeTab === 'history' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-400 dark:text-slate-500'}`}>Cooked</button>
                 </div>
             </div>
 
@@ -4385,13 +4383,13 @@ STRICT JSON Output:
                         )}
 
                         <div className="space-y-4 w-full">
-                            <h2 className="text-xl font-bold text-slate-900 px-1">Configure</h2>
+                            <h2 className="text-xl font-bold text-slate-900 dark:text-white px-1">Configure</h2>
                             <textarea value={urlInput} onChange={e => setUrlInput(e.target.value)} placeholder="What are you craving?" className="w-full input-field min-h-[100px]" />
                             {family.length > 0 && (
                                 <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide w-full">
                                     {family.map(m => (
                                         <button key={m.id} onClick={() => setEaters(eaters.includes(m.id) ? eaters.filter(id => id !== m.id) : [...eaters, m.id])}
-                                            className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-bold border whitespace-nowrap transition-colors ${eaters.includes(m.id) ? 'bg-orange-50 border-orange-200 text-orange-700' : 'bg-white border-slate-200 text-slate-400'}`}>
+                                            className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-bold border whitespace-nowrap transition-colors ${eaters.includes(m.id) ? 'bg-orange-50 dark:bg-orange-900/30 border-orange-200 dark:border-orange-700 text-orange-700 dark:text-orange-400' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500'}`}>
                                             {eaters.includes(m.id) ? <Check className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />} {m.name}
                                         </button>
                                     ))}
@@ -4399,29 +4397,29 @@ STRICT JSON Output:
                             )}
 
                             {/* Compact Extra Guests + Total Servings */}
-                            <div className="flex items-center gap-3 bg-slate-50 px-3 py-2 rounded-xl">
+                            <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-800 px-3 py-2 rounded-xl">
                                 <div className="flex items-center gap-2">
-                                    <span className="text-xs font-bold text-slate-500">Guests:</span>
+                                    <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Guests:</span>
                                     <button
                                         onClick={() => setExtraGuests(Math.max(0, extraGuests - 1))}
-                                        className="w-6 h-6 flex items-center justify-center bg-white border rounded text-slate-600 hover:bg-slate-100 text-sm"
+                                        className="w-6 h-6 flex items-center justify-center bg-white dark:bg-slate-700 border dark:border-slate-600 rounded text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-600 text-sm"
                                     >-</button>
-                                    <span className="w-5 text-center font-bold text-slate-700">{extraGuests}</span>
+                                    <span className="w-5 text-center font-bold text-slate-700 dark:text-slate-200">{extraGuests}</span>
                                     <button
                                         onClick={() => setExtraGuests(extraGuests + 1)}
-                                        className="w-6 h-6 flex items-center justify-center bg-white border rounded text-slate-600 hover:bg-slate-100 text-sm"
+                                        className="w-6 h-6 flex items-center justify-center bg-white dark:bg-slate-700 border dark:border-slate-600 rounded text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-600 text-sm"
                                     >+</button>
                                 </div>
-                                <div className="h-4 w-px bg-slate-200" />
-                                <span className="text-xs text-slate-500">
+                                <div className="h-4 w-px bg-slate-200 dark:bg-slate-600" />
+                                <span className="text-xs text-slate-500 dark:text-slate-400">
                                     <span className="font-bold text-indigo-600">{totalServings}</span> servings
-                                    <span className="text-slate-400 ml-1">({baseServings}+{extraGuests})</span>
+                                    <span className="text-slate-400 dark:text-slate-500 ml-1">({baseServings}+{extraGuests})</span>
                                 </span>
                             </div>
 
 
                             <div>
-                                <label className="block text-xs font-bold text-slate-500 mb-2">Meal Type</label>
+                                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">Meal Type</label>
                                 <div className="flex gap-2 flex-wrap">
                                     {['Any', 'Breakfast', 'Lunch', 'Dinner', 'Snack', 'Dessert'].map(type => (
                                         <button
@@ -4429,7 +4427,7 @@ STRICT JSON Output:
                                             onClick={() => setMealType(type)}
                                             className={`px-3 py-2 rounded-lg text-sm font-bold transition-colors ${mealType === type
                                                 ? 'bg-orange-500 text-white'
-                                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                                : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
                                                 }`}
                                         >
                                             {type}
@@ -4451,8 +4449,8 @@ STRICT JSON Output:
                             </div>
                         </div>
                         <div className="space-y-4 w-full">
-                            <h2 className="text-xl font-bold text-slate-900 px-1 mt-2">Suggestions</h2>
-                            {recipes.length === 0 && <p className="text-slate-400 px-1 text-sm">Tap generate to get started.</p>}
+                            <h2 className="text-xl font-bold text-slate-900 dark:text-white px-1 mt-2">Suggestions</h2>
+                            {recipes.length === 0 && <p className="text-slate-400 dark:text-slate-500 px-1 text-sm">Tap generate to get started.</p>}
                             {recipes.map(r => (
                                 <RecipeCard
                                     key={r.id}
@@ -4465,12 +4463,12 @@ STRICT JSON Output:
                 ) : activeTab === 'custom' ? (
                     <div className="space-y-4 w-full">
                         <div className="flex justify-between items-center">
-                            <h2 className="text-xl font-bold text-slate-900 px-1">My Recipes</h2>
+                            <h2 className="text-xl font-bold text-slate-900 dark:text-white px-1">My Recipes</h2>
                             <button
                                 id="add-recipe-button"
                                 onClick={() => setShowCustomRecipeForm(!showCustomRecipeForm)}
                                 className={`text-sm py-2 px-4 rounded-xl font-bold flex items-center gap-1.5 transition-all ${showCustomRecipeForm
-                                    ? 'bg-slate-200 text-slate-700 shadow-inner'
+                                    ? 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 shadow-inner'
                                     : 'btn-primary'
                                     }`}
                             >
@@ -4487,12 +4485,12 @@ STRICT JSON Output:
                         </div>
 
                         {showCustomRecipeForm && (
-                            <div id="add-recipe-form" className="bg-slate-50 p-4 rounded-2xl space-y-3 mb-4 border border-slate-200 shadow-sm animate-slide-up">
+                            <div id="add-recipe-form" className="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl space-y-3 mb-4 border border-slate-200 dark:border-slate-700 shadow-sm animate-slide-up">
                                 {/* AI Format Section */}
-                                <div className="bg-purple-50 border border-purple-200 rounded-xl p-3 space-y-3">
+                                <div className="bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 rounded-xl p-3 space-y-3">
                                     <div className="flex items-center gap-2">
                                         <Sparkles className="w-4 h-4 text-purple-600" />
-                                        <span className="text-sm font-bold text-purple-700">Describe or Import a Recipe</span>
+                                        <span className="text-sm font-bold text-purple-700 dark:text-purple-400">Describe or Import a Recipe</span>
                                     </div>
                                     <textarea
                                         value={rawRecipeText}
@@ -4677,19 +4675,19 @@ STRICT JSON Output:
                         )}
 
                         {/* Quick Meals Section */}
-                        <div id="quick-meals-section" className="bg-gradient-to-r from-amber-50/50 to-orange-50/50 rounded-2xl p-3 border border-amber-100">
+                        <div id="quick-meals-section" className="bg-gradient-to-r from-amber-50/50 to-orange-50/50 dark:from-amber-900/20 dark:to-orange-900/20 rounded-2xl p-3 border border-amber-100 dark:border-amber-800">
                             <div className="flex items-center justify-between mb-1">
                                 <div>
-                                    <h3 className="text-sm font-bold text-amber-800 flex items-center gap-1.5">
+                                    <h3 className="text-sm font-bold text-amber-800 dark:text-amber-400 flex items-center gap-1.5">
                                         <Zap className="w-4 h-4" /> Quick Meals
                                     </h3>
-                                    <p className="text-xs text-amber-600/60">Long-press to view recipe</p>
+                                    <p className="text-xs text-amber-600/60 dark:text-amber-500/60">Long-press to view recipe</p>
                                 </div>
                                 <div className="flex gap-1">
                                     {quickMeals?.length > 0 && (
                                         <button
                                             onClick={() => setQuickMealsEditMode(!quickMealsEditMode)}
-                                            className={`text-xs px-2 py-1 rounded-lg transition-colors ${quickMealsEditMode ? 'bg-red-100 text-red-600' : 'text-amber-600 hover:bg-amber-100'}`}
+                                            className={`text-xs px-2 py-1 rounded-lg transition-colors ${quickMealsEditMode ? 'bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-800/50'}`}
                                         >
                                             {quickMealsEditMode ? 'Done' : 'Edit'}
                                         </button>
@@ -4697,7 +4695,7 @@ STRICT JSON Output:
                                     <button
                                         onClick={scanForQuickMeals}
                                         disabled={quickMealsLoading}
-                                        className="text-xs px-2 py-1 rounded-lg bg-amber-100 text-amber-700 hover:bg-amber-200 flex items-center gap-1"
+                                        className="text-xs px-2 py-1 rounded-lg bg-amber-100 dark:bg-amber-800/50 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-700/50 flex items-center gap-1"
                                     >
                                         {quickMealsLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
                                         Auto-Discover
@@ -4780,7 +4778,7 @@ STRICT JSON Output:
                                     })()}
                                 </div>
                             ) : (
-                                <p className="text-xs text-amber-600/70 italic mt-2">
+                                <p className="text-xs text-amber-600/70 dark:text-amber-500/70 italic mt-2">
                                     Tap "Auto-Discover" to scan your inventory, or add recipes as Quick Meals from any recipe card.
                                 </p>
                             )}
@@ -4789,16 +4787,16 @@ STRICT JSON Output:
 
 
                         {customRecipes.length === 0 && !showCustomRecipeForm && (
-                            <p className="text-center text-slate-400 py-10">No custom recipes yet. Add your own recipes above!</p>
+                            <p className="text-center text-slate-400 dark:text-slate-500 py-10">No custom recipes yet. Add your own recipes above!</p>
                         )}
 
                         {customRecipes.map(r => (
                             <div
                                 key={r.id}
-                                className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm cursor-pointer hover:shadow-md hover:border-indigo-200 transition-all flex gap-4"
+                                className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm cursor-pointer hover:shadow-md hover:border-indigo-200 dark:hover:border-indigo-700 transition-all flex gap-4"
                                 onClick={() => setSelectedRecipe(r)}
                             >
-                                <div className="w-20 h-20 bg-indigo-50 rounded-xl overflow-hidden shrink-0 flex items-center justify-center">
+                                <div className="w-20 h-20 bg-indigo-50 dark:bg-indigo-900/30 rounded-xl overflow-hidden shrink-0 flex items-center justify-center">
                                     {r.imageUrl ? (
                                         <img src={r.imageUrl} className="w-full h-full object-cover" alt={r.name} />
                                     ) : (
@@ -4808,7 +4806,7 @@ STRICT JSON Output:
                                 <div className="flex-1 min-w-0 flex flex-col justify-between">
                                     <div>
                                         <div className="flex justify-between items-start">
-                                            <h3 className="font-bold text-slate-800 truncate pr-2">{r.name}</h3>
+                                            <h3 className="font-bold text-slate-800 dark:text-white truncate pr-2">{r.name}</h3>
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
@@ -4819,10 +4817,10 @@ STRICT JSON Output:
                                                 <Trash2 className="w-4 h-4" />
                                             </button>
                                         </div>
-                                        {r.description && <p className="text-sm text-slate-500 mt-1 line-clamp-1">{r.description}</p>}
+                                        {r.description && <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 line-clamp-1">{r.description}</p>}
                                     </div>
                                     <div className="flex justify-between items-end mt-2">
-                                        <div className="flex gap-3 text-xs text-slate-400">
+                                        <div className="flex gap-3 text-xs text-slate-400 dark:text-slate-500">
                                             <span>{r.servings} svg</span>
                                             <span>{r.total_time}</span>
                                         </div>
@@ -4842,16 +4840,16 @@ STRICT JSON Output:
                     </div>
                 ) : activeTab === 'favorites' ? (
                     <div className="space-y-4 w-full">
-                        <h2 className="text-xl font-bold text-slate-900 px-1">Saved Recipes</h2>
-                        {favorites.length === 0 && <p className="text-center text-slate-400 py-10">No favorites yet. Tap the heart on a recipe to save it.</p>}
+                        <h2 className="text-xl font-bold text-slate-900 dark:text-white px-1">Saved Recipes</h2>
+                        {favorites.length === 0 && <p className="text-center text-slate-400 dark:text-slate-500 py-10">No favorites yet. Tap the heart on a recipe to save it.</p>}
                         {favorites.map(f => (
-                            <div key={f.id} className="bg-white p-4 rounded-2xl border border-slate-100 flex gap-4 w-full shadow-sm" onClick={() => setSelectedRecipe(f)}>
-                                <div className="w-20 h-20 bg-amber-50 rounded-xl overflow-hidden shrink-0 flex items-center justify-center">
+                            <div key={f.id} className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-700 flex gap-4 w-full shadow-sm" onClick={() => setSelectedRecipe(f)}>
+                                <div className="w-20 h-20 bg-amber-50 dark:bg-amber-900/30 rounded-xl overflow-hidden shrink-0 flex items-center justify-center">
                                     {f.imageUrl ? <img src={f.imageUrl} className="w-full h-full object-cover" alt={f.name} /> : <Heart className="text-amber-300 w-6 h-6" />}
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <h3 className="font-bold text-lg text-slate-800 truncate">{f.name}</h3>
-                                    <div className="text-sm text-slate-500 mt-1">{f.time} • {f.servings} servings</div>
+                                    <h3 className="font-bold text-lg text-slate-800 dark:text-white truncate">{f.name}</h3>
+                                    <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">{f.time} • {f.servings} servings</div>
                                     <MacroBadges macros={f.macros} />
                                 </div>
                                 <button
@@ -4868,7 +4866,7 @@ STRICT JSON Output:
                         {/* Active Leftovers Section */}
                         {leftovers.length > 0 && (
                             <div className="space-y-3">
-                                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider px-1">Active Leftovers</h3>
+                                <h3 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider px-1">Active Leftovers</h3>
                                 <div className="space-y-3">
                                     {leftovers.map(l => (
                                         <LeftoverCard
@@ -4886,17 +4884,17 @@ STRICT JSON Output:
 
                         {/* Cooking History Section */}
                         <div className="space-y-3">
-                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider px-1">Recent Cooking</h3>
-                            {history.length === 0 && <p className="text-center text-slate-400 py-10 bg-slate-50 rounded-2xl">No history yet.</p>}
+                            <h3 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider px-1">Recent Cooking</h3>
+                            {history.length === 0 && <p className="text-center text-slate-400 dark:text-slate-500 py-10 bg-slate-50 dark:bg-slate-800 rounded-2xl">No history yet.</p>}
                             <div className="space-y-3">
                                 {history.map(h => (
-                                    <div key={h.id} className="bg-white p-4 rounded-2xl border border-slate-100 flex gap-4 w-full shadow-sm hover:border-orange-200 transition-colors cursor-pointer" onClick={() => setSelectedRecipe(h)}>
-                                        <div className="w-16 h-16 bg-slate-100 rounded-xl overflow-hidden shrink-0 flex items-center justify-center">
+                                    <div key={h.id} className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-700 flex gap-4 w-full shadow-sm hover:border-orange-200 dark:hover:border-orange-700 transition-colors cursor-pointer" onClick={() => setSelectedRecipe(h)}>
+                                        <div className="w-16 h-16 bg-slate-100 dark:bg-slate-700 rounded-xl overflow-hidden shrink-0 flex items-center justify-center">
                                             {h.imageUrl ? <img src={h.imageUrl} className="w-full h-full object-cover" alt={h.name} /> : <ChefHat className="text-slate-300 w-6 h-6" />}
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                            <h3 className="font-bold text-slate-800 truncate">{h.name}</h3>
-                                            <div className="text-xs text-slate-500 mt-1 flex items-center justify-between">
+                                            <h3 className="font-bold text-slate-800 dark:text-white truncate">{h.name}</h3>
+                                            <div className="text-xs text-slate-500 dark:text-slate-400 mt-1 flex items-center justify-between">
                                                 <span className="flex items-center gap-1"><History className="w-3 h-3" /> {new Date(h.cookedAt).toLocaleDateString()}</span>
                                                 {h.status && <span className={`px-1.5 py-0.5 rounded-md font-bold ${h.status === 'Finished' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}>{h.status}</span>}
                                             </div>
@@ -5207,7 +5205,7 @@ STRICT JSON Output:
                     </div>
                 )}
             </Modal>
-        </div >
+        </div>
     );
 };
 
@@ -5270,15 +5268,15 @@ const ShoppingView = ({ apiKey, model, list, setList }) => {
         <div className="w-full min-h-full pb-32">
             <div className="p-4 space-y-6 w-full">
                 <div className="flex items-center justify-between px-1">
-                    <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
                         <ShoppingCart className="w-6 h-6 text-blue-500" /> Shopping
                     </h2>
                     <div className="flex gap-2">
-                        <button onClick={copyToClipboard} disabled={list.length === 0} className="action-chip"><Copy className="w-3 h-3" /> Copy</button>
-                        <button onClick={sortList} disabled={sorting || list.length === 0} className="action-chip bg-blue-50 text-blue-600">
+                        <button onClick={copyToClipboard} disabled={list.length === 0} className="action-chip dark:text-slate-300"><Copy className="w-3 h-3" /> Copy</button>
+                        <button onClick={sortList} disabled={sorting || list.length === 0} className="action-chip bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
                             {sorting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />} Sort
                         </button>
-                        <button onClick={() => setList([])} className="action-chip text-slate-400">Clear</button>
+                        <button onClick={() => setList([])} className="action-chip text-slate-400 dark:text-slate-500">Clear</button>
                     </div>
                 </div>
 
@@ -5288,44 +5286,44 @@ const ShoppingView = ({ apiKey, model, list, setList }) => {
                 </form>
 
                 <div className="space-y-4 w-full">
-                    {list.length === 0 && <p className="text-center text-slate-400 py-10">List is empty.</p>}
+                    {list.length === 0 && <p className="text-center text-slate-400 dark:text-slate-500 py-10">List is empty.</p>}
                     {Object.keys(grouped).sort().map(cat => (
                         <div key={cat} className="space-y-2">
-                            <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">{cat}</h3>
+                            <h3 className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest pl-1">{cat}</h3>
                             {grouped[cat].map(i => (
-                                <div key={i.id} className={`flex justify-between items-center p-4 rounded-xl transition-all ${i.checked ? 'opacity-50 bg-slate-50' : 'bg-white shadow-sm border border-slate-100'}`}>
+                                <div key={i.id} className={`flex justify-between items-center p-4 rounded-xl transition-all ${i.checked ? 'opacity-50 bg-slate-50 dark:bg-slate-900/50' : 'bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700'}`}>
                                     <div className="flex items-center gap-4 flex-1" onClick={() => toggle(i.id)}>
-                                        <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${i.checked ? 'bg-blue-500 border-blue-500 text-white' : 'border-slate-300'}`}>
+                                        <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${i.checked ? 'bg-blue-500 border-blue-500 text-white' : 'border-slate-300 dark:border-slate-600 text-transparent'}`}>
                                             {i.checked && <Check className="w-4 h-4" />}
                                         </div>
                                         <div className="flex-1">
-                                            <span className={`text-lg ${i.checked ? 'line-through text-slate-400' : 'text-slate-800 font-medium'}`}>{i.name}</span>
-                                            {i.quantity && <span className="text-slate-400 text-sm ml-2">({i.quantity})</span>}
+                                            <span className={`text-lg ${i.checked ? 'line-through text-slate-400 dark:text-slate-500' : 'text-slate-800 dark:text-gray-100 font-medium'}`}>{i.name}</span>
+                                            {i.quantity && <span className="text-slate-400 dark:text-slate-500 text-sm ml-2">({i.quantity})</span>}
                                         </div>
                                     </div>
                                     <div className="flex gap-1">
-                                        <button onClick={() => setEditingItem(i)} className="p-2 text-slate-300 hover:text-blue-500"><Edit3 className="w-4 h-4" /></button>
-                                        <button onClick={() => deleteItem(i.id)} className="p-2 text-slate-300 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
+                                        <button onClick={() => setEditingItem(i)} className="p-2 text-slate-300 dark:text-slate-600 hover:text-blue-500 dark:hover:text-blue-400"><Edit3 className="w-4 h-4" /></button>
+                                        <button onClick={() => deleteItem(i.id)} className="p-2 text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400"><Trash2 className="w-4 h-4" /></button>
                                     </div>
                                 </div>
                             ))}
                         </div>
                     ))}
                 </div>
-            </div>
 
-            {/* Edit Item Modal */}
-            <Modal isOpen={!!editingItem} onClose={() => setEditingItem(null)}>
-                {editingItem && (
-                    <div className="p-6 space-y-4">
-                        <h2 className="text-xl font-bold">Edit Item</h2>
-                        <input value={editingItem.name} onChange={e => setEditingItem({ ...editingItem, name: e.target.value })} placeholder="Item name" className="input-field" />
-                        <input value={editingItem.quantity || ''} onChange={e => setEditingItem({ ...editingItem, quantity: e.target.value })} placeholder="Quantity (e.g., 2 lbs)" className="input-field" />
-                        <input value={editingItem.notes || ''} onChange={e => setEditingItem({ ...editingItem, notes: e.target.value })} placeholder="Notes" className="input-field" />
-                        <button onClick={() => { updateItem(editingItem.id, editingItem); setEditingItem(null); }} className="w-full btn-primary">Save</button>
-                    </div>
-                )}
-            </Modal>
+                {/* Edit Item Modal */}
+                <Modal isOpen={!!editingItem} onClose={() => setEditingItem(null)}>
+                    {editingItem && (
+                        <div className="p-6 space-y-4">
+                            <h2 className="text-xl font-bold text-slate-900 dark:text-white">Edit Item</h2>
+                            <input value={editingItem.name} onChange={e => setEditingItem({ ...editingItem, name: e.target.value })} placeholder="Item name" className="input-field" />
+                            <input value={editingItem.quantity || ''} onChange={e => setEditingItem({ ...editingItem, quantity: e.target.value })} placeholder="Quantity (e.g., 2 lbs)" className="input-field" />
+                            <input value={editingItem.notes || ''} onChange={e => setEditingItem({ ...editingItem, notes: e.target.value })} placeholder="Notes" className="input-field" />
+                            <button onClick={() => { updateItem(editingItem.id, editingItem); setEditingItem(null); }} className="w-full btn-primary">Save</button>
+                        </div>
+                    )}
+                </Modal>
+            </div>
         </div>
     );
 };
@@ -5348,10 +5346,10 @@ const LeftoversView = ({ apiKey, model, leftovers, setLeftovers, onMoveToHistory
         if (!newLeftover.name) return;
         setIsGenerating(true);
         const prompt = `Based on the dish name "${newLeftover.name}", provide:
-1. Storage instructions (short, concise)
-2. Reheating tips (short, concise)
-3. Suggested days until expiration (number only, 1-7)
-Return JSON: {"storage": "...", "reheat": "...", "expiresInDays": 4}`;
+            1. Storage instructions (short, concise)
+            2. Reheating tips (short, concise)
+            3. Suggested days until expiration (number only, 1-7)
+            Return JSON: {"storage": "...", "reheat": "...", "expiresInDays": 4}`;
 
         const res = await callGemini(apiKey, prompt, null, model);
         if (!res.error) {
@@ -5390,18 +5388,18 @@ Return JSON: {"storage": "...", "reheat": "...", "expiresInDays": 4}`;
         <div className="w-full min-h-full pb-32">
             <div className="p-4 space-y-4 w-full">
                 <div className="flex items-center justify-between px-1">
-                    <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
                         <ThermometerSnowflake className="w-6 h-6 text-rose-500" /> Leftovers
                     </h2>
-                    <button onClick={() => setShowAddModal(true)} className="text-xs font-bold bg-rose-100 text-rose-600 px-3 py-1.5 rounded-full flex items-center gap-1">
+                    <button onClick={() => setShowAddModal(true)} className="text-xs font-bold bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 px-3 py-1.5 rounded-full flex items-center gap-1">
                         <Plus className="w-3 h-3" /> Add
                     </button>
                 </div>
 
                 <div className="space-y-3 w-full">
                     {leftovers.length === 0 ? (
-                        <div className="text-center py-10 text-slate-400">
-                            <ThermometerSnowflake className="w-12 h-12 mx-auto mb-3 text-slate-200" />
+                        <div className="text-center py-10 text-slate-400 dark:text-slate-500">
+                            <ThermometerSnowflake className="w-12 h-12 mx-auto mb-3 text-slate-200 dark:text-slate-700" />
                             <p className="font-medium">No leftovers</p>
                             <p className="text-sm">Add leftovers manually or they'll appear after cooking!</p>
                         </div>
@@ -5434,7 +5432,7 @@ Return JSON: {"storage": "...", "reheat": "...", "expiresInDays": 4}`;
             {/* Add Leftover Modal */}
             <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)}>
                 <div className="p-6 space-y-4">
-                    <h2 className="text-xl font-bold">Add Leftover</h2>
+                    <h2 className="text-xl font-bold text-slate-900 dark:text-white">Add Leftover</h2>
                     <div className="relative">
                         <input
                             value={newLeftover.name}
@@ -5505,13 +5503,13 @@ const CalendarView = ({ apiKey, model, mealPlan, setMealPlan, inventory, setInve
     const setSelectedLeftover = (leftover) => setSelectedLeftoverId(leftover?.id || null);
 
     // Modals & View State
-    const [showAddCustomMeal, setShowAddCustomMeal] = useState(null); // { date, mealType } -> For legacy or specific handling
+    const [showAddCustomMeal, setShowAddCustomMeal] = useState(null); // {date, mealType} -> For legacy or specific handling
     const [calendarViewMode, setCalendarViewMode] = useState('agenda'); // 'agenda' or 'month'
     const [monthViewDate, setMonthViewDate] = useState(new Date());
     const [selectedMonthDay, setSelectedMonthDay] = useState(null);
     const [showAddLeftover, setShowAddLeftover] = useState(false);
-    const [showReschedule, setShowReschedule] = useState(null); // { meal, originalSlotKey, originalDate }
-    const [showDeleteConfirm, setShowDeleteConfirm] = useState(null); // { slotKey, mealId, title }
+    const [showReschedule, setShowReschedule] = useState(null); // {meal, originalSlotKey, originalDate}
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(null); // {slotKey, mealId, title}
 
     // Modal Form State
     const [customMealName, setCustomMealName] = useState('');
@@ -6103,14 +6101,14 @@ const CalendarView = ({ apiKey, model, mealPlan, setMealPlan, inventory, setInve
 
         if (customMealIngredients.trim() && apiKey) {
             const prompt = `For a meal called "${customMealName}" with possible ingredients: ${customMealIngredients}
-            
-Generate cooking/storage details. Return JSON:
-{
-  "description": "Brief description",
-  "ingredients": [{"item": "ingredient", "qty": "amount"}],
-  "storage_instructions": "How to store leftovers",
-  "reheating_tips": "How to reheat",
-  "servings": 4
+
+            Generate cooking/storage details. Return JSON:
+            {
+                "description": "Brief description",
+            "ingredients": [{"item": "ingredient", "qty": "amount"}],
+            "storage_instructions": "How to store leftovers",
+            "reheating_tips": "How to reheat",
+            "servings": 4
 }`;
 
             const result = await callGemini(apiKey, prompt, null, model);
@@ -6158,29 +6156,29 @@ Generate cooking/storage details. Return JSON:
     return (
         <div className="w-full h-full flex flex-col pb-32">
             {/* Sticky Header Section */}
-            <div className="sticky top-0 z-20 bg-slate-50 p-4 space-y-4 border-b border-slate-100 shadow-sm">
+            <div className="sticky top-0 z-20 bg-slate-50 dark:bg-slate-900 p-4 space-y-4 border-b border-slate-100 dark:border-slate-700 shadow-sm">
                 {/* Header */}
                 <div className="flex items-center justify-between">
-                    <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
                         <CalendarDays className="w-6 h-6 text-indigo-500" /> Calendar
                     </h2>
                     <div className="flex items-center gap-2">
                         {/* View Toggle */}
-                        <div className="flex bg-slate-100 rounded-lg p-0.5">
+                        <div className="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5">
                             <button
                                 onClick={() => setCalendarViewMode('agenda')}
-                                className={`px-2 py-1 text-xs font-bold rounded transition-all ${calendarViewMode === 'agenda' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-400'}`}
+                                className={`px-2 py-1 text-xs font-bold rounded transition-all ${calendarViewMode === 'agenda' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-800 dark:text-white' : 'text-slate-400 dark:text-slate-500'}`}
                             >
                                 <List className="w-3 h-3 inline mr-1" />Agenda
                             </button>
                             <button
                                 onClick={() => setCalendarViewMode('month')}
-                                className={`px-2 py-1 text-xs font-bold rounded transition-all ${calendarViewMode === 'month' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-400'}`}
+                                className={`px-2 py-1 text-xs font-bold rounded transition-all ${calendarViewMode === 'month' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-800 dark:text-white' : 'text-slate-400 dark:text-slate-500'}`}
                             >
                                 <Grid3x3 className="w-3 h-3 inline mr-1" />Month
                             </button>
                         </div>
-                        <button onClick={exportCalendar} disabled={Object.keys(mealPlan).length === 0} className="action-chip">
+                        <button onClick={exportCalendar} disabled={Object.keys(mealPlan).length === 0} className="action-chip dark:text-slate-300">
                             <Download className="w-3 h-3" /> Export
                         </button>
                     </div>
@@ -6194,18 +6192,18 @@ Generate cooking/storage details. Return JSON:
                 {calendarViewMode === 'agenda' && (
                     <>
                         {/* Tabs */}
-                        <div className="flex bg-slate-100 rounded-xl p-1">
+                        <div className="flex bg-slate-100 dark:bg-slate-800 rounded-xl p-1">
                             <button
                                 id="calendar-tab-upcoming"
                                 onClick={() => setActiveTab('upcoming')}
-                                className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${activeTab === 'upcoming' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-400'}`}
+                                className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${activeTab === 'upcoming' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-400 dark:text-slate-500'}`}
                             >
                                 Upcoming
                             </button>
                             <button
                                 id="calendar-tab-leftovers"
                                 onClick={() => setActiveTab('leftovers')}
-                                className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${activeTab === 'leftovers' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-400'}`}
+                                className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${activeTab === 'leftovers' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-400 dark:text-slate-500'}`}
                             >
                                 <span className="flex items-center justify-center gap-1">
                                     <ThermometerSnowflake className="w-3 h-3" /> Leftovers
@@ -6237,7 +6235,7 @@ Generate cooking/storage details. Return JSON:
                                 </div>
 
                                 {/* Help Text */}
-                                <p className="text-xs text-slate-400 text-center">
+                                <p className="text-xs text-slate-400 dark:text-slate-500 text-center">
                                     Schedule meals from the Plan tab. Tap + to add items.
                                 </p>
 
@@ -6250,19 +6248,19 @@ Generate cooking/storage details. Return JSON:
                                     // Show all past days (removed filtering to enable infinite scroll into past)
 
                                     return (
-                                        <div key={dayIdx} ref={isToday ? todayRef : null} className={`agenda-day scroll-mt-24 ${isToday ? 'ring-2 ring-indigo-100 rounded-xl bg-indigo-50/30' : ''}`}>
+                                        <div key={dayIdx} ref={isToday ? todayRef : null} className={`agenda-day scroll-mt-24 ${isToday ? 'ring-2 ring-indigo-100 dark:ring-indigo-900 rounded-xl bg-indigo-50/30 dark:bg-indigo-900/20' : ''}`}>
                                             <div className={`agenda-day-header ${isToday ? 'today' : ''} flex justify-between items-center`}>
-                                                <span className={isToday ? 'text-indigo-700' : ''}>{formatDate(date)}</span>
+                                                <span className={isToday ? 'text-indigo-700 dark:text-indigo-400' : ''}>{formatDate(date)}</span>
                                                 <button
                                                     onClick={() => setShowAddCustomMeal({ date, mealType: 'Dinner' })}
-                                                    className="p-1 bg-indigo-100 rounded-full text-indigo-600 hover:bg-indigo-200"
+                                                    className="p-1.5 bg-indigo-500 dark:bg-indigo-600 rounded-full text-white hover:bg-indigo-600 dark:hover:bg-indigo-500 shadow-sm"
                                                 >
                                                     <Plus className="w-4 h-4" />
                                                 </button>
                                             </div>
 
                                             {meals.length === 0 ? (
-                                                <div className="text-center py-6 text-slate-300 text-sm italic">
+                                                <div className="text-center py-6 text-slate-300 dark:text-slate-600 text-sm italic">
                                                     No meals scheduled
                                                 </div>
                                             ) : (
@@ -6288,7 +6286,7 @@ Generate cooking/storage details. Return JSON:
                                                             key={mIdx}
                                                             onClick={handleMealClick}
                                                             className={`agenda-meal-card cursor-pointer transition-all border
-                                                            ${isGreyedOut ? 'opacity-60 bg-slate-50 border-slate-100 grayscale-[0.5]' : 'bg-white border-slate-100 hover:border-indigo-200 hover:shadow-sm'}
+                                                            ${isGreyedOut ? 'opacity-60 bg-slate-50 dark:bg-slate-800/50 border-slate-100 dark:border-slate-700 grayscale-[0.5]' : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700 hover:border-indigo-200 dark:hover:border-indigo-600 hover:shadow-sm'}
                                                         `}
                                                         >
                                                             <div className="flex items-center gap-3">
@@ -6296,7 +6294,7 @@ Generate cooking/storage details. Return JSON:
                                                                 {meal.imageUrl ? (
                                                                     <img src={meal.imageUrl} className="w-12 h-12 rounded-lg object-cover" alt="" />
                                                                 ) : (
-                                                                    <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${isLeftover ? 'bg-amber-100' : 'bg-orange-100'}`}>
+                                                                    <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${isLeftover ? 'bg-amber-100 dark:bg-amber-900/30' : 'bg-orange-100 dark:bg-orange-900/30'}`}>
                                                                         {isLeftover ?
                                                                             <ThermometerSnowflake className="w-5 h-5 text-amber-500" /> :
                                                                             <ChefHat className="w-5 h-5 text-orange-400" />
@@ -6306,21 +6304,21 @@ Generate cooking/storage details. Return JSON:
 
                                                                 {/* Content */}
                                                                 <div className="flex-1 min-w-0">
-                                                                    <div className={`font-bold truncate ${isGreyedOut ? 'text-slate-500 line-through' : 'text-slate-800'}`}>
+                                                                    <div className={`font-bold truncate ${isGreyedOut ? 'text-slate-500 dark:text-slate-400 line-through' : 'text-slate-800 dark:text-white'}`}>
                                                                         {meal.name}
                                                                     </div>
-                                                                    <div className="text-xs text-slate-500 flex items-center gap-2 flex-wrap mt-0.5">
+                                                                    <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2 flex-wrap mt-0.5">
                                                                         <span className="font-semibold text-indigo-600/80">{meal.mealType}</span>
 
                                                                         {isLeftover && (
-                                                                            <span className="text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded text-[10px] font-bold border border-amber-100">
+                                                                            <span className="text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-1.5 py-0.5 rounded text-[10px] font-bold border border-amber-100 dark:border-amber-800">
                                                                                 Leftover Day {meal.dayNumber}
                                                                             </span>
                                                                         )}
 
                                                                         {/* Quick Status Badges */}
-                                                                        {isCooked && <span className="text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded text-[10px] font-bold">Cooked</span>}
-                                                                        {isEaten && <span className="text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded text-[10px] font-bold">Eaten</span>}
+                                                                        {isCooked && <span className="text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-1.5 py-0.5 rounded text-[10px] font-bold">Cooked</span>}
+                                                                        {isEaten && <span className="text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded text-[10px] font-bold">Eaten</span>}
                                                                     </div>
                                                                 </div>
 
@@ -6329,7 +6327,7 @@ Generate cooking/storage details. Return JSON:
                                                                     {/* Quick Action Button - COOK or COOKED STATE */}
                                                                     {!isLeftover && (
                                                                         isCooked ? (
-                                                                            <span className="px-2 py-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 rounded-lg opacity-60 flex items-center gap-1">
+                                                                            <span className="px-2 py-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 rounded-lg opacity-60 flex items-center gap-1">
                                                                                 <Check className="w-3 h-3" /> Cooked
                                                                             </span>
                                                                         ) : (
@@ -6340,7 +6338,7 @@ Generate cooking/storage details. Return JSON:
                                                                                     // Trigger logic via generic onCook handler which handles deduction
                                                                                     handleMarkAsCooked(meal);
                                                                                 }}
-                                                                                className="p-2 text-indigo-600 bg-indigo-50 hover:bg-slate-100 hover:text-indigo-700 rounded-full transition-colors"
+                                                                                className="p-2 text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 hover:bg-slate-100 dark:hover:bg-indigo-800 hover:text-indigo-700 rounded-full transition-colors"
                                                                                 title="Mark as Cooked"
                                                                             >
                                                                                 <Check className="w-4 h-4" />
@@ -6351,7 +6349,7 @@ Generate cooking/storage details. Return JSON:
                                                                     {/* Quick Action Button - EAT or EATEN STATE (Leftover) */}
                                                                     {isLeftover && (
                                                                         isEaten ? (
-                                                                            <span className="px-2 py-1 text-[10px] font-bold text-slate-500 bg-slate-100 rounded-lg opacity-60 flex items-center gap-1">
+                                                                            <span className="px-2 py-1 text-[10px] font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 rounded-lg opacity-60 flex items-center gap-1">
                                                                                 <Utensils className="w-3 h-3" /> Eaten
                                                                             </span>
                                                                         ) : parentCooked ? (
@@ -6360,13 +6358,13 @@ Generate cooking/storage details. Return JSON:
                                                                                     e.stopPropagation();
                                                                                     handleMarkAsEaten(meal);
                                                                                 }}
-                                                                                className="p-2 text-amber-600 bg-amber-50 hover:bg-amber-100 rounded-full"
+                                                                                className="p-2 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 hover:bg-amber-100 dark:hover:bg-amber-800 rounded-full"
                                                                                 title="Mark as Eaten"
                                                                             >
                                                                                 <Utensils className="w-4 h-4" />
                                                                             </button>
                                                                         ) : (
-                                                                            <span className="px-2 py-1 text-[10px] font-medium text-slate-400 bg-slate-100 rounded-lg flex items-center gap-1" title="Cook main meal first">
+                                                                            <span className="px-2 py-1 text-[10px] font-medium text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-700 rounded-lg flex items-center gap-1" title="Cook main meal first">
                                                                                 <Clock className="w-3 h-3" /> Waiting
                                                                             </span>
                                                                         )
@@ -6374,7 +6372,7 @@ Generate cooking/storage details. Return JSON:
 
                                                                     <button
                                                                         onClick={(e) => { e.stopPropagation(); requestDelete(meal.slotKey, meal.id, meal.name); }}
-                                                                        className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                                                                        className="p-2 text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-full transition-colors"
                                                                     >
                                                                         <X className="w-4 h-4" />
                                                                     </button>
@@ -6396,23 +6394,23 @@ Generate cooking/storage details. Return JSON:
                             <div className="space-y-4">
                                 {/* Header with Add Button */}
                                 <div className="flex items-center justify-between">
-                                    <h3 className="text-lg font-bold text-slate-900">Your Leftovers</h3>
+                                    <h3 className="text-lg font-bold text-slate-900 dark:text-white">Your Leftovers</h3>
                                     <button
                                         onClick={() => setShowAddLeftover(true)}
-                                        className="flex items-center gap-1 text-sm font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg hover:bg-emerald-100"
+                                        className="flex items-center gap-1 text-sm font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-3 py-1.5 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-800"
                                     >
                                         <Plus className="w-4 h-4" /> Add
                                     </button>
                                 </div>
 
                                 {leftovers.length === 0 ? (
-                                    <div className="text-center py-10 text-slate-400">
-                                        <ThermometerSnowflake className="w-12 h-12 mx-auto mb-3 text-slate-200" />
+                                    <div className="text-center py-10 text-slate-400 dark:text-slate-500">
+                                        <ThermometerSnowflake className="w-12 h-12 mx-auto mb-3 text-slate-200 dark:text-slate-700" />
                                         <p className="font-medium">No leftovers</p>
                                         <p className="text-sm">Leftovers from cooked meals will appear here</p>
                                         <button
                                             onClick={() => setShowAddLeftover(true)}
-                                            className="mt-4 text-sm font-bold text-emerald-600 underline"
+                                            className="mt-4 text-sm font-bold text-emerald-600 dark:text-emerald-400 underline"
                                         >
                                             Add your first leftover
                                         </button>
@@ -6443,11 +6441,11 @@ Generate cooking/storage details. Return JSON:
                                     prev.setMonth(prev.getMonth() - 1);
                                     setMonthViewDate(prev);
                                 }}
-                                className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600"
+                                className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400"
                             >
                                 <ChevronLeft className="w-5 h-5" />
                             </button>
-                            <h3 className="text-lg font-bold text-slate-800">
+                            <h3 className="text-lg font-bold text-slate-800 dark:text-white">
                                 {monthViewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
                             </h3>
                             <button
@@ -6456,14 +6454,14 @@ Generate cooking/storage details. Return JSON:
                                     next.setMonth(next.getMonth() + 1);
                                     setMonthViewDate(next);
                                 }}
-                                className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600"
+                                className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400"
                             >
                                 <ChevronRight className="w-5 h-5" />
                             </button>
                         </div>
 
                         {/* Day Labels */}
-                        <div className="grid grid-cols-7 gap-1 text-center text-xs font-bold text-slate-400">
+                        <div className="grid grid-cols-7 gap-1 text-center text-xs font-bold text-slate-400 dark:text-slate-500">
                             {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
                                 <div key={d}>{d}</div>
                             ))}
@@ -6499,7 +6497,7 @@ Generate cooking/storage details. Return JSON:
                                                 ? 'bg-indigo-100 text-indigo-700 ring-2 ring-indigo-400'
                                                 : isSelected
                                                     ? 'bg-indigo-600 text-white'
-                                                    : 'bg-slate-50 hover:bg-slate-100 text-slate-700'
+                                                    : 'bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'
                                                 }`}
                                         >
                                             {d}
@@ -6521,41 +6519,41 @@ Generate cooking/storage details. Return JSON:
 
                         {/* Selected Day Details */}
                         {selectedMonthDay && (
-                            <div className="bg-white rounded-xl border border-slate-100 p-4 space-y-3">
+                            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 p-4 space-y-3">
                                 <div className="flex items-center justify-between">
-                                    <h4 className="font-bold text-slate-800">
+                                    <h4 className="font-bold text-slate-800 dark:text-white">
                                         {selectedMonthDay.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
                                     </h4>
                                     <button
                                         onClick={() => setShowAddCustomMeal({ date: selectedMonthDay, mealType: 'Dinner' })}
-                                        className="text-xs bg-indigo-100 text-indigo-600 px-2 py-1 rounded-lg font-bold hover:bg-indigo-200"
+                                        className="text-xs bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 px-2 py-1 rounded-lg font-bold hover:bg-indigo-200 dark:hover:bg-indigo-800"
                                     >
                                         <Plus className="w-3 h-3 inline mr-1" />Add Meal
                                     </button>
                                 </div>
                                 {getMealsForDate(selectedMonthDay).length === 0 ? (
-                                    <p className="text-sm text-slate-400 text-center py-4">No meals scheduled</p>
+                                    <p className="text-sm text-slate-400 dark:text-slate-500 text-center py-4">No meals scheduled</p>
                                 ) : (
                                     getMealsForDate(selectedMonthDay).map((meal, i) => (
                                         <div
                                             key={i}
                                             onClick={() => setSelectedMeal(meal)}
-                                            className="flex items-center gap-3 p-2 bg-slate-50 rounded-lg cursor-pointer hover:bg-slate-100"
+                                            className="flex items-center gap-3 p-2 bg-slate-50 dark:bg-slate-700/50 rounded-lg cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700"
                                         >
                                             {meal.imageUrl ? (
                                                 <img src={meal.imageUrl} className="w-10 h-10 rounded-lg object-cover" alt="" />
                                             ) : (
-                                                <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center">
+                                                <div className="w-10 h-10 rounded-lg bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
                                                     <ChefHat className="w-4 h-4 text-orange-300" />
                                                 </div>
                                             )}
                                             <div className="flex-1">
-                                                <div className="font-bold text-sm text-slate-800">{meal.name}</div>
+                                                <div className="font-bold text-sm text-slate-800 dark:text-white">{meal.name}</div>
                                                 <div className="text-xs text-indigo-500">{meal.mealType}</div>
                                             </div>
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); requestDelete(meal.slotKey, meal.id, meal.name); }}
-                                                className="p-1 text-slate-300 hover:text-red-500"
+                                                className="p-1 text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400"
                                             >
                                                 <X className="w-4 h-4" />
                                             </button>
@@ -7136,35 +7134,35 @@ const MealSchedulerWizard = ({
 
         const prompt = `Act as an expert chef and nutritionist.
 
-Context:
-- Inventory: [${invStr}]
-- People Eating: [${famStr}]
-- Total Servings: ${totalServings} (1 cook day + ${currentLeftoverDays} leftover days)
-- Meal Type: ${wizardMealType}
-- Day: ${dayLabel}
-- Already Scheduled: [${alreadyScheduled || 'None'}]
-- Preferences: ${wizardPrompt || 'Standard'}${freezingNote}
+            Context:
+            - Inventory: [${invStr}]
+            - People Eating: [${famStr}]
+            - Total Servings: ${totalServings} (1 cook day + ${currentLeftoverDays} leftover days)
+            - Meal Type: ${wizardMealType}
+            - Day: ${dayLabel}
+            - Already Scheduled: [${alreadyScheduled || 'None'}]
+            - Preferences: ${wizardPrompt || 'Standard'}${freezingNote}
 
-Create 3 different ${wizardMealType.toLowerCase()} recipes.
+            Create 3 different ${wizardMealType.toLowerCase()} recipes.
 
-Requirements:
-1. Use stock ingredients
-2. Include family_adaptation for dietary needs
-3. Include macros, storage_instructions, reheating_tips
-4. Scale to ${totalServings} servings${needsFreezing ? '\n5. MUST include freezing instructions' : ''}
+            Requirements:
+            1. Use stock ingredients
+            2. Include family_adaptation for dietary needs
+            3. Include macros, storage_instructions, reheating_tips
+            4. Scale to ${totalServings} servings${needsFreezing ? '\n5. MUST include freezing instructions' : ''}
 
-JSON Output:
-{
-  "recipes": [{
-    "id": "1", "name": "Name", "time": "30 min", "description": "Brief",
-    "servings": ${totalServings},
-    "macros": {"calories":400,"protein":25,"carbs":40,"fat":15},
-    "ingredients": [{"item":"Item","qty":"1 cup","have":true}],
-    "missing_ingredients": [{"item":"Missing","total_amount_needed":"1 unit"}],
-    "steps": ["Step 1"],
-    "family_adaptation": "Adaptations",
-    "storage_instructions": "Storage",
-    "reheating_tips": "Reheat tips"
+            JSON Output:
+            {
+                "recipes": [{
+                "id": "1", "name": "Name", "time": "30 min", "description": "Brief",
+            "servings": ${totalServings},
+            "macros": {"calories":400,"protein":25,"carbs":40,"fat":15},
+            "ingredients": [{"item":"Item","qty":"1 cup","have":true}],
+            "missing_ingredients": [{"item":"Missing","total_amount_needed":"1 unit"}],
+            "steps": ["Step 1"],
+            "family_adaptation": "Adaptations",
+            "storage_instructions": "Storage",
+            "reheating_tips": "Reheat tips"
   }]
 }`;
 
@@ -7315,32 +7313,32 @@ JSON Output:
 
         const prompt = `Match recipe ingredients to pantry for reservation. Use fuzzy matching.
 
-Recipe Ingredients:
-${ingStr}
+            Recipe Ingredients:
+            ${ingStr}
 
-Current Inventory (with IDs):
-${invStr}
+            Current Inventory (with IDs):
+            ${invStr}
 
-Return JSON: {
-    "allocations": [{
-        "inventoryItemId": "actual_id_from_list",
-        "inventoryItemName": "Flour",
-        "currentQuantity": 2,
-        "currentUnit": "cups",
-        "reserveAmount": 1,
-        "remainingAfterReserve": 1,
-        "recipeIngredient": "1 cup flour",
-        "confidence": "high"
+            Return JSON: {
+                "allocations": [{
+                "inventoryItemId": "actual_id_from_list",
+            "inventoryItemName": "Flour",
+            "currentQuantity": 2,
+            "currentUnit": "cups",
+            "reserveAmount": 1,
+            "remainingAfterReserve": 1,
+            "recipeIngredient": "1 cup flour",
+            "confidence": "high"
     }]
 }
 
-Rules:
-- Only match items that exist in inventory
-- CRITICAL: "reserveAmount" must be in the SAME UNIT as the pantry item (currentUnit)
-- If recipe says "2 tsp" but pantry unit is "can" or "container", convert properly:
-  a) Estimate how many tsp are in a can/container, then calculate fraction needed
-  b) If conversion is unknown, use a small fraction (0.01-0.1) and set confidence to "low"
-- confidence: "high" = name AND unit match, "medium" = name match but different units, "low" = uncertain`;
+            Rules:
+            - Only match items that exist in inventory
+            - CRITICAL: "reserveAmount" must be in the SAME UNIT as the pantry item (currentUnit)
+            - If recipe says "2 tsp" but pantry unit is "can" or "container", convert properly:
+            a) Estimate how many tsp are in a can/container, then calculate fraction needed
+            b) If conversion is unknown, use a small fraction (0.01-0.1) and set confidence to "low"
+            - confidence: "high" = name AND unit match, "medium" = name match but different units, "low" = uncertain`;
 
         try {
             const res = await callGemini(apiKey, prompt, null, model);
@@ -7423,11 +7421,12 @@ Rules:
 
     const cookCount = Object.entries(safeDayStates).filter(([k, v]) => {
         if (v !== 'cook') return false;
-        // Only count days that are today or likely to be shown
-        const date = new Date(k);
+        // Only count days that are today or in the future
+        // Use string comparison of dateKeys to avoid timezone issues
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        return date >= today;
+        const todayKey = getLocalDateKey(today);
+        return k >= todayKey;
     }).length;
     const leftoverCount = Object.values(safeDayStates).filter(v => v === 'leftover').length;
 
@@ -7439,12 +7438,12 @@ Rules:
                     {/* Scrollable Content */}
                     <div className="flex-1 overflow-y-auto p-6 space-y-6">
                         <div className="flex justify-between items-center">
-                            <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-                                <CalendarDays className="w-6 h-6 text-indigo-600" />
+                            <h2 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                <CalendarDays className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
                                 Meal Planning Wizard
                             </h2>
                             {wizardPhase === 'review' && (
-                                <span className="text-sm font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">
+                                <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1 rounded-full">
                                     Meal {wizardCurrentIdx + 1} of {cookingDays.length}
                                 </span>
                             )}
@@ -7454,7 +7453,7 @@ Rules:
                             <>
                                 <div>
                                     <div className="flex justify-between items-end mb-2">
-                                        <label className="block text-sm font-bold text-slate-600">Select Days to Cook</label>
+                                        <label className="block text-sm font-bold text-slate-600 dark:text-slate-300">Select Days to Cook</label>
                                         <button
                                             onClick={() => setDayStates({})}
                                             className="text-xs text-rose-500 font-bold hover:text-rose-600 transition-colors"
@@ -7462,8 +7461,8 @@ Rules:
                                             Clear All
                                         </button>
                                     </div>
-                                    <p className="text-xs text-slate-400 mb-3">
-                                        Tap a day to cycle: <b>None</b> → <span className="text-indigo-600 font-bold">Cook</span> → <span className="text-orange-500 font-bold">Leftover</span>
+                                    <p className="text-xs text-slate-400 dark:text-slate-500 mb-3">
+                                        Tap a day to cycle: <b className="dark:text-slate-300">None</b> → <span className="text-indigo-600 dark:text-indigo-400 font-bold">Cook</span> → <span className="text-orange-500 dark:text-orange-400 font-bold">Leftover</span>
                                     </p>
                                     <div className="grid grid-cols-4 gap-2">
                                         {upcomingDays.map((day, dayIdx) => {
@@ -7493,13 +7492,13 @@ Rules:
                                                     <button
                                                         onClick={() => handleDayClick(day.dateKey)}
                                                         className={`w-full p-3 rounded-xl text-center transition-all min-h-[72px] flex flex-col justify-center relative z-10 ${isCook ? 'bg-indigo-600 text-white shadow-md scale-[1.02]'
-                                                            : isLeftover ? 'bg-white text-orange-700 border-2 border-orange-400 shadow-sm'
-                                                                : 'bg-slate-50 text-slate-400 hover:bg-slate-100 border border-slate-200 border-dashed'
+                                                            : isLeftover ? 'bg-white dark:bg-slate-800 text-orange-700 dark:text-orange-400 border-2 border-orange-400 dark:border-orange-600 shadow-sm'
+                                                                : 'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-600 border-dashed'
                                                             }`}
                                                     >
                                                         <div className="font-bold text-sm">{day.dayOfWeek}</div>
                                                         <div className="text-xs opacity-70">{day.dateLabel}</div>
-                                                        <div className={`text-[10px] mt-1 font-bold h-3 ${isCook ? 'text-indigo-200' : isLeftover ? 'text-orange-500' : 'opacity-0'}`}>
+                                                        <div className={`text-[10px] mt-1 font-bold h-3 ${isCook ? 'text-indigo-100' : isLeftover ? 'text-orange-500 dark:text-orange-400' : 'opacity-0'}`}>
                                                             {isCook ? 'COOK' : isLeftover ? 'LEFTOVER' : '·'}
                                                         </div>
                                                     </button>
@@ -7513,8 +7512,8 @@ Rules:
 
                                     {/* Meal summary info */}
                                     {cookingDaysInfo.length > 0 && (
-                                        <div className="mt-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
-                                            <div className="text-xs font-bold text-slate-600 mb-2">Planned Meals</div>
+                                        <div className="mt-3 p-3 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+                                            <div className="text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Planned Meals</div>
                                             <div className="space-y-1">
                                                 {cookingDaysInfo.map((cook, idx) => {
                                                     const dayInfo = upcomingDays.find(d => d.dateKey === cook.dateKey);
@@ -7531,10 +7530,10 @@ Rules:
                                                     }
 
                                                     return (
-                                                        <div key={cook.dateKey} className="bg-white p-2 rounded-lg border border-slate-100 flex flex-col gap-1">
+                                                        <div key={cook.dateKey} className="bg-white dark:bg-slate-700 p-2 rounded-lg border border-slate-100 dark:border-slate-600 flex flex-col gap-1">
                                                             <div className="flex justify-between items-center">
-                                                                <span className="text-slate-700 font-bold">
-                                                                    <span className="text-indigo-600">Meal {idx + 1}:</span> {dayInfo?.dayOfWeek} {dayInfo?.dateLabel}
+                                                                <span className="text-slate-700 dark:text-slate-200 font-bold">
+                                                                    <span className="text-indigo-600 dark:text-indigo-400">Meal {idx + 1}:</span> {dayInfo?.dayOfWeek} {dayInfo?.dateLabel}
                                                                 </span>
                                                                 <button
                                                                     onClick={() => {
@@ -7548,7 +7547,7 @@ Rules:
                                                                             }
                                                                         }
                                                                     }}
-                                                                    className="p-1 hover:bg-indigo-50 rounded text-indigo-500 transition-colors"
+                                                                    className="p-1 hover:bg-indigo-50 dark:hover:bg-indigo-900/50 rounded text-indigo-500 dark:text-indigo-400 transition-colors"
                                                                     title="Add leftover day"
                                                                 >
                                                                     <Plus className="w-4 h-4" />
@@ -7575,35 +7574,35 @@ Rules:
                             <>
                                 <div className="space-y-4">
                                     {/* Current meal info - title at top */}
-                                    <div className="bg-indigo-50 rounded-xl p-4 text-center border border-indigo-100">
-                                        <div className="text-lg text-indigo-600 font-bold">
+                                    <div className="bg-indigo-50 dark:bg-indigo-900/30 rounded-xl p-4 text-center border border-indigo-100 dark:border-indigo-800">
+                                        <div className="text-lg text-indigo-600 dark:text-indigo-400 font-bold">
                                             {upcomingDays.find(d => d.dateKey === currentDay)?.dayOfWeek} {upcomingDays.find(d => d.dateKey === currentDay)?.dateLabel} - {wizardMealType}
                                         </div>
-                                        <div className="text-sm text-indigo-400 mt-1">
+                                        <div className="text-sm text-indigo-400 dark:text-indigo-300 mt-1">
                                             {currentLeftoverDays} leftover day{currentLeftoverDays !== 1 ? 's' : ''} • {totalServings} servings
                                         </div>
                                     </div>
 
                                     {/* Who's eating */}
-                                    <div className="bg-white rounded-xl p-3 border border-slate-200 space-y-3">
+                                    <div className="bg-white dark:bg-slate-800 rounded-xl p-3 border border-slate-200 dark:border-slate-700 space-y-3">
                                         <div>
-                                            <label className="block text-xs font-bold text-slate-600 mb-1.5">Who's Eating?</label>
+                                            <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1.5">Who's Eating?</label>
                                             <div className="flex flex-wrap gap-1.5">
                                                 {family.map(f => (
                                                     <button key={f.id} onClick={() => toggleEater(f.id)}
-                                                        className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${wizardEaters.includes(f.id) ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{f.name} ({f.servings || 1})</button>
+                                                        className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${wizardEaters.includes(f.id) ? 'bg-emerald-500 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'}`}>{f.name} ({f.servings || 1})</button>
                                                 ))}
                                             </div>
                                         </div>
                                         <div className="flex flex-wrap gap-3 items-center">
                                             <div className="flex items-center gap-2">
-                                                <span className="text-xs text-slate-500">Extra guests:</span>
+                                                <span className="text-xs text-slate-500 dark:text-slate-400">Extra guests:</span>
                                                 <input type="number" min="0" value={wizardExtraGuests}
                                                     onChange={e => setWizardExtraGuests(e.target.value === '' ? 0 : parseInt(e.target.value))}
                                                     className="w-14 input-field text-center text-sm py-1" />
                                             </div>
                                             <div className="flex items-center gap-2">
-                                                <span className="text-xs text-slate-500">Meal type:</span>
+                                                <span className="text-xs text-slate-500 dark:text-slate-400">Meal type:</span>
                                                 <select value={wizardMealType} onChange={e => setWizardMealType(e.target.value)} className="select-field text-sm py-1">
                                                     <option value="Dinner">Dinner</option>
                                                     <option value="Lunch">Lunch</option>
@@ -7615,7 +7614,7 @@ Rules:
                                     </div>
 
                                     {/* Recipe Source Tabs */}
-                                    <div className="flex bg-slate-100 p-1 rounded-xl">
+                                    <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
                                         {[
                                             { id: 'ai', label: 'Generate', icon: Sparkles },
                                             { id: 'saved', label: 'Saved', icon: Heart },
@@ -7626,8 +7625,8 @@ Rules:
                                                 key={tab.id}
                                                 onClick={() => setActiveRecipeTab(tab.id)}
                                                 className={`flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-all ${activeRecipeTab === tab.id
-                                                    ? 'bg-white text-indigo-600 shadow-sm'
-                                                    : 'text-slate-500 hover:text-slate-700'
+                                                    ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                                                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
                                                     }`}
                                             >
                                                 <tab.icon className="w-3 h-3" />
@@ -7642,7 +7641,7 @@ Rules:
                                             {loading ? (
                                                 <div className="text-center py-12">
                                                     <Loader2 className="w-12 h-12 text-indigo-500 animate-spin mx-auto mb-4" />
-                                                    <p className="text-slate-500">Generating 3 options...</p>
+                                                    <p className="text-slate-500 dark:text-slate-400">Generating 3 options...</p>
                                                 </div>
                                             ) : recipes.length > 0 ? (
                                                 <div className="space-y-4 pb-4">
@@ -7665,7 +7664,7 @@ Rules:
                                             ) : (
                                                 <div className="space-y-4">
                                                     <div>
-                                                        <label className="block text-xs font-bold text-slate-600 mb-1.5">Preferences (optional)</label>
+                                                        <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1.5">Preferences (optional)</label>
                                                         <textarea value={wizardPrompt} onChange={e => setWizardPrompt(e.target.value)}
                                                             placeholder="Quick meals, Tex-Mex, No mushrooms..." className="w-full input-field h-16 resize-none text-sm" />
                                                     </div>
@@ -7695,28 +7694,28 @@ Rules:
                                                 }
 
                                                 if (list.length === 0) {
-                                                    return <div className="text-center py-8 text-slate-400 italic">{emptyMsg}</div>;
+                                                    return <div className="text-center py-8 text-slate-400 dark:text-slate-500 italic">{emptyMsg}</div>;
                                                 }
 
                                                 return list.map(r => (
                                                     <div key={r.id}
                                                         onClick={() => setSelectedWizardRecipe(r)}
-                                                        className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex items-center gap-3 cursor-pointer hover:border-indigo-200 transition-colors"
+                                                        className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm flex items-center gap-3 cursor-pointer hover:border-indigo-200 dark:hover:border-indigo-600 transition-colors"
                                                     >
                                                         {r.imageUrl ? (
                                                             <img src={r.imageUrl} className="w-12 h-12 rounded-lg object-cover" alt="" />
                                                         ) : (
-                                                            <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
+                                                            <div className="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
                                                                 <ChefHat className="w-6 h-6 text-orange-300" />
                                                             </div>
                                                         )}
                                                         <div className="flex-1 min-w-0">
-                                                            <div className="font-bold text-slate-900 truncate">{r.name}</div>
-                                                            <div className="text-xs text-slate-500">{r.totalServings || r.servings} servings</div>
+                                                            <div className="font-bold text-slate-900 dark:text-white truncate">{r.name}</div>
+                                                            <div className="text-xs text-slate-500 dark:text-slate-400">{r.totalServings || r.servings} servings</div>
                                                         </div>
                                                         <button
                                                             onClick={(e) => { e.stopPropagation(); initiateSelectRecipe(r); }}
-                                                            className="p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100"
+                                                            className="p-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-800/50"
                                                         >
                                                             <Check className="w-4 h-4" />
                                                         </button>
@@ -7732,7 +7731,7 @@ Rules:
                     </div>
 
                     {/* Sticky Footer with Action Buttons */}
-                    <div className="shrink-0 bg-white border-t border-slate-100 p-4 pb-safe">
+                    <div className="shrink-0 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-700 p-4 pb-safe z-10 relative">
                         {wizardPhase === 'config' ? (
                             <button onClick={startWizard} disabled={cookCount === 0}
                                 className="w-full btn-primary bg-indigo-600 disabled:opacity-50">
@@ -7772,9 +7771,9 @@ Rules:
             {/* Ingredient Allocation Modal */}
             <Modal isOpen={!!pendingAllocation} onClose={() => setPendingAllocation(null)}>
                 {pendingAllocation && (
-                    <div className="p-6 space-y-4">
-                        <h2 className="text-xl font-bold text-slate-900">Reserve Ingredients</h2>
-                        <p className="text-slate-600 text-sm">
+                    <div className="p-6 space-y-4 dark:text-white">
+                        <h2 className="text-xl font-bold text-slate-900 dark:text-white">Reserve Ingredients</h2>
+                        <p className="text-slate-600 dark:text-slate-300 text-sm">
                             Adjust quantities to reserve for <strong>{pendingAllocation.recipe.name}</strong> on {new Date(currentDay).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
                         </p>
 
@@ -8707,7 +8706,7 @@ Be concise, friendly, and action-oriented. Don't ask for permission to check thi
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[100] bg-white flex flex-col animate-slide-up">
+        <div className="fixed inset-0 z-[100] bg-white dark:bg-slate-900 flex flex-col animate-slide-up">
             {/* Header */}
             <div className="flex-none bg-gradient-to-r from-violet-600 to-purple-600 text-white px-5 py-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -8730,14 +8729,14 @@ Be concise, friendly, and action-oriented. Don't ask for permission to check thi
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50 dark:bg-slate-800">
                 {messages.length === 0 && (
                     <div className="text-center py-8">
-                        <div className="bg-violet-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <div className="bg-violet-100 dark:bg-violet-900/30 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
                             <Sparkles className="w-8 h-8 text-violet-500" />
                         </div>
-                        <h3 className="font-bold text-lg text-slate-800 mb-2">How can I help?</h3>
-                        <p className="text-slate-500 text-sm mb-6">Try saying things like:</p>
+                        <h3 className="font-bold text-lg text-slate-800 dark:text-white mb-2">How can I help?</h3>
+                        <p className="text-slate-500 dark:text-slate-400 text-sm mb-6">Try saying things like:</p>
                         <div className="space-y-2 max-w-sm mx-auto">
                             {[
                                 "I had a turkey sandwich for lunch",
@@ -8749,7 +8748,7 @@ Be concise, friendly, and action-oriented. Don't ask for permission to check thi
                                 <button
                                     key={i}
                                     onClick={() => setInput(suggestion)}
-                                    className="w-full text-left p-3 bg-white rounded-xl border border-slate-200 text-sm text-slate-700 hover:border-violet-300 hover:bg-violet-50 transition-colors"
+                                    className="w-full text-left p-3 bg-white dark:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-600 text-sm text-slate-700 dark:text-slate-200 hover:border-violet-300 dark:hover:border-violet-500 hover:bg-violet-50 dark:hover:bg-violet-900/30 transition-colors"
                                 >
                                     {suggestion}
                                 </button>
@@ -8762,7 +8761,7 @@ Be concise, friendly, and action-oriented. Don't ask for permission to check thi
                     <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                         <div className={`max-w-[85%] rounded-2xl px-4 py-3 ${msg.role === 'user'
                             ? 'bg-gradient-to-r from-violet-500 to-purple-500 text-white rounded-br-md'
-                            : 'bg-white border border-slate-200 text-slate-800 rounded-bl-md shadow-sm'
+                            : 'bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-800 dark:text-slate-100 rounded-bl-md shadow-sm'
                             }`}>
                             <div
                                 className="text-sm prose prose-slate prose-sm max-w-none"
@@ -8784,10 +8783,10 @@ Be concise, friendly, and action-oriented. Don't ask for permission to check thi
 
                 {loading && (
                     <div className="flex justify-start">
-                        <div className="bg-white border border-slate-200 rounded-2xl rounded-bl-md px-4 py-3 shadow-sm">
+                        <div className="bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-2xl rounded-bl-md px-4 py-3 shadow-sm">
                             <div className="flex items-center gap-2">
                                 <Loader2 className="w-4 h-4 animate-spin text-violet-500" />
-                                <span className="text-sm text-slate-500">Thinking...</span>
+                                <span className="text-sm text-slate-500 dark:text-slate-400">Thinking...</span>
                             </div>
                         </div>
                     </div>
@@ -8797,7 +8796,7 @@ Be concise, friendly, and action-oriented. Don't ask for permission to check thi
             </div>
 
             {/* Input */}
-            <div className="flex-none bg-white border-t border-slate-200 p-4 pb-safe">
+            <div className="flex-none bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 p-4 pb-safe">
                 <form onSubmit={(e) => { e.preventDefault(); sendMessage(); }} className="flex gap-2">
                     <input
                         ref={inputRef}
@@ -8914,8 +8913,8 @@ const QuickMealPill = ({ quickMeal, onTap, editMode, onDelete, onEdit, onLongPre
             onContextMenu={handleContextMenu}
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all select-none
                 ${editMode
-                    ? 'bg-red-50 border border-red-200 text-red-700 hover:bg-red-100'
-                    : 'bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 text-amber-800 hover:from-amber-100 hover:to-orange-100 hover:shadow-sm active:scale-95'
+                    ? 'bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 text-red-700 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-800/50'
+                    : 'bg-gradient-to-r from-amber-100 to-orange-100 dark:from-amber-800/50 dark:to-orange-800/50 border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200 hover:from-amber-200 hover:to-orange-200 dark:hover:from-amber-700/50 dark:hover:to-orange-700/50 hover:shadow-sm active:scale-95'
                 }`}
         >
             <span>{quickMeal.emoji || '🍽️'}</span>
@@ -9462,6 +9461,7 @@ function MealPrepMate() {
     const [customRecipes, setCustomRecipes] = useLocalStorage('mpm_custom_recipes', []);
     const [allocatedIngredients, setAllocatedIngredients] = useLocalStorage('mpm_allocated_ingredients', {});
     const [quickMeals, setQuickMeals] = useLocalStorage('mpm_quick_meals', []);
+    const [theme, setTheme] = useLocalStorage('mpm_theme', 'system'); // 'light' | 'dark' | 'system'
 
     const toggleFavorite = async (recipe) => {
         if (!recipe) return;
@@ -9612,6 +9612,36 @@ function MealPrepMate() {
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []); // Run only once on mount
+
+    // Theme application effect - applies dark class to document based on setting
+    useEffect(() => {
+        const applyTheme = (isDark) => {
+            if (isDark) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        };
+
+        // Handler for system preference changes
+        const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+        const handleSystemChange = (e) => {
+            if (theme === 'system') {
+                applyTheme(e.matches);
+            }
+        };
+
+        // Apply current theme
+        if (theme === 'system') {
+            applyTheme(mediaQuery.matches);
+        } else {
+            applyTheme(theme === 'dark');
+        }
+
+        // Listen for system preference changes
+        mediaQuery.addEventListener('change', handleSystemChange);
+        return () => mediaQuery.removeEventListener('change', handleSystemChange);
+    }, [theme]);
 
     // Tutorial steps definition - comprehensive walkthrough
     const tutorialSteps = [
@@ -10569,7 +10599,7 @@ Rules:
     };
 
     const NavBtn = ({ icon: Icon, label, active, onClick }) => (
-        <button onClick={onClick} className={`flex flex-col items-center gap-1 w-full py-2 transition-colors ${active ? 'text-emerald-600' : 'text-slate-400'}`}>
+        <button onClick={onClick} className={`flex flex-col items-center gap-1 w-full py-2 transition-colors ${active ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'}`}>
             <Icon className="w-7 h-7" /><span className="text-[10px] font-bold">{label}</span>
         </button>
     );
@@ -10609,57 +10639,57 @@ Rules:
             </div>
 
             <div className="grid grid-cols-2 gap-4 w-full">
-                <div onClick={() => setView('calendar')} className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100">
-                    <div className="bg-indigo-50 w-12 h-12 rounded-2xl flex items-center justify-center mb-3 text-indigo-500"><CalendarDays className="w-6 h-6" /></div>
-                    <div className="font-bold text-lg text-slate-800">Calendar</div>
-                    <div className="text-xs text-slate-400 mt-1">Weekly plan</div>
+                <div onClick={() => setView('calendar')} className="bg-white dark:bg-slate-800 p-5 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700">
+                    <div className="bg-indigo-50 dark:bg-indigo-900/50 w-12 h-12 rounded-2xl flex items-center justify-center mb-3 text-indigo-500 dark:text-indigo-400"><CalendarDays className="w-6 h-6" /></div>
+                    <div className="font-bold text-lg text-slate-800 dark:text-slate-100">Calendar</div>
+                    <div className="text-xs text-slate-400 dark:text-slate-500 mt-1">Weekly plan</div>
                 </div>
-                <div onClick={() => setView('shopping')} className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100">
-                    <div className="bg-blue-50 w-12 h-12 rounded-2xl flex items-center justify-center mb-3 text-blue-500"><ShoppingCart className="w-6 h-6" /></div>
-                    <div className="font-bold text-lg text-slate-800">Shopping</div>
-                    <div className="text-xs text-slate-400 mt-1">{shoppingList.filter(i => !i.checked).length} items</div>
+                <div onClick={() => setView('shopping')} className="bg-white dark:bg-slate-800 p-5 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700">
+                    <div className="bg-blue-50 dark:bg-blue-900/50 w-12 h-12 rounded-2xl flex items-center justify-center mb-3 text-blue-500 dark:text-blue-400"><ShoppingCart className="w-6 h-6" /></div>
+                    <div className="font-bold text-lg text-slate-800 dark:text-slate-100">Shopping</div>
+                    <div className="text-xs text-slate-400 dark:text-slate-500 mt-1">{shoppingList.filter(i => !i.checked).length} items</div>
                 </div>
             </div>
-            <div onClick={() => setView('leftovers')} className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 flex items-center justify-between">
+            <div onClick={() => setView('leftovers')} className="bg-white dark:bg-slate-800 p-5 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700 flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                    <div className="bg-rose-50 w-12 h-12 rounded-2xl flex items-center justify-center text-rose-500"><ThermometerSnowflake className="w-6 h-6" /></div>
-                    <div><div className="font-bold text-lg text-slate-800">Leftovers</div><div className="text-xs text-slate-400 mt-1">{leftovers.length} leftovers</div></div>
+                    <div className="bg-rose-50 dark:bg-rose-900/50 w-12 h-12 rounded-2xl flex items-center justify-center text-rose-500 dark:text-rose-400"><ThermometerSnowflake className="w-6 h-6" /></div>
+                    <div><div className="font-bold text-lg text-slate-800 dark:text-slate-100">Leftovers</div><div className="text-xs text-slate-400 dark:text-slate-500 mt-1">{leftovers.length} leftovers</div></div>
                 </div>
-                <ArrowLeft className="w-5 h-5 text-slate-300 rotate-180" />
+                <ArrowLeft className="w-5 h-5 text-slate-300 dark:text-slate-600 rotate-180" />
             </div>
         </div>
     );
 
     return (
-        <div className="w-full h-[100dvh] flex flex-col relative bg-white overflow-hidden">
+        <div className="w-full h-[100dvh] flex flex-col relative bg-white dark:bg-slate-900 overflow-hidden">
             {/* Only show API key modal after tutorial is complete and no key exists */}
             <ApiKeyModal isOpen={!apiKey && hasSeenTutorial && tutorialStep === -1 && !showTutorialSetup} onSave={setApiKey} />
 
             {/* Header */}
-            <div className="flex-none bg-white/90 backdrop-blur-md px-5 py-3 flex justify-between items-center border-b border-slate-100 z-30 sticky top-0">
+            <div className="flex-none bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-5 py-3 flex justify-between items-center border-b border-slate-100 dark:border-slate-800 z-30 sticky top-0">
                 {view !== 'dashboard' ? (
-                    <button onClick={() => setView('dashboard')} className="p-2 -ml-2 rounded-full hover:bg-slate-100">
-                        <ArrowLeft className="w-6 h-6 text-slate-700" />
+                    <button onClick={() => setView('dashboard')} className="p-2 -ml-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800">
+                        <ArrowLeft className="w-6 h-6 text-slate-700 dark:text-slate-200" />
                     </button>
                 ) : (
                     <div className="flex items-center gap-2">
                         <div className="bg-emerald-500 p-1.5 rounded-lg"><ChefHat className="w-5 h-5 text-white" /></div>
-                        <span className="font-bold text-xl tracking-tight text-slate-800">MealPrepMate</span>
+                        <span className="font-bold text-xl tracking-tight text-slate-800 dark:text-white">MealPrepMate</span>
                     </div>
                 )}
                 <div className="flex gap-1">
                     {!isStandalone && installPrompt && (
-                        <button onClick={handleInstall} className="p-2 rounded-full bg-emerald-50 text-emerald-600 font-bold flex items-center gap-2 px-3">
+                        <button onClick={handleInstall} className="p-2 rounded-full bg-emerald-50 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-2 px-3">
                             <Download className="w-4 h-4" />
                         </button>
                     )}
-                    <button id="header-family-btn" onClick={() => setView('family')} className="p-2 rounded-full hover:bg-slate-100 text-slate-600"><User className="w-6 h-6" /></button>
-                    <button id="header-settings-btn" onClick={() => setShowSettings(true)} className="p-2 rounded-full hover:bg-slate-100 text-slate-600"><Settings className="w-6 h-6" /></button>
+                    <button id="header-family-btn" onClick={() => setView('family')} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300"><User className="w-6 h-6" /></button>
+                    <button id="header-settings-btn" onClick={() => setShowSettings(true)} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300"><Settings className="w-6 h-6" /></button>
                 </div>
             </div>
 
             {/* Main Content */}
-            <div className="flex-1 overflow-y-auto scrollbar-hide w-full relative bg-white">
+            <div className="flex-1 overflow-y-auto scrollbar-hide w-full relative bg-white dark:bg-slate-900">
                 {view === 'dashboard' && <Dashboard />}
                 {view === 'inventory' && <InventoryView apiKey={apiKey} model={selectedModel} inventory={inventory} setInventory={setInventory} knownLocations={knownLocations} setKnownLocations={setKnownLocations} processedFiles={processedFiles} setProcessedFiles={setProcessedFiles} allocatedIngredients={allocatedIngredients} expandedItemId={expandedInventoryItemId} setExpandedItemId={setExpandedInventoryItemId} getAvailableQuantity={getAvailableQuantity} getItemReservations={getItemReservations} shoppingList={shoppingList} setShoppingList={setShoppingList} setToastData={setToastData} />}
                 {view === 'family' && <FamilyView familyMembers={family} setFamilyMembers={setFamily} />}
@@ -10740,12 +10770,12 @@ Rules:
             </div>
 
             {/* Bottom Nav */}
-            <div className="fixed bottom-0 left-0 right-0 w-full bg-white border-t border-slate-100 px-6 pb-safe pt-2 z-40 rounded-t-3xl shadow-[0_-5px_10px_rgba(0,0,0,0.02)]">
+            <div className="fixed bottom-0 left-0 right-0 w-full bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 px-6 pb-safe pt-2 z-40 rounded-t-3xl shadow-[0_-5px_10px_rgba(0,0,0,0.02)] dark:shadow-[0_-5px_10px_rgba(0,0,0,0.3)]">
                 <div className="flex justify-between items-end pb-2">
                     <div id="nav-pantry"><NavBtn icon={Refrigerator} label="Pantry" active={view === 'inventory'} onClick={() => setView('inventory')} /></div>
                     <div id="nav-plan"><NavBtn icon={Utensils} label="Cook" active={view === 'recipes'} onClick={() => setView('recipes')} /></div>
                     <div className="relative -top-6 px-2">
-                        <button onClick={() => setView('dashboard')} className={`w-16 h-16 bg-gradient-to-tr from-emerald-400 to-emerald-600 rounded-full text-white flex items-center justify-center shadow-xl transition-all ${view === 'dashboard' ? 'ring-[5px] ring-emerald-300/80 shadow-[0_0_20px_rgba(52,211,153,0.6)] scale-105' : 'shadow-emerald-200'}`}>
+                        <button onClick={() => setView('dashboard')} className={`w-16 h-16 bg-gradient-to-tr from-emerald-400 to-emerald-600 rounded-full text-white flex items-center justify-center shadow-xl transition-all ${view === 'dashboard' ? 'ring-[5px] ring-emerald-300/80 dark:ring-emerald-500/50 shadow-[0_0_20px_rgba(52,211,153,0.6)] scale-105' : 'shadow-emerald-200 dark:shadow-emerald-900'}`}>
                             <ChefHat className="w-7 h-7" />
                         </button>
                     </div>
@@ -10932,13 +10962,13 @@ Rules:
             {/* Settings Modal */}
             <Modal isOpen={showSettings} onClose={() => setShowSettings(false)}>
                 <div className="p-6 space-y-6">
-                    <h2 className="text-xl font-bold flex items-center gap-2">
+                    <h2 className="text-xl font-bold flex items-center gap-2 text-slate-900 dark:text-white">
                         <Settings className="w-5 h-5" /> Settings
                     </h2>
 
                     {/* API Key */}
                     <div>
-                        <label className="text-sm font-bold text-slate-600 block mb-2">Gemini API Key</label>
+                        <label className="text-sm font-bold text-slate-600 dark:text-slate-300 block mb-2">Gemini API Key</label>
                         <div className="flex gap-2">
                             <input
                                 type="password"
@@ -10964,7 +10994,7 @@ Rules:
 
                     {/* AI Model Selector */}
                     <div>
-                        <label className="text-sm font-bold text-slate-600 block mb-2">AI Model</label>
+                        <label className="text-sm font-bold text-slate-600 dark:text-slate-300 block mb-2">AI Model</label>
                         <div className="flex gap-2 mb-2">
                             <select
                                 value={GEMINI_MODELS.find(m => m.id === selectedModel) ? selectedModel : '__custom__'}
@@ -10998,7 +11028,7 @@ Rules:
                                         alert(`Error fetching models: ${e.message}`);
                                     }
                                 }}
-                                className="px-3 py-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200"
+                                className="px-3 py-2 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-200 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600"
                                 title="List Available Models"
                             >
                                 <List className="w-5 h-5" />
@@ -11018,15 +11048,43 @@ Rules:
                         </p>
                     </div>
 
+                    {/* Theme */}
+                    <div>
+                        <label className="text-sm font-bold text-slate-600 dark:text-slate-300 block mb-2">Theme</label>
+                        <div className="flex bg-slate-100 dark:bg-slate-700 rounded-xl p-1">
+                            <button
+                                onClick={() => setTheme('light')}
+                                className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${theme === 'light' ? 'bg-white dark:bg-slate-600 shadow-sm text-slate-900 dark:text-white' : 'text-slate-400'}`}
+                            >
+                                ☀️ Light
+                            </button>
+                            <button
+                                onClick={() => setTheme('dark')}
+                                className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${theme === 'dark' ? 'bg-white dark:bg-slate-600 shadow-sm text-slate-900 dark:text-white' : 'text-slate-400'}`}
+                            >
+                                🌙 Dark
+                            </button>
+                            <button
+                                onClick={() => setTheme('system')}
+                                className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${theme === 'system' ? 'bg-white dark:bg-slate-600 shadow-sm text-slate-900 dark:text-white' : 'text-slate-400'}`}
+                            >
+                                🖥️ System
+                            </button>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-2">
+                            System mode follows your device's appearance settings.
+                        </p>
+                    </div>
+
                     {/* Notifications */}
                     <div>
-                        <label className="text-sm font-bold text-slate-600 block mb-2">Notifications</label>
+                        <label className="text-sm font-bold text-slate-600 dark:text-slate-300 block mb-2">Notifications</label>
                         <div className="space-y-3">
-                            <div className="flex justify-between items-center bg-slate-50 p-4 rounded-xl">
-                                <span className="text-sm text-slate-600">Leftover Expiry Alerts</span>
+                            <div className="flex justify-between items-center bg-slate-50 dark:bg-slate-700/50 p-4 rounded-xl">
+                                <span className="text-sm text-slate-600 dark:text-slate-300">Leftover Expiry Alerts</span>
                                 <button
                                     onClick={() => setNotifsEnabled(!notifsEnabled)}
-                                    className={`w-12 h-6 rounded-full transition-colors relative ${notifsEnabled ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                                    className={`w-12 h-6 rounded-full transition-colors relative ${notifsEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`}
                                 >
                                     <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${notifsEnabled ? 'translate-x-7' : 'translate-x-1'}`} />
                                 </button>
@@ -11045,7 +11103,7 @@ Rules:
                             {canUseNotifications() && getNotificationPermission() !== 'granted' && getNotificationPermission() !== 'denied' && (
                                 <button
                                     onClick={() => requestNotificationPermission()}
-                                    className="w-full text-xs font-bold text-emerald-600 bg-emerald-50 py-2 rounded-lg hover:bg-emerald-100 transition-colors"
+                                    className="w-full text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 py-2 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors"
                                 >
                                     <Bell className="w-3 h-3 inline mr-1" /> Enable System Notifications
                                 </button>
@@ -11060,12 +11118,12 @@ Rules:
 
                     {/* Expiration Reminders */}
                     <div>
-                        <label className="text-sm font-bold text-slate-600 block mb-2">Inventory Expiration Reminders</label>
+                        <label className="text-sm font-bold text-slate-600 dark:text-slate-300 block mb-2">Inventory Expiration Reminders</label>
                         <p className="text-xs text-slate-400 mb-3">Get reminded X days before items expire</p>
                         <div className="space-y-2">
                             {expirationReminders.sort((a, b) => b - a).map((days, idx) => (
-                                <div key={idx} className="flex justify-between items-center bg-slate-50 p-3 rounded-xl">
-                                    <span className="text-sm text-slate-600">
+                                <div key={idx} className="flex justify-between items-center bg-slate-50 dark:bg-slate-700/50 p-3 rounded-xl">
+                                    <span className="text-sm text-slate-600 dark:text-slate-300">
                                         {days === 1 ? '1 day before' : `${days} days before`}
                                     </span>
                                     <button
@@ -11104,19 +11162,19 @@ Rules:
 
                     {/* Data Management */}
                     <div>
-                        <label className="text-sm font-bold text-slate-600 block mb-2">Data Management</label>
+                        <label className="text-sm font-bold text-slate-600 dark:text-slate-300 block mb-2">Data Management</label>
                         <div className="space-y-2">
-                            <div className="flex justify-between items-center bg-slate-50 p-3 rounded-xl">
-                                <span className="text-sm text-slate-600">Inventory Items</span>
-                                <span className="text-sm font-bold text-slate-800">{inventory.length}</span>
+                            <div className="flex justify-between items-center bg-slate-50 dark:bg-slate-700/50 p-3 rounded-xl">
+                                <span className="text-sm text-slate-600 dark:text-slate-300">Inventory Items</span>
+                                <span className="text-sm font-bold text-slate-800 dark:text-slate-100">{inventory.length}</span>
                             </div>
-                            <div className="flex justify-between items-center bg-slate-50 p-3 rounded-xl">
-                                <span className="text-sm text-slate-600">Family Members</span>
-                                <span className="text-sm font-bold text-slate-800">{family.length}</span>
+                            <div className="flex justify-between items-center bg-slate-50 dark:bg-slate-700/50 p-3 rounded-xl">
+                                <span className="text-sm text-slate-600 dark:text-slate-300">Family Members</span>
+                                <span className="text-sm font-bold text-slate-800 dark:text-slate-100">{family.length}</span>
                             </div>
-                            <div className="flex justify-between items-center bg-slate-50 p-3 rounded-xl">
-                                <span className="text-sm text-slate-600">Shopping List</span>
-                                <span className="text-sm font-bold text-slate-800">{shoppingList.length}</span>
+                            <div className="flex justify-between items-center bg-slate-50 dark:bg-slate-700/50 p-3 rounded-xl">
+                                <span className="text-sm text-slate-600 dark:text-slate-300">Shopping List</span>
+                                <span className="text-sm font-bold text-slate-800 dark:text-slate-100">{shoppingList.length}</span>
                             </div>
                         </div>
 
@@ -11215,28 +11273,29 @@ Rules:
             </Modal >
 
             {/* Schedule to Calendar Modal */}
-            <Modal isOpen={showScheduleModal && selectedRecipe} onClose={() => setShowScheduleModal(false)}>
+            < Modal isOpen={showScheduleModal && selectedRecipe
+            } onClose={() => setShowScheduleModal(false)}>
                 {selectedRecipe && (
                     <div className="p-6 space-y-4">
-                        <h2 className="text-xl font-bold text-slate-900">Schedule to Calendar</h2>
+                        <h2 className="text-xl font-bold text-slate-900 dark:text-white">Schedule to Calendar</h2>
 
                         {/* Recipe Preview */}
-                        <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl">
-                            <div className="w-14 h-14 bg-orange-100 rounded-lg overflow-hidden flex-shrink-0">
+                        <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
+                            <div className="w-14 h-14 bg-orange-100 dark:bg-orange-900/30 rounded-lg overflow-hidden flex-shrink-0">
                                 {selectedRecipe.imageUrl ? (
                                     <img src={selectedRecipe.imageUrl} className="w-full h-full object-cover" alt="" />
-                                ) : <ChefHat className="w-full h-full p-2 text-orange-300" />}
+                                ) : <ChefHat className="w-full h-full p-2 text-orange-300 dark:text-orange-500" />}
                             </div>
                             <div className="flex-1 min-w-0">
-                                <h3 className="font-bold text-slate-800 truncate">{selectedRecipe.name}</h3>
-                                <div className="text-sm text-slate-500">{selectedRecipe.totalServings || selectedRecipe.servings} servings</div>
+                                <h3 className="font-bold text-slate-800 dark:text-white truncate">{selectedRecipe.name}</h3>
+                                <div className="text-sm text-slate-500 dark:text-slate-400">{selectedRecipe.totalServings || selectedRecipe.servings} servings</div>
                             </div>
                         </div>
 
 
                         {/* Quick Add - Next 8 Days */}
                         <div>
-                            <label className="block text-sm font-bold text-slate-600 mb-2">Quick Add (Next 8 Days)</label>
+                            <label className="block text-sm font-bold text-slate-600 dark:text-slate-400 mb-2">Quick Add (Next 8 Days)</label>
 
                             {/* "Already Cooked" Checkbox (Only if scheduling for today or past) */}
                             {(() => {
@@ -11249,15 +11308,15 @@ Rules:
 
                                 if (isTodayOrPast) {
                                     return (
-                                        <div className="mb-3 flex items-center gap-2 p-2 bg-emerald-50 rounded-lg border border-emerald-100">
+                                        <div className="mb-3 flex items-center gap-2 p-2 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-100 dark:border-emerald-800/50">
                                             <input
                                                 type="checkbox"
                                                 id="cookedNowCheck"
                                                 checked={isCookedNow}
                                                 onChange={(e) => setIsCookedNow(e.target.checked)}
-                                                className="w-5 h-5 rounded border-emerald-300 text-emerald-600 focus:ring-emerald-500"
+                                                className="w-5 h-5 rounded border-emerald-300 dark:border-emerald-700 text-emerald-600 dark:text-emerald-500 focus:ring-emerald-500 focus:ring-offset-0"
                                             />
-                                            <label htmlFor="cookedNowCheck" className="text-sm font-bold text-emerald-800 cursor-pointer">
+                                            <label htmlFor="cookedNowCheck" className="text-sm font-bold text-emerald-800 dark:text-emerald-400 cursor-pointer">
                                                 I just cooked this (Mark as Cooked)
                                             </label>
                                         </div>
@@ -11278,10 +11337,10 @@ Rules:
                                             key={i}
                                             onClick={() => setScheduleDate(new Date(date))}
                                             className={`p-2 rounded-lg text-center transition-colors ${isSelected
-                                                ? 'bg-indigo-600 text-white'
+                                                ? 'bg-indigo-600 text-white shadow-md scale-[1.02]'
                                                 : isToday
-                                                    ? 'bg-emerald-50 text-emerald-700 border-2 border-emerald-200'
-                                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                                    ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border-2 border-emerald-200 dark:border-emerald-700'
+                                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
                                                 }`}
                                         >
                                             <div className="text-xs font-bold">{isToday ? 'Today' : dayName}</div>
@@ -11294,7 +11353,7 @@ Rules:
 
                         {/* Manual Date Picker */}
                         <div>
-                            <label className="block text-sm font-bold text-slate-600 mb-2">Or Pick a Date</label>
+                            <label className="block text-sm font-bold text-slate-600 dark:text-slate-400 mb-2">Or Pick a Date</label>
                             <input
                                 type="date"
                                 value={scheduleDate ? getLocalDateKey(scheduleDate) : ''}
@@ -11306,15 +11365,15 @@ Rules:
 
                         {/* Meal Type */}
                         <div>
-                            <label className="block text-sm font-bold text-slate-600 mb-2">Meal Type</label>
+                            <label className="block text-sm font-bold text-slate-600 dark:text-slate-400 mb-2">Meal Type</label>
                             <div className="flex gap-2 flex-wrap">
                                 {['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Dessert'].map(type => (
                                     <button
                                         key={type}
                                         onClick={() => setScheduleMealType(type)}
                                         className={`px-3 py-2 rounded-lg text-sm font-bold transition-colors ${scheduleMealType === type
-                                            ? 'bg-indigo-600 text-white'
-                                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                            ? 'bg-indigo-600 text-white shadow-sm'
+                                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
                                             }`}
                                     >
                                         {type}
@@ -11325,9 +11384,9 @@ Rules:
 
                         {/* Leftover Preview */}
                         {selectedRecipe.leftoverDays > 0 && scheduleDate && (
-                            <div className="bg-teal-50 p-3 rounded-xl text-sm">
-                                <div className="font-bold text-teal-700 mb-1">Leftovers will be added for:</div>
-                                <div className="text-teal-600">
+                            <div className="bg-teal-50 dark:bg-teal-900/20 p-3 rounded-xl text-sm border border-teal-100 dark:border-teal-800/50">
+                                <div className="font-bold text-teal-700 dark:text-teal-400 mb-1">Leftovers will be added for:</div>
+                                <div className="text-teal-600 dark:text-teal-500">
                                     {Array.from({ length: selectedRecipe.leftoverDays }, (_, i) => {
                                         const d = new Date(scheduleDate);
                                         d.setDate(d.getDate() + i + 1);
@@ -11464,10 +11523,10 @@ Rules:
                         </button>
                     </div>
                 )}
-            </Modal>
+            </Modal >
 
             {/* Meal Scheduler Wizard */}
-            <MealSchedulerWizard
+            < MealSchedulerWizard
                 isOpen={showMealWizard}
                 onClose={() => setShowMealWizard(false)}
                 apiKey={apiKey}
@@ -11565,7 +11624,7 @@ Rules:
                     />
                 )
             }
-        </div>
+        </div >
     );
 }
 

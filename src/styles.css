@@ -44,6 +44,40 @@ body {
     scrollbar-width: none;
 }
 
+/* Custom Dark Mode Scrollbar */
+:root {
+    --scrollbar-thumb: #cbd5e1;
+    --scrollbar-track: #f1f5f9;
+}
+
+.dark {
+    --scrollbar-thumb: #475569;
+    --scrollbar-track: #1e293b;
+}
+
+*::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+    border-radius: 4px;
+}
+
+*::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 4px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+.dark *::-webkit-scrollbar-thumb:hover {
+    background: #64748b;
+}
+
 /* Safe Area Padding */
 .pb-safe {
     padding-bottom: env(safe-area-inset-bottom);
@@ -68,23 +102,24 @@ input[type="number"] {
 /* Custom Input Styles */
 .input-field {
     width: 100%;
-    background-color: #f8fafc;
-    border: 1px solid #e2e8f0;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
     border-radius: 0.75rem;
     padding: 0.75rem 1rem;
     outline: none;
     transition: all 0.2s;
+    color: var(--text-primary);
 }
 
 .input-field:focus {
-    border-color: #10b981;
+    border-color: var(--accent);
     box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
 }
 
 /* Select Field */
 .select-field {
-    background-color: #f8fafc;
-    border: 1px solid #e2e8f0;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
     border-radius: 0.5rem;
     padding: 0.5rem 2rem 0.5rem 0.75rem;
     font-size: 0.875rem;
@@ -97,16 +132,17 @@ input[type="number"] {
     background-repeat: no-repeat;
     background-position: right 0.5rem center;
     background-size: 1.25em 1.25em;
+    color: var(--text-primary);
 }
 
 .select-field:focus {
-    border-color: #10b981;
+    border-color: var(--accent);
 }
 
 /* Editable Inventory Item */
 .inventory-item {
-    background-color: white;
-    border: 1px solid #f1f5f9;
+    background-color: var(--bg-primary);
+    border: 1px solid var(--border-color);
     border-radius: 1rem;
     padding: 1rem;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
@@ -169,6 +205,32 @@ input[type="number"] {
     color: #047857;
 }
 
+/* Dark mode macro badges */
+.dark .macro-calories {
+    background-color: rgba(180, 83, 9, 0.25);
+    color: #fcd34d;
+}
+
+.dark .macro-protein {
+    background-color: rgba(185, 28, 28, 0.25);
+    color: #fca5a5;
+}
+
+.dark .macro-carbs {
+    background-color: rgba(29, 78, 216, 0.25);
+    color: #93c5fd;
+}
+
+.dark .macro-fat {
+    background-color: rgba(124, 58, 237, 0.25);
+    color: #c4b5fd;
+}
+
+.dark .macro-servings {
+    background-color: rgba(4, 120, 87, 0.25);
+    color: #6ee7b7;
+}
+
 /* Confidence Indicators */
 .confidence-high {
     border-left: 4px solid #34d399;
@@ -191,8 +253,8 @@ input[type="number"] {
 }
 
 .calendar-cell {
-    background-color: white;
-    border: 1px solid #f1f5f9;
+    background-color: var(--bg-primary);
+    border: 1px solid var(--border-color);
     border-radius: 0.75rem;
     padding: 0.5rem;
     min-height: 100px;
@@ -201,13 +263,13 @@ input[type="number"] {
 }
 
 .calendar-cell:hover {
-    border-color: #a7f3d0;
+    border-color: var(--accent);
 }
 
 .calendar-cell-header {
     font-size: 0.625rem;
     font-weight: 700;
-    color: #94a3b8;
+    color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.05em;
     margin-bottom: 0.5rem;
@@ -253,7 +315,7 @@ input[type="number"] {
 }
 
 .modal-content {
-    background-color: white;
+    background-color: var(--bg-primary);
     width: 100%;
     max-width: 36rem;
     height: 95dvh;
@@ -309,8 +371,8 @@ input[type="number"] {
 }
 
 .btn-secondary {
-    background-color: #f1f5f9;
-    color: #475569;
+    background-color: var(--bg-tertiary);
+    color: var(--text-secondary);
     font-weight: 700;
     padding: 0.75rem 1.5rem;
     border-radius: 0.75rem;
@@ -320,7 +382,7 @@ input[type="number"] {
 }
 
 .btn-secondary:hover {
-    background-color: #e2e8f0;
+    background-color: var(--border-color);
 }
 
 .btn-secondary:active {
@@ -356,15 +418,15 @@ input[type="number"] {
     border-radius: 9999px;
     font-size: 0.75rem;
     font-weight: 700;
-    background-color: #f1f5f9;
-    color: #64748b;
+    background-color: var(--bg-tertiary);
+    color: var(--text-secondary);
     cursor: pointer;
     transition: all 0.2s;
     border: none;
 }
 
 .action-chip:hover {
-    background-color: #e2e8f0;
+    background-color: var(--border-color);
 }
 
 .action-chip:active {
@@ -470,25 +532,26 @@ input[type="number"] {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    background-color: rgba(255, 255, 255, 0.95);
+    background-color: var(--bg-primary);
+    opacity: 0.97;
     backdrop-filter: blur(8px);
 }
 
 /* Agenda View Styles */
 .agenda-day {
-    background: white;
-    border: 1px solid #f1f5f9;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
     border-radius: 1rem;
     margin-bottom: 0.75rem;
     overflow: hidden;
 }
 
 .agenda-day-header {
-    background: linear-gradient(to right, #f8fafc, #f1f5f9);
+    background: var(--bg-secondary);
     padding: 0.75rem 1rem;
     font-weight: 700;
     font-size: 0.875rem;
-    color: #334155;
+    color: var(--text-primary);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -501,7 +564,7 @@ input[type="number"] {
 
 .agenda-meal {
     padding: 0.75rem 1rem;
-    border-top: 1px solid #f1f5f9;
+    border-top: 1px solid var(--border-color);
     display: flex;
     align-items: center;
     gap: 0.75rem;
@@ -510,7 +573,7 @@ input[type="number"] {
 }
 
 .agenda-meal:hover {
-    background-color: #f8fafc;
+    background-color: var(--bg-secondary);
 }
 
 .agenda-meal-image {
@@ -596,18 +659,19 @@ input[type="number"] {
 .tutorial-tooltip {
     position: fixed;
     z-index: 10002;
-    background: white;
+    background: var(--bg-primary);
     border-radius: 20px;
     padding: 24px;
     width: 580px;
     max-width: 92vw;
-    border: 2px solid #e2e8f0;
+    border: 2px solid var(--border-color);
     box-shadow:
         0 4px 6px -1px rgba(0, 0, 0, 0.1),
         0 10px 15px -3px rgba(0, 0, 0, 0.15),
         0 25px 50px -12px rgba(0, 0, 0, 0.25),
         0 0 0 1px rgba(0, 0, 0, 0.05);
     animation: fadeIn 0.3s ease-out;
+    color: var(--text-primary);
 }
 
 /* Dynamic arrow element (positioned via inline styles) */
@@ -615,7 +679,7 @@ input[type="number"] {
     position: absolute;
     width: 16px;
     height: 16px;
-    background: white;
+    background: var(--bg-primary);
     box-shadow: -2px -2px 4px rgba(0, 0, 0, 0.05);
 }
 
@@ -633,13 +697,14 @@ input[type="number"] {
 }
 
 .tutorial-setup-content {
-    background: white;
+    background: var(--bg-primary);
     border-radius: 24px;
     padding: 32px;
     max-width: 480px;
     width: 90%;
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
     animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    color: var(--text-primary);
 }
 
 /* Demo badge for tutorial items */
