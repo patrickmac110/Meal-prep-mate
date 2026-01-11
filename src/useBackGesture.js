@@ -1,53 +1,98 @@
 import { useEffect, useRef } from 'react';
 
 /**
+ * Global stack to track active back gesture handlers.
+ * Only the TOP handler in the stack will fire on popstate.
+ * This prevents multiple handlers from firing simultaneously.
+ */
+const handlerStack = [];
+let globalListenerAttached = false;
+
+const handleGlobalPopState = () => {
+    // Only the topmost (most recently added) handler fires
+    if (handlerStack.length > 0) {
+        const topHandler = handlerStack[handlerStack.length - 1];
+        if (topHandler && topHandler.callback) {
+            topHandler.callback();
+        }
+    }
+};
+
+/**
  * Intercepts the Android Back Gesture/Browser Back Button.
  * 
- * This hook pushes a "fake" entry to the browser's history stack when active,
- * allowing custom logic (like closing a modal) to run instead of navigating away.
+ * Uses a global stack to ensure only ONE handler fires per back press.
+ * The most recently activated handler (topmost in stack) gets priority.
  *
  * @param {boolean} active - Only listen when this specific modal/view is open
  * @param {Function} onBack - Function to run when back is pressed (e.g., closeModal)
  */
 export const useBackGesture = (active, onBack) => {
     const onBackRef = useRef(onBack);
+    const handlerIdRef = useRef(null);
     const hasAddedHistoryEntry = useRef(false);
 
     // Keep callback ref updated
     useEffect(() => {
         onBackRef.current = onBack;
+        // Update callback in stack if we're already registered
+        if (handlerIdRef.current) {
+            const handler = handlerStack.find(h => h.id === handlerIdRef.current);
+            if (handler) {
+                handler.callback = onBack;
+            }
+        }
     }, [onBack]);
 
     useEffect(() => {
         if (!active) {
+            // Remove from stack if we were active
+            if (handlerIdRef.current) {
+                const index = handlerStack.findIndex(h => h.id === handlerIdRef.current);
+                if (index !== -1) {
+                    handlerStack.splice(index, 1);
+                }
+                handlerIdRef.current = null;
+            }
             hasAddedHistoryEntry.current = false;
             return;
         }
 
-        // 1. Push a "fake" state to the history stack
-        // Only push if we haven't already (prevents duplicate entries)
+        // Generate unique ID for this handler instance
+        const handlerId = Date.now() + Math.random();
+        handlerIdRef.current = handlerId;
+
+        // Add to stack
+        handlerStack.push({
+            id: handlerId,
+            callback: onBackRef.current
+        });
+
+        // Push history entry only once per activation
         if (!hasAddedHistoryEntry.current) {
-            window.history.pushState({ modalOpen: true }, '');
+            window.history.pushState({ modalOpen: true, handlerId }, '');
             hasAddedHistoryEntry.current = true;
         }
 
-        // 2. Define what happens when the user hits "Back"
-        const handlePopState = () => {
-            // Call the close handler
-            onBackRef.current();
-            hasAddedHistoryEntry.current = false;
-        };
-
-        // 3. Listen for the back gesture
-        window.addEventListener('popstate', handlePopState);
+        // Attach global listener only once
+        if (!globalListenerAttached) {
+            window.addEventListener('popstate', handleGlobalPopState);
+            globalListenerAttached = true;
+        }
 
         return () => {
-            // Cleanup: Just remove the listener
-            // We intentionally do NOT call history.back() here because:
-            // 1. It causes race conditions with other active hooks
-            // 2. The extra history entry is harmless - user just presses back again
-            window.removeEventListener('popstate', handlePopState);
+            // Remove from stack on cleanup
+            const index = handlerStack.findIndex(h => h.id === handlerId);
+            if (index !== -1) {
+                handlerStack.splice(index, 1);
+            }
+            handlerIdRef.current = null;
+
+            // Remove global listener only if stack is empty
+            if (handlerStack.length === 0 && globalListenerAttached) {
+                window.removeEventListener('popstate', handleGlobalPopState);
+                globalListenerAttached = false;
+            }
         };
     }, [active]);
 };
-
