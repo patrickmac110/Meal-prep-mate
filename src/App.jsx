@@ -6915,7 +6915,7 @@ const CalendarView = ({ apiKey, model, mealPlan, setMealPlan, inventory, setInve
                         });
                     }
                 }}
-                onFavorite={(recipe) => { toggleFavorite(recipe); onFavorite?.(recipe); }}
+                onFavorite={(recipe) => { onFavorite?.(recipe); }}
                 onCook={(recipe) => {
                     // First, deplete any allocated ingredients for this meal's slot
                     if (recipe.slotKey && allocatedIngredients && allocatedIngredients[recipe.slotKey] && setInventory) {
