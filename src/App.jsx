@@ -6901,14 +6901,15 @@ const CalendarView = ({ apiKey, model, mealPlan, setMealPlan, inventory, setInve
                     if (updatedRecipe.slotKey && setMealPlan) {
                         setMealPlan(prev => {
                             const slot = prev[updatedRecipe.slotKey];
-                            if (!slot || !slot.meals) return prev;
+                            if (!slot) return prev;
                             return {
                                 ...prev,
                                 [updatedRecipe.slotKey]: {
                                     ...slot,
-                                    meals: slot.meals.map(m =>
+                                    meals: slot.meals ? slot.meals.map(m =>
                                         m.id === updatedRecipe.id ? updatedRecipe : m
-                                    )
+                                    ) : undefined,
+                                    selected: slot.selected && slot.selected.id === updatedRecipe.id ? updatedRecipe : slot.selected
                                 }
                             };
                         });
