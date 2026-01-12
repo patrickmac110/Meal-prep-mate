@@ -3632,6 +3632,7 @@ If you find no additional items, return: { "items": [] }`;
                                 allLocations={allLocations}
                                 handleLocationChange={handleLocationChange}
                                 getItemReservations={getItemReservations}
+                                onRemoveReservation={handleRemoveReservation}
                                 getAvailableQuantity={getAvailableQuantity}
                                 showLocationBadge={true}
                                 shoppingList={shoppingList}
