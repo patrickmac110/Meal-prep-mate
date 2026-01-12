@@ -2610,7 +2610,7 @@ const InventoryItem = ({
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             if (window.confirm(`Remove reservation for ${res.recipeName}?`)) {
-                                                                onRemoveReservation(res.slotKey, item.name);
+                                                                onRemoveReservation(res.slotKey, item);
                                                             }
                                                         }}
                                                         className="p-1 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-400 rounded transition-colors"
@@ -5883,55 +5883,84 @@ const CalendarView = ({ apiKey, model, mealPlan, setMealPlan, inventory, setInve
 
     const allDays = [...historyDays, ...agendaDays];
 
-    // Scroll-based infinite loading
-    const lastLoadTimeRef = useRef(0);
-    const hasInitializedRef = useRef(false); // Track initialization
+    // Intersection Observer-based infinite loading
+    const [isInitialized, setIsInitialized] = useState(false); // Track initialization (use state, not ref!)
+    const prevScrollHeightRef = useRef(0); // Track scroll height for position preservation
 
+    // Preserve scroll position when past content is prepended
     useEffect(() => {
         const container = scrollContainerRef.current;
-        if (!container) return;
+        if (!container || !isInitialized) return;
 
-        const handleScroll = () => {
-            // Skip if we haven't scrolled to today yet
-            if (!hasInitializedRef.current) return;
+        const newScrollHeight = container.scrollHeight;
+        const heightDiff = newScrollHeight - prevScrollHeightRef.current;
 
-            const { scrollTop, scrollHeight, clientHeight } = container;
-            const now = Date.now();
+        // If content was prepended (scrollHeight increased)
+        if (heightDiff > 0 && prevScrollHeightRef.current > 0) {
+            container.scrollTop += heightDiff;
+        }
 
-            // Throttle: only allow loading every 500ms
-            if (now - lastLoadTimeRef.current < 500) return;
+        prevScrollHeightRef.current = newScrollHeight;
+    }, [historyDaysLoaded, isInitialized]);
 
-            // Near top - load more past days (trigger early, ~15-20 days before boundary)
-            if (scrollTop < 2500) {
-                lastLoadTimeRef.current = now;
-                setHistoryDaysLoaded(prev => prev + 90);
-            }
+    // Set up Intersection Observers for infinite scroll
+    useEffect(() => {
+        if (!isInitialized) return;
 
-            // Near bottom - load more future days (trigger early)
-            if (scrollHeight - scrollTop - clientHeight < 2500) {
-                lastLoadTimeRef.current = now;
-                setFutureDaysLoaded(prev => prev + 90);
-            }
+        const options = {
+            root: scrollContainerRef.current,
+            rootMargin: '300px', // Trigger 300px before sentinel is visible
+            threshold: 0
         };
 
-        container.addEventListener('scroll', handleScroll);
-        return () => container.removeEventListener('scroll', handleScroll);
-    }, [activeTab, historyDaysLoaded]);
+        // Observer for loading past days (top sentinel)
+        const topObserver = new IntersectionObserver((entries) => {
+            if (entries[0].isIntersecting) {
+                prevScrollHeightRef.current = scrollContainerRef.current?.scrollHeight || 0;
+                setHistoryDaysLoaded(prev => prev + 90);
+            }
+        }, options);
+
+        // Observer for loading future days (bottom sentinel)
+        const bottomObserver = new IntersectionObserver((entries) => {
+            if (entries[0].isIntersecting) {
+                setFutureDaysLoaded(prev => prev + 90);
+            }
+        }, options);
+
+        if (topSentinelRef.current) topObserver.observe(topSentinelRef.current);
+        if (bottomSentinelRef.current) bottomObserver.observe(bottomSentinelRef.current);
+
+        return () => {
+            topObserver.disconnect();
+            bottomObserver.disconnect();
+        };
+    }, [isInitialized]); // Re-run when initialized
 
     // Scroll to today on mount
     useEffect(() => {
-        if (todayRef.current) {
-            todayRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            // Mark as initialized after scrolling to today
-            setTimeout(() => {
-                hasInitializedRef.current = true;
-            }, 500);
-        }
-    }, [todayRef]);
+        // Wait for DOM to be ready, then scroll to today instantly
+        const timer = setTimeout(() => {
+            if (todayRef.current) {
+                todayRef.current.scrollIntoView({ behavior: 'instant', block: 'start' });
+            }
+            // Mark as initialized after scrolling - this triggers the observer setup
+            setIsInitialized(true);
+        }, 100);
+
+        return () => clearTimeout(timer);
+    }, []); // Run once on mount
 
     const scrollToToday = () => {
         if (todayRef.current) {
-            todayRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            // Use instant scroll to avoid being interrupted by dynamic content loading
+            todayRef.current.scrollIntoView({ behavior: 'instant', block: 'start' });
+            // Retry after a brief delay in case content was loading
+            setTimeout(() => {
+                if (todayRef.current) {
+                    todayRef.current.scrollIntoView({ behavior: 'instant', block: 'start' });
+                }
+            }, 150);
         }
     };
 
@@ -6029,11 +6058,10 @@ const CalendarView = ({ apiKey, model, mealPlan, setMealPlan, inventory, setInve
         // Perform matching (find best pantry items)
         const matches = recipeIngredients.map(ing => {
             const ingName = ing.item || ing.name || "";
-            // Find best match in inventory
-            // Simple name match for now, expanded logic in allocateIngredients
+            // Find exact name match in inventory only - no fuzzy substring matching
+            const ingNameLower = ingName.toLowerCase().trim();
             const match = inventory.find(inv =>
-                inv.name.toLowerCase().includes(ingName.toLowerCase()) ||
-                ingName.toLowerCase().includes(inv.name.toLowerCase())
+                inv.name.toLowerCase().trim() === ingNameLower
             );
 
             return {
@@ -6545,9 +6573,6 @@ const CalendarView = ({ apiKey, model, mealPlan, setMealPlan, inventory, setInve
                     <>
                         {activeTab === 'upcoming' ? (
                             <div className="space-y-3 relative min-h-[500px]">
-                                {/* Top Sentinel for Infinite Scroll - MUST be first element */}
-                                <div ref={topSentinelRef} data-sentinel="top" className="h-4 -mt-2" />
-
                                 {/* Jump to Today Button */}
                                 <div className="sticky top-0 z-10 flex justify-center pointer-events-none mb-2">
                                     <button
@@ -6562,6 +6587,9 @@ const CalendarView = ({ apiKey, model, mealPlan, setMealPlan, inventory, setInve
                                 <p className="text-xs text-slate-400 dark:text-slate-500 text-center">
                                     Schedule meals from the Plan tab. Tap + to add items.
                                 </p>
+
+                                {/* Top Sentinel for Infinite Scroll (past days) */}
+                                <div ref={topSentinelRef} className="h-1" />
 
                                 {/* Agenda Days */}
                                 {allDays.map((date, dayIdx) => {
@@ -7723,6 +7751,7 @@ const MealSchedulerWizard = ({
 }
 
             Rules:
+            - CRITICAL: "inventoryItemId" is REQUIRED and MUST be an exact ID from the inventory list above
             - Only match items that exist in inventory
             - CRITICAL: "reserveAmount" must be in the SAME UNIT as the pantry item (currentUnit)
             - If recipe says "2 tsp" but pantry unit is "can" or "container", convert properly:
@@ -9941,6 +9970,41 @@ function MealPrepMate() {
     const [quickMeals, setQuickMeals] = useLocalStorage('mpm_quick_meals', []);
     const [theme, setTheme] = useLocalStorage('mpm_theme', 'system'); // 'light' | 'dark' | 'system'
 
+    // Migration: Backfill inventoryItemId for legacy allocations that only have names
+    useEffect(() => {
+        if (!allocatedIngredients || !inventory.length) return;
+
+        let hasChanges = false;
+        const updated = { ...allocatedIngredients };
+
+        Object.entries(updated).forEach(([slotKey, allocation]) => {
+            if (!allocation?.ingredients) return;
+
+            allocation.ingredients = allocation.ingredients.map(ing => {
+                // Skip if already has ID
+                if (ing.inventoryItemId) return ing;
+
+                // Try to find exact name match in inventory
+                const itemName = (ing.item || ing.inventoryItemName || '').toLowerCase().trim();
+                if (!itemName) return ing;
+
+                const match = inventory.find(inv =>
+                    inv.name.toLowerCase().trim() === itemName
+                );
+
+                if (match) {
+                    hasChanges = true;
+                    return { ...ing, inventoryItemId: match.id };
+                }
+                return ing;
+            });
+        });
+
+        if (hasChanges) {
+            setAllocatedIngredients(updated);
+        }
+    }, [inventory]); // Re-run when inventory changes
+
     const toggleFavorite = async (recipe) => {
         if (!recipe) return;
         const isFav = favorites.some(f => f.id === recipe.id || f.name === recipe.name);
@@ -10802,6 +10866,7 @@ Return JSON: {
 }
 
 Rules:
+- CRITICAL: "inventoryItemId" is REQUIRED and MUST be an exact ID from the inventory list above
 - confidence: "high" = exact name AND compatible units, "medium" = name match but different units, "low" = uncertain match
 - Only match items that exist in inventory
 - CRITICAL: "amount" must be in the SAME UNIT as the pantry item (currentUnit)
@@ -10835,8 +10900,8 @@ Rules:
 
             matches.forEach(m => {
                 updatedInventory = updatedInventory.map(item => {
-                    if (item.id === m.inventoryItemId ||
-                        item.name.toLowerCase() === m.inventoryItemName?.toLowerCase()) {
+                    // Match strictly by ID only - no fallback name matching
+                    if (m.inventoryItemId && item.id === m.inventoryItemId) {
                         deductedItemIds.add(item.id);
                         return { ...item, quantity: Math.max(0, item.quantity - m.amount) };
                     }
@@ -11031,38 +11096,19 @@ Rules:
     };
 
     // Calculate which meals have reserved this ingredient
-    // Calculate which meals have reserved this ingredient
     const getItemReservations = (itemOrName) => {
         if (!allocatedIngredients || !itemOrName) return [];
         const reservations = [];
 
-        const itemName = typeof itemOrName === 'string' ? itemOrName : itemOrName.name;
         const itemId = typeof itemOrName === 'object' ? itemOrName.id : null;
-        const itemNameLower = itemName.toLowerCase().trim();
+        if (!itemId) return []; // Can't match without an ID
 
         Object.entries(allocatedIngredients).forEach(([slotKey, allocation]) => {
             if (!allocation?.ingredients) return;
 
             const matchingIng = allocation.ingredients.find(ing => {
-                // 1. Exact ID Match (Strongest)
-                if (itemId && ing.inventoryItemId === itemId) return true;
-
-                if (!ing?.item) return false;
-                const ingItemLower = ing.item.toLowerCase().trim();
-
-                // Skip very short names to avoid false positives
-                if (itemNameLower.length < 3 || ingItemLower.length < 3) return false;
-
-                // 2. Exact Name Match
-                if (itemNameLower === ingItemLower) return true;
-
-                // 3. Strict Substring Match (e.g. "Frozen Peas" matches "Peas")
-                // BUT prevent single-word partials like "Sauce" matching "BBQ Sauce" if it's the ONLY word
-                // We want: "Peanut Butter" matches "Crunchy Peanut Butter"
-                // We DON'T want: "Sauce" matching "BBQ Sauce" (too generic)
-                // ACTUALLY: The user's issue was "Frozen ground beef" matching "Frozen chicken" via "Frozen"
-                // STRICTER RULE: One must contain the other fully.
-                return itemNameLower.includes(ingItemLower) || ingItemLower.includes(itemNameLower);
+                // Match strictly by inventoryItemId only - no fallback name matching
+                return ing.inventoryItemId && ing.inventoryItemId === itemId;
             });
 
             if (matchingIng) {
@@ -11077,26 +11123,18 @@ Rules:
         return reservations;
     };
 
-    const handleRemoveReservation = (slotKey, pantryItemName) => {
+    const handleRemoveReservation = (slotKey, pantryItem) => {
+        // Store previous state for Undo
+        const previousAllocations = { ...allocatedIngredients };
+        const itemId = pantryItem?.id;
+
         setAllocatedIngredients(prev => {
             const newAlloc = { ...prev };
             const allocation = newAlloc[slotKey];
-            if (allocation && allocation.ingredients) {
-                const itemNameLower = pantryItemName.toLowerCase().trim();
-
-                // remove ingredients matching the logic
+            if (allocation && allocation.ingredients && itemId) {
+                // Remove by strict ID match only
                 newAlloc[slotKey].ingredients = allocation.ingredients.filter(ing => {
-                    if (!ing?.item) return true;
-                    const ingItemLower = ing.item.toLowerCase().trim();
-
-                    if (itemNameLower.length < 3 || ingItemLower.length < 3) return true;
-                    if (itemNameLower === ingItemLower) return false;
-
-                    const itemWords = itemNameLower.split(/\s+/);
-                    const ingWords = ingItemLower.split(/\s+/);
-                    const match = itemWords.some(w => w.length >= 3 && ingWords.includes(w)) ||
-                        ingWords.some(w => w.length >= 3 && itemWords.includes(w));
-                    return !match;
+                    return !(ing.inventoryItemId && ing.inventoryItemId === itemId);
                 });
 
                 // clean up empty slots
@@ -11106,7 +11144,14 @@ Rules:
             }
             return newAlloc;
         });
-        setToastData({ message: "Reservation removed", duration: 2000 });
+
+        setToastData({
+            message: "Reservation removed",
+            duration: 4000,
+            onUndo: () => {
+                setAllocatedIngredients(previousAllocations);
+            }
+        });
     };
 
     // Calculate available quantity (Total - Reserved)
@@ -11359,6 +11404,7 @@ Return JSON: {
 
 Rules:
 - confidence: "high" = exact name AND compatible units, "medium" = name match but different units, "low" = uncertain match
+- CRITICAL: "inventoryItemId" is REQUIRED and MUST be an exact ID from the inventory list above
 - Only match items that exist in inventory
 - CRITICAL: "amount" must be in the SAME UNIT as the pantry item (currentUnit)
 - If recipe says "2 tsp" but pantry unit is "can" or "container", convert properly:
