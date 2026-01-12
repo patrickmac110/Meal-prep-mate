@@ -2571,7 +2571,7 @@ const InventoryItem = ({
                             </span>
                         )}
                         {(() => {
-                            const reservations = getItemReservations(item.name);
+                            const reservations = getItemReservations(item);
                             if (reservations.length > 0) {
                                 return (
                                     <span className="text-xs bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded font-bold inline-flex items-center w-fit">
@@ -2595,7 +2595,7 @@ const InventoryItem = ({
                 <div className="p-3 pt-1 space-y-3 animate-fade-in border-t border-indigo-100/50 dark:border-indigo-900/30" onClick={(e) => e.stopPropagation()}>
                     {/* Reservations Details (if any) */}
                     {(() => {
-                        const reservations = getItemReservations(item.name);
+                        const reservations = getItemReservations(item);
                         if (reservations.length > 0) {
                             return (
                                 <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-lg p-3 space-y-1 mt-1">
@@ -2846,8 +2846,8 @@ const InventoryView = ({ apiKey, model, inventory, setInventory, knownLocations,
                 return new Date(a.expiresAt) - new Date(b.expiresAt);
             case 'reserved':
                 // Reserved items first
-                const aRes = getItemReservations(a.name).length > 0 ? 0 : 1;
-                const bRes = getItemReservations(b.name).length > 0 ? 0 : 1;
+                const aRes = getItemReservations(a).length > 0 ? 0 : 1;
+                const bRes = getItemReservations(b).length > 0 ? 0 : 1;
                 return aRes - bRes || a.name.localeCompare(b.name);
             case 'location':
             default:
@@ -11031,30 +11031,38 @@ Rules:
     };
 
     // Calculate which meals have reserved this ingredient
-    const getItemReservations = (itemName) => {
-        if (!allocatedIngredients || !itemName) return [];
+    // Calculate which meals have reserved this ingredient
+    const getItemReservations = (itemOrName) => {
+        if (!allocatedIngredients || !itemOrName) return [];
         const reservations = [];
+
+        const itemName = typeof itemOrName === 'string' ? itemOrName : itemOrName.name;
+        const itemId = typeof itemOrName === 'object' ? itemOrName.id : null;
         const itemNameLower = itemName.toLowerCase().trim();
 
         Object.entries(allocatedIngredients).forEach(([slotKey, allocation]) => {
             if (!allocation?.ingredients) return;
 
             const matchingIng = allocation.ingredients.find(ing => {
+                // 1. Exact ID Match (Strongest)
+                if (itemId && ing.inventoryItemId === itemId) return true;
+
                 if (!ing?.item) return false;
                 const ingItemLower = ing.item.toLowerCase().trim();
 
                 // Skip very short names to avoid false positives
                 if (itemNameLower.length < 3 || ingItemLower.length < 3) return false;
 
-                // Exact match
+                // 2. Exact Name Match
                 if (itemNameLower === ingItemLower) return true;
 
-                // Check if one contains the other as a whole word
-                const itemWords = itemNameLower.split(/\s+/);
-                const ingWords = ingItemLower.split(/\s+/);
-
-                return itemWords.some(w => w.length >= 3 && ingWords.includes(w)) ||
-                    ingWords.some(w => w.length >= 3 && itemWords.includes(w));
+                // 3. Strict Substring Match (e.g. "Frozen Peas" matches "Peas")
+                // BUT prevent single-word partials like "Sauce" matching "BBQ Sauce" if it's the ONLY word
+                // We want: "Peanut Butter" matches "Crunchy Peanut Butter"
+                // We DON'T want: "Sauce" matching "BBQ Sauce" (too generic)
+                // ACTUALLY: The user's issue was "Frozen ground beef" matching "Frozen chicken" via "Frozen"
+                // STRICTER RULE: One must contain the other fully.
+                return itemNameLower.includes(ingItemLower) || ingItemLower.includes(itemNameLower);
             });
 
             if (matchingIng) {
@@ -11103,7 +11111,7 @@ Rules:
 
     // Calculate available quantity (Total - Reserved)
     const getAvailableQuantity = (item) => {
-        const reservations = getItemReservations(item.name);
+        const reservations = getItemReservations(item);
         const totalReserved = reservations.reduce((sum, res) => sum + (parseFloat(res.amount) || 0), 0);
         return Math.max(0, (parseFloat(item.quantity) || 0) - totalReserved);
     };
