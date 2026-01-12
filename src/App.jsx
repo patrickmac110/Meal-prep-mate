@@ -55,6 +55,52 @@ const SERVING_MULTIPLIERS = {
 const APP_VERSION = __APP_VERSION__;
 
 // ============================================================================
+// AI DEBUG LOGGING
+// ============================================================================
+
+// Global debug log storage (persisted to localStorage)
+const DEBUG_LOG_KEY = 'mpm_ai_debug_logs';
+const MAX_DEBUG_LOGS = 100;
+
+// Load existing logs from localStorage
+const loadDebugLogs = () => {
+    try {
+        const stored = localStorage.getItem(DEBUG_LOG_KEY);
+        return stored ? JSON.parse(stored) : [];
+    } catch {
+        return [];
+    }
+};
+
+// Save logs to localStorage
+const saveDebugLogs = (logs) => {
+    try {
+        localStorage.setItem(DEBUG_LOG_KEY, JSON.stringify(logs.slice(-MAX_DEBUG_LOGS)));
+    } catch (e) {
+        console.warn('Failed to save debug logs:', e);
+    }
+};
+
+// Add a new debug log entry
+const addDebugLog = (entry) => {
+    const logs = loadDebugLogs();
+    logs.push({
+        id: Date.now().toString(36) + Math.random().toString(36).substr(2, 5),
+        timestamp: new Date().toISOString(),
+        ...entry
+    });
+    saveDebugLogs(logs);
+    // Dispatch event so UI can update
+    window.dispatchEvent(new CustomEvent('debug-log-updated'));
+};
+
+// Clear all debug logs
+const clearDebugLogs = () => {
+    localStorage.removeItem(DEBUG_LOG_KEY);
+    window.dispatchEvent(new CustomEvent('debug-log-updated'));
+};
+
+// ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
 
@@ -223,6 +269,7 @@ const useLocalStorage = (key, initialValue) => {
 const callGemini = async (apiKey, prompt, imageBase64 = null, model = 'gemini-2.0-flash') => {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
     const parts = [{ text: prompt }];
+    const hasImages = !!imageBase64;
     if (imageBase64) {
         const images = Array.isArray(imageBase64) ? imageBase64 : [imageBase64];
         images.forEach(img => {
@@ -242,13 +289,33 @@ const callGemini = async (apiKey, prompt, imageBase64 = null, model = 'gemini-2.
 
         if (!response.ok) {
             const errorData = await response.json();
-            throw new Error(errorData.error?.message || `API Error: ${response.status}`);
+            const errorMsg = errorData.error?.message || `API Error: ${response.status}`;
+            // Log error
+            addDebugLog({
+                type: 'callGemini',
+                model,
+                hasImages,
+                prompt: prompt.substring(0, 5000), // Truncate very long prompts
+                response: null,
+                error: errorMsg
+            });
+            throw new Error(errorMsg);
         }
 
         const data = await response.json();
         const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
-        if (!text) throw new Error("No data returned from AI.");
+        if (!text) {
+            addDebugLog({
+                type: 'callGemini',
+                model,
+                hasImages,
+                prompt: prompt.substring(0, 5000),
+                response: null,
+                error: 'No data returned from AI'
+            });
+            throw new Error("No data returned from AI.");
+        }
 
         // Log raw response for debugging
         console.log('[Gemini API] Raw response length:', text.length);
@@ -258,9 +325,30 @@ const callGemini = async (apiKey, prompt, imageBase64 = null, model = 'gemini-2.
 
         console.log('[Gemini API] Parsed items count:', parsed.items?.length ?? 'no items key');
 
+        // Log success
+        addDebugLog({
+            type: 'callGemini',
+            model,
+            hasImages,
+            prompt: prompt.substring(0, 5000),
+            response: JSON.stringify(parsed).substring(0, 10000), // Truncate large responses
+            error: null
+        });
+
         return parsed;
     } catch (error) {
         console.error("Gemini API Failed:", error);
+        // Ensure error is logged if not already
+        if (!error.message?.includes('API Error')) {
+            addDebugLog({
+                type: 'callGemini',
+                model,
+                hasImages,
+                prompt: prompt.substring(0, 5000),
+                response: null,
+                error: error.message
+            });
+        }
         return { error: true, message: error.message };
     }
 };
@@ -307,6 +395,10 @@ const generateImageWithGemini = async (apiKey, prompt) => {
 const callGeminiWithFunctions = async (apiKey, messages, functions, model = 'gemini-2.0-flash') => {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
+    // Extract last user message for logging
+    const lastUserMsg = messages.filter(m => m.role === 'user').slice(-1)[0];
+    const promptSummary = lastUserMsg?.parts?.[0]?.text?.substring(0, 2000) || '[function call context]';
+
     try {
         const response = await fetch(url, {
             method: 'POST',
@@ -320,7 +412,15 @@ const callGeminiWithFunctions = async (apiKey, messages, functions, model = 'gem
 
         if (!response.ok) {
             const errorData = await response.json();
-            throw new Error(errorData.error?.message || `API Error: ${response.status}`);
+            const errorMsg = errorData.error?.message || `API Error: ${response.status}`;
+            addDebugLog({
+                type: 'callGeminiWithFunctions',
+                model,
+                prompt: promptSummary,
+                response: null,
+                error: errorMsg
+            });
+            throw new Error(errorMsg);
         }
 
         const data = await response.json();
@@ -344,9 +444,33 @@ const callGeminiWithFunctions = async (apiKey, messages, functions, model = 'gem
             result.functionCall = result.functionCalls[0]; // First one for legacy code
         }
 
+        // Log success
+        addDebugLog({
+            type: 'callGeminiWithFunctions',
+            model,
+            prompt: promptSummary,
+            response: JSON.stringify({
+                text: result.text?.substring(0, 2000),
+                functionCalls: result.functionCalls.map(fc => ({
+                    name: fc.name,
+                    args: JSON.stringify(fc.args).substring(0, 1000)
+                }))
+            }),
+            error: null
+        });
+
         return result;
     } catch (error) {
         console.error("Gemini Function Calling Failed:", error);
+        if (!error.message?.includes('API Error')) {
+            addDebugLog({
+                type: 'callGeminiWithFunctions',
+                model,
+                prompt: promptSummary,
+                response: null,
+                error: error.message
+            });
+        }
         return { error: true, message: error.message };
     }
 };
@@ -856,6 +980,167 @@ const ConfirmDialog = ({ isOpen, onClose, onConfirm, title, message, confirmText
                 </div>
             </div>
         </div>
+    )
+};
+
+// ============================================================================
+// AI DEBUG LOGS MODAL
+// ============================================================================
+
+const DebugLogsModal = ({ isOpen, onClose }) => {
+    const [logs, setLogs] = useState([]);
+    const [expandedId, setExpandedId] = useState(null);
+
+    // Load logs and listen for updates
+    useEffect(() => {
+        if (isOpen) {
+            setLogs(loadDebugLogs());
+        }
+        const handleUpdate = () => setLogs(loadDebugLogs());
+        window.addEventListener('debug-log-updated', handleUpdate);
+        return () => window.removeEventListener('debug-log-updated', handleUpdate);
+    }, [isOpen]);
+
+    const copyToClipboard = (text) => {
+        navigator.clipboard.writeText(text).then(() => {
+            alert('Copied to clipboard!');
+        });
+    };
+
+    const handleClearLogs = () => {
+        if (confirm('Clear all AI debug logs?')) {
+            clearDebugLogs();
+            setLogs([]);
+        }
+    };
+
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-2xl w-full max-h-[80vh] flex flex-col shadow-2xl border border-slate-100 dark:border-slate-700">
+                {/* Header */}
+                <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-700">
+                    <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                        <Search className="w-5 h-5 text-indigo-500" /> AI Debug Logs
+                    </h2>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={handleClearLogs}
+                            className="text-xs px-2 py-1 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-100"
+                        >
+                            Clear All
+                        </button>
+                        <button onClick={onClose} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg">
+                            <X className="w-5 h-5 text-slate-500" />
+                        </button>
+                    </div>
+                </div>
+
+                {/* Logs List */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                    {logs.length === 0 ? (
+                        <div className="text-center py-10 text-slate-400 dark:text-slate-500">
+                            <Search className="w-10 h-10 mx-auto mb-2 opacity-50" />
+                            <p>No AI calls logged yet.</p>
+                            <p className="text-xs mt-1">Trigger any AI action to see logs here.</p>
+                        </div>
+                    ) : (
+                        [...logs].reverse().map(log => (
+                            <div
+                                key={log.id}
+                                className={`rounded-xl border transition-all ${log.error
+                                    ? 'border-red-200 dark:border-red-800 bg-red-50/50 dark:bg-red-900/20'
+                                    : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50'}`}
+                            >
+                                {/* Log Header */}
+                                <div
+                                    className="flex items-center justify-between p-3 cursor-pointer"
+                                    onClick={() => setExpandedId(expandedId === log.id ? null : log.id)}
+                                >
+                                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                                        <span className={`text-xs font-bold px-2 py-0.5 rounded ${log.error
+                                            ? 'bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400'
+                                            : 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400'}`}>
+                                            {log.error ? 'ERROR' : 'OK'}
+                                        </span>
+                                        <span className="text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded">
+                                            {log.type}
+                                        </span>
+                                        <span className="text-xs text-slate-500 dark:text-slate-400">
+                                            {log.model}
+                                        </span>
+                                        {log.hasImages && (
+                                            <span className="text-xs text-amber-600 dark:text-amber-400">📷</span>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[10px] text-slate-400">
+                                            {new Date(log.timestamp).toLocaleTimeString()}
+                                        </span>
+                                        {expandedId === log.id ?
+                                            <ChevronDown className="w-4 h-4 text-slate-400" /> :
+                                            <ChevronRight className="w-4 h-4 text-slate-400" />
+                                        }
+                                    </div>
+                                </div>
+
+                                {/* Expanded Details */}
+                                {expandedId === log.id && (
+                                    <div className="px-3 pb-3 space-y-3">
+                                        {/* Prompt */}
+                                        <div>
+                                            <div className="flex items-center justify-between mb-1">
+                                                <span className="text-xs font-bold text-slate-600 dark:text-slate-400">PROMPT</span>
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); copyToClipboard(log.prompt); }}
+                                                    className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+                                                >
+                                                    Copy
+                                                </button>
+                                            </div>
+                                            <pre className="text-xs bg-slate-100 dark:bg-slate-900 p-2 rounded-lg overflow-x-auto max-h-40 overflow-y-auto whitespace-pre-wrap text-slate-700 dark:text-slate-300">
+                                                {log.prompt}
+                                            </pre>
+                                        </div>
+
+                                        {/* Response or Error */}
+                                        {log.error ? (
+                                            <div>
+                                                <span className="text-xs font-bold text-red-600 dark:text-red-400">ERROR</span>
+                                                <pre className="text-xs bg-red-100 dark:bg-red-900/30 p-2 rounded-lg mt-1 text-red-700 dark:text-red-300">
+                                                    {log.error}
+                                                </pre>
+                                            </div>
+                                        ) : log.response && (
+                                            <div>
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <span className="text-xs font-bold text-slate-600 dark:text-slate-400">RESPONSE</span>
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); copyToClipboard(log.response); }}
+                                                        className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+                                                    >
+                                                        Copy
+                                                    </button>
+                                                </div>
+                                                <pre className="text-xs bg-slate-100 dark:bg-slate-900 p-2 rounded-lg overflow-x-auto max-h-40 overflow-y-auto whitespace-pre-wrap text-slate-700 dark:text-slate-300">
+                                                    {log.response}
+                                                </pre>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        ))
+                    )}
+                </div>
+
+                {/* Footer */}
+                <div className="p-4 border-t border-slate-100 dark:border-slate-700">
+                    <button onClick={onClose} className="w-full btn-primary">Close</button>
+                </div>
+            </div>
+        </div>
     );
 };
 
@@ -968,7 +1253,8 @@ const IngredientMatchModal = ({
         const updated = [...matches];
         updated[idx] = {
             ...updated[idx],
-            amount: newAmount === '' ? 0 : parseFloat(newAmount)
+            // Allow empty string while editing, treat as 0 on confirm
+            amount: newAmount === '' ? '' : parseFloat(newAmount)
         };
         setMatches(updated);
     };
@@ -1048,7 +1334,7 @@ const IngredientMatchModal = ({
                                                     type="number"
                                                     min="0"
                                                     step="0.1"
-                                                    value={match.amount}
+                                                    value={match.amount === '' ? '' : match.amount}
                                                     onChange={(e) => handleAmountChange(idx, e.target.value)}
                                                     className="w-full text-center border-2 border-indigo-100 dark:border-indigo-900/50 rounded-lg py-1.5 font-bold text-indigo-700 dark:text-indigo-300 focus:border-indigo-500 focus:ring-0 outline-none transition-colors bg-indigo-50/30 dark:bg-indigo-900/20"
                                                 />
@@ -1065,23 +1351,29 @@ const IngredientMatchModal = ({
                         {/* Still Missing Items Indicator */}
                         {stillMissing && stillMissing.length > 0 && (
                             <div className="rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-900/10 p-4 shadow-sm">
-                                <div className="flex items-center gap-2 mb-2">
-                                    <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-500" />
-                                    <span className="font-bold text-amber-800 dark:text-amber-300">Still Missing from Pantry</span>
+                                <div className="flex items-center justify-between mb-2">
+                                    <div className="flex items-center gap-2">
+                                        <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-500" />
+                                        <span className="font-bold text-amber-800 dark:text-amber-300">Missing from Pantry ({stillMissing.length})</span>
+                                    </div>
                                 </div>
                                 <p className="text-sm text-amber-700 dark:text-amber-400 mb-3">
-                                    These ingredients weren't found in your inventory. They won't be deducted.
+                                    These ingredients weren't found in your inventory. Consider adding them to your shopping list.
                                 </p>
-                                <div className="flex flex-wrap gap-2">
+                                <div className="flex flex-wrap gap-2 mb-3">
                                     {stillMissing.map((item, idx) => (
                                         <span
                                             key={idx}
-                                            className="px-3 py-1.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 text-sm font-medium border border-amber-200 dark:border-amber-800/50"
+                                            className="px-3 py-1.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 text-sm font-medium border border-amber-200 dark:border-amber-800/50 flex items-center gap-1"
                                         >
+                                            <AlertTriangle className="w-3 h-3" />
                                             {item}
                                         </span>
                                     ))}
                                 </div>
+                                <p className="text-[10px] text-amber-600/70 dark:text-amber-500/70">
+                                    💡 Tip: You can add missing items via the Shopping List tab
+                                </p>
                             </div>
                         )}
                     </div>
@@ -2149,7 +2441,8 @@ const InventoryItem = ({
     handleQuantityBlur,
     shoppingList,
     setShoppingList,
-    setToastData
+    setToastData,
+    onRemoveReservation
 }) => {
     const isExpanded = expandedItemId === item.id;
     const expirationStatus = getExpirationStatus(item.expiresAt);
@@ -2214,7 +2507,7 @@ const InventoryItem = ({
                     type="number"
                     min="0"
                     step="0.01"
-                    value={item.quantity === 0 ? '' : item.quantity}
+                    value={item.quantity === '' ? '' : item.quantity}
                     onChange={(e) => {
                         e.stopPropagation();
                         updateItem(item.id, { quantity: e.target.value === '' ? '' : parseFloat(e.target.value) });
@@ -2309,8 +2602,24 @@ const InventoryItem = ({
                                     <div className="text-[10px] font-bold text-indigo-400 dark:text-indigo-500 uppercase tracking-wider mb-1">Current Reservations</div>
                                     {reservations.map((res, idx) => (
                                         <div key={idx} className="text-xs text-indigo-800 dark:text-indigo-200 flex justify-between items-center border-b border-indigo-100 dark:border-indigo-800/30 last:border-0 pb-1.5 pt-1">
-                                            <span className="font-medium truncate">{res.recipeName}</span>
-                                            <span className="font-bold ml-2">{res.amount} {res.unit}</span>
+                                            <span className="font-medium truncate flex-1">{res.recipeName}</span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-bold">{res.amount} {res.unit}</span>
+                                                {onRemoveReservation && (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            if (window.confirm(`Remove reservation for ${res.recipeName}?`)) {
+                                                                onRemoveReservation(res.slotKey, item.name);
+                                                            }
+                                                        }}
+                                                        className="p-1 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-400 rounded transition-colors"
+                                                        title="Remove Reservation"
+                                                    >
+                                                        <Trash2 className="w-3 h-3" />
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
                                     ))}
                                     <div className="text-[10px] font-bold text-indigo-900 dark:text-indigo-100 text-right pt-2 mt-1 border-t border-indigo-200 dark:border-indigo-800/50">
@@ -2470,7 +2779,7 @@ const InventoryItem = ({
 // INVENTORY VIEW (Enhanced with editable fields)
 // ============================================================================
 
-const InventoryView = ({ apiKey, model, inventory, setInventory, knownLocations, setKnownLocations, processedFiles, setProcessedFiles, allocatedIngredients, expandedItemId, setExpandedItemId, getAvailableQuantity, getItemReservations, shoppingList, setShoppingList, setToastData }) => {
+const InventoryView = ({ apiKey, model, inventory, setInventory, knownLocations, setKnownLocations, processedFiles, setProcessedFiles, allocatedIngredients, expandedItemId, setExpandedItemId, getAvailableQuantity, getItemReservations, handleRemoveReservation, shoppingList, setShoppingList, setToastData }) => {
     // Persisted form state (survives refresh)
     const [newItem, setNewItem] = useLocalStorage('mpm_inv_new_item', '');
     const [newQty, setNewQty] = useLocalStorage('mpm_inv_new_qty', 1);
@@ -2662,8 +2971,20 @@ const InventoryView = ({ apiKey, model, inventory, setInventory, knownLocations,
 
     // New handler for onBlur / Enter key on quantity inputs
     const handleQuantityBlur = (item, currentVal) => {
-        const qty = parseFloat(currentVal);
-        if (!isNaN(qty) && qty <= 0) {
+        // Handle empty or invalid input by defaulting to 0
+        const qty = currentVal === '' ? 0 : parseFloat(currentVal);
+
+        if (isNaN(qty)) {
+            updateItem(item.id, { quantity: 0 });
+            return;
+        }
+
+        // Ensure state is a number if it was an empty string
+        if (currentVal === '') {
+            updateItem(item.id, { quantity: 0 });
+        }
+
+        if (qty <= 0) {
             if (!item.isStaple) {
                 // Auto-delete non-staple items
                 const oldInventory = [...inventory];
@@ -3280,6 +3601,7 @@ If you find no additional items, return: { "items": [] }`;
                                         handleLocationChange={handleLocationChange}
 
                                         getItemReservations={getItemReservations}
+                                        onRemoveReservation={handleRemoveReservation}
                                         getAvailableQuantity={getAvailableQuantity}
                                         shoppingList={shoppingList}
                                         setShoppingList={setShoppingList}
@@ -5233,7 +5555,8 @@ const ShoppingView = ({ apiKey, model, list, setList }) => {
 
     const copyToClipboard = () => {
         if (list.length === 0) return;
-        const text = list.map(i => `- ${i.quantity ? i.quantity + ' ' : ''}${i.name}`).join('\n');
+        // Include quantity and unit for each item, with proper line breaks
+        const text = list.map(i => `- ${i.quantity ? i.quantity + ' ' : ''}${i.unit ? i.unit + ' ' : ''}${i.name}`).join('\n');
         navigator.clipboard.writeText(text).then(() => alert("List copied!"));
     };
 
@@ -5496,7 +5819,7 @@ const LeftoversView = ({ apiKey, model, leftovers, setLeftovers, onMoveToHistory
 // CALENDAR VIEW (Agenda Style)
 // ============================================================================
 
-const CalendarView = ({ apiKey, model, mealPlan, setMealPlan, inventory, setInventory, family, recipes, customRecipes, favorites, downloadICSFn, onCook, onFavorite, onAddToLeftovers, leftovers, setLeftovers, onMoveToHistory, allocatedIngredients, setAllocatedIngredients, onOpenWizard, activeTab, setActiveTab, selectedLeftoverId, setSelectedLeftoverId, getAvailableQuantity, getItemReservations, setIngredientLoading, setIngredientMatchData, setToastData, history, setHistory, dayStates, setDayStates }) => {
+const CalendarView = ({ apiKey, model, mealPlan, setMealPlan, inventory, setInventory, family, recipes, customRecipes, favorites, downloadICSFn, onCook, onFavorite, onAddToLeftovers, leftovers, setLeftovers, onMoveToHistory, allocatedIngredients, setAllocatedIngredients, onOpenWizard, activeTab, setActiveTab, selectedLeftoverId, setSelectedLeftoverId, getAvailableQuantity, getItemReservations, setIngredientLoading, setIngredientMatchData, setToastData, history, setHistory, dayStates, setDayStates, shoppingList, setShoppingList }) => {
     const [selectedMeal, setSelectedMeal] = useState(null);
     // Derive selectedLeftover from ID for compatibility
     const selectedLeftover = selectedLeftoverId ? leftovers.find(l => l.id === selectedLeftoverId) : null;
@@ -6304,7 +6627,7 @@ const CalendarView = ({ apiKey, model, mealPlan, setMealPlan, inventory, setInve
 
                                                                 {/* Content */}
                                                                 <div className="flex-1 min-w-0">
-                                                                    <div className={`font-bold truncate ${isGreyedOut ? 'text-slate-500 dark:text-slate-400 line-through' : 'text-slate-800 dark:text-white'}`}>
+                                                                    <div className={`font-bold truncate ${isGreyedOut ? 'text-slate-400 dark:text-slate-500' : 'text-slate-800 dark:text-white'}`}>
                                                                         {meal.name}
                                                                     </div>
                                                                     <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2 flex-wrap mt-0.5">
@@ -6612,6 +6935,35 @@ const CalendarView = ({ apiKey, model, mealPlan, setMealPlan, inventory, setInve
                     setRescheduleTargetDate(getLocalDateKey(new Date())); // Default to today
                     setRescheduleTargetMealType(meal.mealType || 'Dinner');
                     setSelectedMeal(null);
+                }}
+                onAddToShoppingList={(recipe) => {
+                    if (!recipe.missing_ingredients || recipe.missing_ingredients.length === 0) {
+                        alert('No missing ingredients to add!');
+                        return;
+                    }
+                    const newItems = recipe.missing_ingredients.map(m => ({
+                        id: generateId(),
+                        name: m.item || m,
+                        quantity: parseFloat(m.total_amount_needed) || 1,
+                        unit: m.total_amount_needed?.replace(/[\d.]+\s*/, '').trim() || 'each',
+                        checked: false
+                    }));
+                    setShoppingList(prev => [...prev, ...newItems]);
+                    alert(`Added ${newItems.length} items to shopping list!`);
+                }}
+                onAddMissingToInventory={(ingredient) => {
+                    const newItem = {
+                        id: generateId(),
+                        name: ingredient.item || ingredient,
+                        quantity: 1,
+                        unit: 'piece',
+                        location: 'Pantry',
+                        notes: '',
+                        expiresAt: null,
+                        addedAt: new Date().toISOString()
+                    };
+                    setInventory(prev => [...prev, newItem]);
+                    alert(`Added ${newItem.name} to pantry!`);
                 }}
                 showScheduleButton={false}
                 showRescheduleButton={true}
@@ -6978,6 +7330,11 @@ const MealSchedulerWizard = ({
     const [pendingAllocation, setPendingAllocation] = useState(null);
     const [activeRecipeTab, setActiveRecipeTab] = useState('ai'); // 'ai', 'saved', 'history', 'custom'
 
+    // Filter states
+    const [filterInStock, setFilterInStock] = useState(false);
+    const [filterBudget, setFilterBudget] = useState(false);
+    const [filterQuick, setFilterQuick] = useState(false);
+
     // Intercept back gesture for wizard and its modals
     useBackGesture(isOpen, onClose);
     useBackGesture(!!selectedWizardRecipe, () => setSelectedWizardRecipe(null));
@@ -6994,6 +7351,11 @@ const MealSchedulerWizard = ({
         setScheduledMeals([]);
         setRecipes([]);
         setDayStates({});
+        // Reset filters
+        setFilterInStock(false);
+        setFilterBudget(false);
+        setFilterQuick(false);
+        setWizardPrompt('');
     };
 
     // Reset wizard to config phase and clear selection when closed
@@ -7132,6 +7494,15 @@ const MealSchedulerWizard = ({
             ? `\n- IMPORTANT: Leftovers will be stored for ${totalDaySpan} days. Include FREEZING instructions and reheating from frozen tips.`
             : '';
 
+        // Build constraint string from filters
+        let constraints = [];
+        if (filterInStock) constraints.push("STRICT CONSTRAINT: ONLY use ingredients listed in Inventory. Do not assume user has basic staples unless listed.");
+        if (filterBudget) constraints.push("Budget-friendly: Use low-cost ingredients, minimize waste.");
+        if (filterQuick) constraints.push("Quick & Easy: Ready in under 30 minutes.");
+        if (wizardPrompt) constraints.push(`User Preferences: ${wizardPrompt}`);
+
+        const constraintStr = constraints.length > 0 ? `\n\nConstraints:\n${constraints.map(c => `- ${c}`).join('\n')}` : '';
+
         const prompt = `Act as an expert chef and nutritionist.
 
             Context:
@@ -7140,8 +7511,7 @@ const MealSchedulerWizard = ({
             - Total Servings: ${totalServings} (1 cook day + ${currentLeftoverDays} leftover days)
             - Meal Type: ${wizardMealType}
             - Day: ${dayLabel}
-            - Already Scheduled: [${alreadyScheduled || 'None'}]
-            - Preferences: ${wizardPrompt || 'Standard'}${freezingNote}
+            - Already Scheduled: [${alreadyScheduled || 'None'}]${freezingNote}${constraintStr}
 
             Create 3 different ${wizardMealType.toLowerCase()} recipes.
 
@@ -7654,11 +8024,61 @@ const MealSchedulerWizard = ({
                                                             onUseRecipe={() => initiateSelectRecipe(r)}
                                                         />
                                                     ))}
+
+                                                    {/* Prompt editing after recipes generated */}
+                                                    <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-200 dark:border-slate-700">
+                                                        <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1.5">
+                                                            <Pencil className="w-3 h-3 inline mr-1" />
+                                                            Edit Preferences & Regenerate
+                                                        </label>
+
+                                                        {/* Filter Toggles */}
+                                                        <div className="flex flex-wrap gap-2 mb-2">
+                                                            <button
+                                                                onClick={() => setFilterInStock(!filterInStock)}
+                                                                className={`px-2 py-1 rounded text-xs font-bold flex items-center gap-1 transition-all border ${filterInStock
+                                                                    ? 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-700'
+                                                                    : 'bg-white dark:bg-slate-700 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-600'
+                                                                    }`}
+                                                            >
+                                                                <Package className="w-3 h-3" /> In-Stock
+                                                            </button>
+                                                            <button
+                                                                onClick={() => setFilterBudget(!filterBudget)}
+                                                                className={`px-2 py-1 rounded text-xs font-bold flex items-center gap-1 transition-all border ${filterBudget
+                                                                    ? 'bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700'
+                                                                    : 'bg-white dark:bg-slate-700 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-600'
+                                                                    }`}
+                                                            >
+                                                                💰 Budget
+                                                            </button>
+                                                            <button
+                                                                onClick={() => setFilterQuick(!filterQuick)}
+                                                                className={`px-2 py-1 rounded text-xs font-bold flex items-center gap-1 transition-all border ${filterQuick
+                                                                    ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-400 border-blue-300 dark:border-blue-700'
+                                                                    : 'bg-white dark:bg-slate-700 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-600'
+                                                                    }`}
+                                                            >
+                                                                ⚡ Quick
+                                                            </button>
+                                                        </div>
+
+                                                        <textarea
+                                                            value={wizardPrompt}
+                                                            onChange={e => setWizardPrompt(e.target.value)}
+                                                            placeholder="Quick meals, Tex-Mex, No mushrooms, Under $20..."
+                                                            className="w-full input-field h-14 resize-none text-sm mb-2"
+                                                        />
+                                                        <button onClick={generateRecipes} className="w-full btn-secondary text-indigo-600 py-2">
+                                                            <Sparkles className="w-4 h-4 inline mr-1" /> Regenerate with New Preferences
+                                                        </button>
+                                                    </div>
+
                                                     <div className="flex gap-2">
                                                         <button onClick={generateRecipes} className="flex-1 btn-secondary text-indigo-600">
-                                                            <Sparkles className="w-4 h-4 inline mr-1" /> 3 More
+                                                            <Sparkles className="w-4 h-4 inline mr-1" />3 More Options
                                                         </button>
-                                                        <button onClick={skipDay} className="flex-1 btn-secondary text-slate-500">Skip</button>
+                                                        <button onClick={skipDay} className="flex-1 btn-secondary text-slate-500">Skip This Meal</button>
                                                     </div>
                                                 </div>
                                             ) : (
@@ -7666,11 +8086,49 @@ const MealSchedulerWizard = ({
                                                     <div>
                                                         <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1.5">Preferences (optional)</label>
                                                         <textarea value={wizardPrompt} onChange={e => setWizardPrompt(e.target.value)}
-                                                            placeholder="Quick meals, Tex-Mex, No mushrooms..." className="w-full input-field h-16 resize-none text-sm" />
+                                                            placeholder="Quick meals, Tex-Mex, No mushrooms, Budget-friendly..." className="w-full input-field h-16 resize-none text-sm" />
                                                     </div>
-                                                    <button onClick={generateRecipes} className="w-full btn-primary">
-                                                        <Sparkles className="w-4 h-4 inline mr-2" />Generate 3 Recipes
-                                                    </button>
+
+                                                    {/* Filtering Options */}
+                                                    <div className="flex flex-wrap gap-2">
+                                                        <button
+                                                            onClick={() => setFilterInStock(!filterInStock)}
+                                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all border ${filterInStock
+                                                                ? 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-700'
+                                                                : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+                                                                }`}
+                                                        >
+                                                            <Package className="w-3 h-3" />
+                                                            In-Stock Only
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setFilterBudget(!filterBudget)}
+                                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all border ${filterBudget
+                                                                ? 'bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700'
+                                                                : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+                                                                }`}
+                                                        >
+                                                            💰 Budget
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setFilterQuick(!filterQuick)}
+                                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all border ${filterQuick
+                                                                ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-400 border-blue-300 dark:border-blue-700'
+                                                                : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+                                                                }`}
+                                                        >
+                                                            ⚡ Quick
+                                                        </button>
+                                                    </div>
+
+                                                    <div className="flex gap-2">
+                                                        <button onClick={generateRecipes} className="flex-1 btn-primary">
+                                                            <Sparkles className="w-4 h-4 inline mr-2" />Generate Recipes
+                                                        </button>
+                                                        <button onClick={skipDay} className="btn-secondary text-slate-500 px-4">
+                                                            Skip
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             )}
                                         </>
@@ -9528,6 +9986,7 @@ function MealPrepMate() {
     const [isStandalone, setIsStandalone] = useState(false);
     const [scheduleDate, setScheduleDate] = useState(null);
     const [isCookedNow, setIsCookedNow] = useState(false);
+    const [showDebugLogs, setShowDebugLogs] = useState(false);
 
     // Store full recipe object directly (not ID-based) to support new unsaved recipes
     const [selectedRecipe, setSelectedRecipe] = useState(null);
@@ -10571,7 +11030,6 @@ Rules:
                 if (itemNameLower === ingItemLower) return true;
 
                 // Check if one contains the other as a whole word
-                // e.g., "Chicken Breast" should match "Chicken", but "Rice" shouldn't match "Price"
                 const itemWords = itemNameLower.split(/\s+/);
                 const ingWords = ingItemLower.split(/\s+/);
 
@@ -10583,12 +11041,44 @@ Rules:
                 reservations.push({
                     slotKey,
                     recipeName: allocation.recipeName,
-                    amount: parseFloat(matchingIng.amount) || 0,
+                    amount: parseFloat(matchingIng.reserveAmount) || parseFloat(matchingIng.amount) || parseFloat(matchingIng.qty) || 0,
                     unit: matchingIng.unit
                 });
             }
         });
         return reservations;
+    };
+
+    const handleRemoveReservation = (slotKey, pantryItemName) => {
+        setAllocatedIngredients(prev => {
+            const newAlloc = { ...prev };
+            const allocation = newAlloc[slotKey];
+            if (allocation && allocation.ingredients) {
+                const itemNameLower = pantryItemName.toLowerCase().trim();
+
+                // remove ingredients matching the logic
+                newAlloc[slotKey].ingredients = allocation.ingredients.filter(ing => {
+                    if (!ing?.item) return true;
+                    const ingItemLower = ing.item.toLowerCase().trim();
+
+                    if (itemNameLower.length < 3 || ingItemLower.length < 3) return true;
+                    if (itemNameLower === ingItemLower) return false;
+
+                    const itemWords = itemNameLower.split(/\s+/);
+                    const ingWords = ingItemLower.split(/\s+/);
+                    const match = itemWords.some(w => w.length >= 3 && ingWords.includes(w)) ||
+                        ingWords.some(w => w.length >= 3 && itemWords.includes(w));
+                    return !match;
+                });
+
+                // clean up empty slots
+                if (newAlloc[slotKey].ingredients.length === 0) {
+                    delete newAlloc[slotKey];
+                }
+            }
+            return newAlloc;
+        });
+        setToastData({ message: "Reservation removed", duration: 2000 });
     };
 
     // Calculate available quantity (Total - Reserved)
@@ -10691,7 +11181,7 @@ Rules:
             {/* Main Content */}
             <div className="flex-1 overflow-y-auto scrollbar-hide w-full relative bg-white dark:bg-slate-900">
                 {view === 'dashboard' && <Dashboard />}
-                {view === 'inventory' && <InventoryView apiKey={apiKey} model={selectedModel} inventory={inventory} setInventory={setInventory} knownLocations={knownLocations} setKnownLocations={setKnownLocations} processedFiles={processedFiles} setProcessedFiles={setProcessedFiles} allocatedIngredients={allocatedIngredients} expandedItemId={expandedInventoryItemId} setExpandedItemId={setExpandedInventoryItemId} getAvailableQuantity={getAvailableQuantity} getItemReservations={getItemReservations} shoppingList={shoppingList} setShoppingList={setShoppingList} setToastData={setToastData} />}
+                {view === 'inventory' && <InventoryView apiKey={apiKey} model={selectedModel} inventory={inventory} setInventory={setInventory} knownLocations={knownLocations} setKnownLocations={setKnownLocations} processedFiles={processedFiles} setProcessedFiles={setProcessedFiles} allocatedIngredients={allocatedIngredients} expandedItemId={expandedInventoryItemId} setExpandedItemId={setExpandedInventoryItemId} getAvailableQuantity={getAvailableQuantity} getItemReservations={getItemReservations} handleRemoveReservation={handleRemoveReservation} shoppingList={shoppingList} setShoppingList={setShoppingList} setToastData={setToastData} />}
                 {view === 'family' && <FamilyView familyMembers={family} setFamilyMembers={setFamily} />}
                 {view === 'recipes' && (
                     <RecipeEngine
@@ -10766,6 +11256,8 @@ Rules:
                     setToastData={setToastData}
                     dayStates={dayStates}
                     setDayStates={setDayStates}
+                    shoppingList={shoppingList}
+                    setShoppingList={setShoppingList}
                 />}
             </div>
 
@@ -10958,6 +11450,9 @@ Rules:
                 onMoveToHistory={handleMoveToHistory}
                 setSelectedRecipe={setSelectedRecipe}
             />
+
+            {/* AI Debug Logs Modal */}
+            <DebugLogsModal isOpen={showDebugLogs} onClose={() => setShowDebugLogs(false)} />
 
             {/* Settings Modal */}
             <Modal isOpen={showSettings} onClose={() => setShowSettings(false)}>
@@ -11187,7 +11682,17 @@ Rules:
                                     Object.keys(localStorage).forEach(key => {
                                         if (key.startsWith('mpm_')) {
                                             try {
-                                                data[key] = JSON.parse(localStorage.getItem(key));
+                                                let val = JSON.parse(localStorage.getItem(key));
+
+                                                // Sanitize inventory quantities on export
+                                                if (key === 'mpm_inventory' && Array.isArray(val)) {
+                                                    val = val.map(item => ({
+                                                        ...item,
+                                                        quantity: (item.quantity === '' || item.quantity === null || item.quantity === undefined) ? 0 : parseFloat(item.quantity) || 0
+                                                    }));
+                                                }
+
+                                                data[key] = val;
                                             } catch {
                                                 data[key] = localStorage.getItem(key);
                                             }
@@ -11212,30 +11717,62 @@ Rules:
                                     accept=".json"
                                     className="hidden"
                                     onChange={(e) => {
+                                        console.log('[Import] onChange triggered');
                                         const file = e.target.files?.[0];
-                                        if (!file) return;
+                                        if (!file) {
+                                            console.log('[Import] No file selected');
+                                            return;
+                                        }
+                                        console.log('[Import] File selected:', file.name, 'Size:', file.size);
                                         const reader = new FileReader();
                                         reader.onload = (event) => {
+                                            console.log('[Import] FileReader onload triggered');
                                             try {
                                                 const data = JSON.parse(event.target.result);
-                                                if (confirm(`Import ${Object.keys(data).length} data items? This will overwrite existing data.`)) {
-                                                    Object.entries(data).forEach(([key, value]) => {
-                                                        localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
-                                                    });
-                                                    alert('Data imported successfully! Reloading...');
-                                                    window.location.reload();
-                                                }
+                                                const keyCount = Object.keys(data).length;
+                                                console.log('[Import] JSON parsed, keys:', keyCount);
+                                                console.log('[Import] Saving data...');
+                                                Object.entries(data).forEach(([key, value]) => {
+                                                    // Sanitize inventory quantities during import
+                                                    if (key === 'mpm_inventory' && Array.isArray(value)) {
+                                                        value = value.map(item => ({
+                                                            ...item,
+                                                            quantity: (item.quantity === '' || item.quantity === null || item.quantity === undefined) ? 0 : parseFloat(item.quantity) || 0
+                                                        }));
+                                                    }
+                                                    // Always stringify since useLocalStorage always parses
+                                                    localStorage.setItem(key, JSON.stringify(value));
+                                                });
+                                                console.log('[Import] Data saved, reloading...');
+                                                alert(`Successfully imported ${keyCount} data items! The page will now reload.`);
+                                                window.location.reload();
                                             } catch (err) {
+                                                console.error('[Import] JSON parse error:', err);
                                                 alert('Failed to import: Invalid JSON file');
                                             }
+                                            // Reset input after processing
+                                            e.target.value = '';
                                         };
+                                        reader.onerror = (err) => {
+                                            console.error('[Import] FileReader error:', err);
+                                            alert('Failed to read file. Please try again.');
+                                            e.target.value = '';
+                                        };
+                                        console.log('[Import] Starting to read file...');
                                         reader.readAsText(file);
-                                        e.target.value = '';
                                     }}
                                 />
                             </label>
                         </div>
                     </div>
+
+                    {/* AI Debug Logs */}
+                    <button
+                        onClick={() => setShowDebugLogs(true)}
+                        className="w-full btn-secondary text-indigo-600"
+                    >
+                        <Search className="w-4 h-4 inline mr-2" /> View AI Debug Logs
+                    </button>
 
                     {/* Restart Tutorial */}
                     <button
