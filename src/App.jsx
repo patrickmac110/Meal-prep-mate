@@ -6896,6 +6896,24 @@ const CalendarView = ({ apiKey, model, mealPlan, setMealPlan, inventory, setInve
                 isOpen={!!selectedMeal}
                 isFavorite={selectedMeal && favorites.some(f => f.id === selectedMeal.id || f.name === selectedMeal.name)}
                 onClose={() => setSelectedMeal(null)}
+                onSave={(updatedRecipe) => {
+                    setSelectedMeal(updatedRecipe); // Update local modal view
+                    if (updatedRecipe.slotKey && setMealPlan) {
+                        setMealPlan(prev => {
+                            const slot = prev[updatedRecipe.slotKey];
+                            if (!slot || !slot.meals) return prev;
+                            return {
+                                ...prev,
+                                [updatedRecipe.slotKey]: {
+                                    ...slot,
+                                    meals: slot.meals.map(m =>
+                                        m.id === updatedRecipe.id ? updatedRecipe : m
+                                    )
+                                }
+                            };
+                        });
+                    }
+                }}
                 onFavorite={(recipe) => { toggleFavorite(recipe); onFavorite?.(recipe); }}
                 onCook={(recipe) => {
                     // First, deplete any allocated ingredients for this meal's slot
